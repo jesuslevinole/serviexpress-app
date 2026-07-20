@@ -1,0 +1,16 @@
+.app-no-access {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  text-align: center;
+  color: var(--text-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-no-access h2 {
+  color: var(--text);
+  font-size: 18px;
+}

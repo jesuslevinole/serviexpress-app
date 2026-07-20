@@ -1,0 +1,32 @@
+.crudform-layout {
+  display: flex;
+  gap: 18px;
+}
+
+.crudform-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px 16px;
+  align-content: start;
+}
+
+.crudform-error {
+  margin-right: auto;
+  color: var(--danger);
+  font-size: 12.5px;
+  align-self: center;
+}
+
+@media (max-width: 760px) {
+  .crudform-layout {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .crudform-grid {
+    grid-template-columns: 1fr;
+  }
+}

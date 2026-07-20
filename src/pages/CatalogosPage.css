@@ -1,0 +1,36 @@
+.catalogs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalogs-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.catalogs-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  transition: background 0.15s, color 0.15s;
+}
+
+.catalogs-tab:hover {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+.catalogs-tab.is-active {
+  background: var(--primary);
+  color: #fff;
+}
