@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FileSpreadsheet, Plus, Search } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, Plus, Search } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
@@ -9,12 +9,14 @@ import {
   updateDocument,
 } from '../../services/firestoreService';
 import { exportToExcel } from '../../services/excelExport';
+import { downloadCsvTemplate } from '../../services/csv';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DataTable, type TableColumn } from '../ui/DataTable';
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
 import { DetailModal } from './DetailModal';
+import { ImportCsvModal } from './ImportCsvModal';
 import { displayValue } from './displayValue';
 import type { EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
@@ -46,6 +48,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(new Set());
   const [resetSignal, setResetSignal] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
 
   const canCreate = can(config.id, 'crear');
   const canEdit = can(config.id, 'editar');
@@ -165,6 +168,26 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
         </div>
         <div className="crud-toolbar-actions">
           {headerExtra}
+          <button
+            type="button"
+            className="btn btn-outline"
+            title="Descargar plantilla CSV para llenar en Google Sheets"
+            onClick={() => downloadCsvTemplate(config.title, config.fields)}
+          >
+            <FileDown size={16} />
+            <span className="crud-btn-text">Plantilla</span>
+          </button>
+          {canCreate ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Importar registros desde un CSV"
+              onClick={() => setImportOpen(true)}
+            >
+              <FileUp size={16} />
+              <span className="crud-btn-text">Importar CSV</span>
+            </button>
+          ) : null}
           <button type="button" className="btn btn-outline" onClick={handleExport}>
             <FileSpreadsheet size={16} />
             <span className="crud-btn-text">Exportar Excel</span>
@@ -218,6 +241,18 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
         onCancel={() => setDeleting(null)}
         onConfirm={handleDelete}
       />
+
+      {importOpen ? (
+        <ImportCsvModal
+          title={config.title}
+          collection={config.collection}
+          fields={config.fields}
+          refMaps={refMaps}
+          autoUserField={config.autoUserField}
+          currentUid={firebaseUser?.uid ?? null}
+          onClose={() => setImportOpen(false)}
+        />
+      ) : null}
 
       {config.detail && detailParent ? (
         <DetailModal
