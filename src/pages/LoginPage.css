@@ -72,6 +72,26 @@
   margin-bottom: 12px;
 }
 
+.login-info {
+  color: #d4f7e7;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+
+.login-forgot {
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: #e6e3fa;
+  font-size: 12.5px;
+  text-decoration: underline;
+  align-self: center;
+}
+
+.login-forgot:hover {
+  color: #fff;
+}
+
 .login-submit {
   background: #fff;
   color: var(--primary-dark);

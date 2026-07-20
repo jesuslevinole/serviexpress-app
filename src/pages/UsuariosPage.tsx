@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { FileSpreadsheet, Plus, Search } from 'lucide-react';
+import { FileSpreadsheet, MailPlus, Plus, Search } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useCollection } from '../hooks/useCollection';
 import { COLLECTIONS } from '../config/collections';
 import { USER_STATUS } from '../config/enums';
-import { createUserWithProfile } from '../services/userService';
+import { createUserWithProfile, sendSetPasswordEmail } from '../services/userService';
 import { updateDocument } from '../services/firestoreService';
 import { exportToExcel } from '../services/excelExport';
 import { Badge } from '../components/ui/Badge';
@@ -19,7 +19,6 @@ import './UsuariosPage.css';
 interface UserFormState {
   name: string;
   email: string;
-  password: string;
   roleId: string;
   status: string;
 }
@@ -27,7 +26,6 @@ interface UserFormState {
 const EMPTY_FORM: UserFormState = {
   name: '',
   email: '',
-  password: '',
   roleId: '',
   status: 'ACTIVO',
 };
@@ -57,6 +55,7 @@ export function UsuariosPage() {
   const [error, setError] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(new Set());
+  const [notice, setNotice] = useState<string | null>(null);
 
   const roleName = useMemo(() => {
     const map = new Map<string, string>();
@@ -98,7 +97,6 @@ export function UsuariosPage() {
     setForm({
       name: String(row.name ?? ''),
       email: String(row.email ?? ''),
-      password: '',
       roleId: String(row.roleId ?? ''),
       status: String(row.status ?? 'ACTIVO'),
     });
@@ -109,14 +107,10 @@ export function UsuariosPage() {
 
   const handleSubmit = async () => {
     const missingBase = !form.name.trim() || !form.roleId || !form.status;
-    const missingCreate = !editing && (!form.email.trim() || form.password.length < 6);
+    const missingCreate = !editing && !form.email.trim();
     if (missingBase || missingCreate) {
       setInvalid(true);
-      setError(
-        editing
-          ? 'Completa nombre, rol y estatus'
-          : 'Completa todos los campos (contraseña mínima de 6 caracteres)',
-      );
+      setError(editing ? 'Completa nombre, rol y estatus' : 'Completa todos los campos');
       return;
     }
     setBusy(true);
@@ -129,21 +123,37 @@ export function UsuariosPage() {
           status: form.status,
         });
         setSessionIds((prev) => new Set(prev).add(editing.id));
+        setNotice(null);
       } else {
+        const email = form.email.trim();
         const uid = await createUserWithProfile({
           name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
+          email,
           roleId: form.roleId,
           status: form.status,
         });
         setSessionIds((prev) => new Set(prev).add(uid));
+        setNotice(
+          `Usuario creado. Se envió un correo a ${email} para que establezca su contraseña.`,
+        );
       }
       setFormOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar el usuario');
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Reenvía el correo para establecer contraseña (por si expiró o no llegó). */
+  const handleResendEmail = async (row: EntityData) => {
+    const email = String(row.email ?? '');
+    if (!email) return;
+    try {
+      await sendSetPasswordEmail(email);
+      setNotice(`Se reenvió el correo para establecer contraseña a ${email}.`);
+    } catch {
+      setNotice(`No se pudo enviar el correo a ${email}. Intenta de nuevo.`);
     }
   };
 
@@ -189,15 +199,25 @@ export function UsuariosPage() {
         </div>
       </div>
 
+      {notice ? (
+        <p className="usuarios-notice">
+          <MailPlus size={14} />
+          {notice}
+        </p>
+      ) : null}
+
       <DataTable
         columns={columns}
         rows={filtered}
         canEdit={can('users', 'editar')}
         canDelete={false}
         onEdit={openEdit}
+        detailLabel="Reenviar correo de contraseña"
+        onDetail={(row) => void handleResendEmail(row)}
       />
       <p className="usuarios-hint">
-        Para dar de baja a alguien cámbialo a estatus INACTIVO: ya no podrá iniciar sesión.
+        Para dar de baja a alguien cámbialo a estatus INACTIVO: ya no podrá iniciar sesión. El
+        botón de la izquierda en Acciones reenvía el correo para establecer contraseña.
       </p>
 
       <Modal
@@ -246,17 +266,10 @@ export function UsuariosPage() {
             />
           </div>
           {!editing ? (
-            <div className="field">
-              <label className="field-label">
-                Contraseña<span className="field-required">*</span>
-              </label>
-              <input
-                className={`field-input ${invalid && form.password.length < 6 ? 'field-invalid' : ''}`}
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              />
-            </div>
+            <p className="usuarios-email-hint">
+              El usuario recibirá un correo en esa dirección con un enlace para establecer su
+              propia contraseña. Nadie más la conoce.
+            </p>
           ) : null}
           <div className="field">
             <label className="field-label">

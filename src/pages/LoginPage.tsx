@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { sendSetPasswordEmail } from '../services/userService';
 import { Spinner } from '../components/ui/Spinner';
 import './LoginPage.css';
 
@@ -9,6 +10,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (loading) return <Spinner label="Verificando sesión…" />;
@@ -17,6 +19,7 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     if (!email.trim() || !password) {
       setError('Escribe tu correo y contraseña');
       return;
@@ -27,6 +30,21 @@ export function LoginPage() {
     } catch {
       setError('Correo o contraseña incorrectos, o el usuario está inactivo');
       setBusy(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError(null);
+    setInfo(null);
+    if (!email.trim()) {
+      setError('Escribe tu correo arriba y vuelve a dar clic');
+      return;
+    }
+    try {
+      await sendSetPasswordEmail(email.trim());
+      setInfo('Te enviamos un correo con el enlace para establecer tu contraseña');
+    } catch {
+      setError('No se pudo enviar el correo. Revisa la dirección e intenta de nuevo');
     }
   };
 
@@ -63,8 +81,17 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           {error ? <p className="login-error">{error}</p> : null}
+          {info ? <p className="login-info">{info}</p> : null}
           <button type="submit" className="btn btn-primary login-submit" disabled={busy}>
             {busy ? 'Entrando…' : 'Entrar'}
+          </button>
+          <button
+            type="button"
+            className="login-forgot"
+            onClick={() => void handleForgotPassword()}
+            disabled={busy}
+          >
+            ¿Olvidaste tu contraseña?
           </button>
           {bypassEnabled ? (
             <button
