@@ -85,3 +85,36 @@
   font-size: 12.5px;
   align-self: center;
 }
+
+.roles-detail-perms strong {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.roles-detail-perms ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.roles-detail-perms li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.roles-detail-perms li span {
+  font-weight: 600;
+}
+
+.roles-detail-perms li em {
+  font-style: normal;
+  color: var(--primary-dark);
+}

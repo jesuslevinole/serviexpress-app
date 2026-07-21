@@ -58,7 +58,7 @@ export function FormField({ field, value, invalid, refOptions, onChange }: FormF
               checked={value === true}
               onChange={(e) => onChange(field.key, e.target.checked)}
             />
-            <span>Sí</span>
+            <span>Yes</span>
           </label>
         );
       case 'enum':
@@ -98,7 +98,7 @@ export function FormField({ field, value, invalid, refOptions, onChange }: FormF
         {field.required ? <span className="field-required">*</span> : null}
       </label>
       {renderControl()}
-      {invalid ? <span className="field-error">Este campo es obligatorio</span> : null}
+      {invalid ? <span className="field-error">This field is required</span> : null}
     </div>
   );
 }

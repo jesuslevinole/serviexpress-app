@@ -14,7 +14,7 @@ export function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (loading) return <Spinner label="Verificando sesión…" />;
+  if (loading) return <Spinner label="Checking session…" />;
   if (firebaseUser) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -22,14 +22,14 @@ export function LoginPage() {
     setError(null);
     setInfo(null);
     if (!email.trim() || !password) {
-      setError('Escribe tu correo y contraseña');
+      setError('Enter your email and password');
       return;
     }
     setBusy(true);
     try {
       await login(email.trim(), password);
     } catch {
-      setError('Correo o contraseña incorrectos, o el usuario está inactivo');
+      setError('Wrong email or password, or the user is inactive');
       setBusy(false);
     }
   };
@@ -38,14 +38,14 @@ export function LoginPage() {
     setError(null);
     setInfo(null);
     if (!email.trim()) {
-      setError('Escribe tu correo arriba y vuelve a dar clic');
+      setError('Type your email above and click again');
       return;
     }
     try {
       await sendSetPasswordEmail(email.trim());
-      setInfo('Te enviamos un correo con el enlace para establecer tu contraseña');
+      setInfo('We sent you an email with the link to set your password');
     } catch {
-      setError('No se pudo enviar el correo. Revisa la dirección e intenta de nuevo');
+      setError('Could not send the email. Check the address and try again');
     }
   };
 
@@ -54,24 +54,24 @@ export function LoginPage() {
       <div className="login-panel login-brand">
         <img src={logoUrl} alt="ServiExpress" width={110} height={110} />
         <h1>ServiExpress</h1>
-        <p>Control de flotilla · mantenimiento, taller, drivers y unidades</p>
+        <p>Fleet control · maintenance, shop, drivers and units</p>
       </div>
       <div className="login-panel login-form-panel">
         <form className="login-form" onSubmit={handleSubmit}>
-          <h2>Iniciar sesión</h2>
+          <h2>Sign in</h2>
           <label className="login-label" htmlFor="login-email">
-            Correo electrónico
+            Email
           </label>
           <input
             id="login-email"
             type="email"
             autoComplete="email"
-            placeholder="tu@correo.com"
+            placeholder="you@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <label className="login-label" htmlFor="login-password">
-            Contraseña
+            Password
           </label>
           <input
             id="login-password"
@@ -87,12 +87,12 @@ export function LoginPage() {
             onClick={() => void handleForgotPassword()}
             disabled={busy}
           >
-            ¿Olvidaste tu contraseña?
+            Forgot your password?
           </button>
           {error ? <p className="login-error">{error}</p> : null}
           {info ? <p className="login-info">{info}</p> : null}
           <button type="submit" className="btn btn-primary login-submit" disabled={busy}>
-            {busy ? 'Entrando…' : 'Entrar'}
+            {busy ? 'Signing in…' : 'Sign in'}
           </button>
           {bypassEnabled ? (
             <button
@@ -101,7 +101,7 @@ export function LoginPage() {
               onClick={bypassLogin}
               disabled={busy}
             >
-              Entrar en modo desarrollo (sin cuenta)
+              Enter in dev mode (no account)
             </button>
           ) : null}
         </form>

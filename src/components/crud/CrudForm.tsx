@@ -120,7 +120,7 @@ export function CrudForm({
         <>
           {error ? <span className="crudform-error">{error}</span> : null}
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>
-            Cancelar
+            Cancel
           </button>
           {initial === null ? (
             <button
@@ -129,7 +129,7 @@ export function CrudForm({
               onClick={() => handleSubmit(true)}
               disabled={busy}
             >
-              {busy ? 'Guardando…' : 'Guardar y agregar otro'}
+              {busy ? 'Saving…' : 'Save and add another'}
             </button>
           ) : null}
           <button
@@ -138,7 +138,7 @@ export function CrudForm({
             onClick={() => handleSubmit(false)}
             disabled={busy}
           >
-            {busy ? 'Guardando…' : 'Guardar'}
+            {busy ? 'Saving…' : 'Save'}
           </button>
         </>
       }

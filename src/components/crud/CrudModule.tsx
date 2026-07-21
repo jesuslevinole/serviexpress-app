@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FileDown, FileSpreadsheet, FileUp, Filter, Plus, Search, X } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, Filter, Pencil, Plus, Search, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
@@ -21,6 +21,9 @@ import { CrudForm } from './CrudForm';
 import { DetailModal } from './DetailModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
+import { RecordDetailModal } from './RecordDetailModal';
+import { TableLayoutModal } from './TableLayoutModal';
+import { useUiConfig } from '../../hooks/useUiConfig';
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
 import { displayValue } from './displayValue';
@@ -74,8 +77,12 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  * eliminación con confirmación, permisos por rol, detalle maestro-detalle
  * y exportación a Excel. TODOS los módulos del app usan este componente.
  */
-export function CrudModule({ config, headerExtra }: CrudModuleProps) {
-  const { can, firebaseUser } = useAuth();
+export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
+  const { can, firebaseUser, isAdmin } = useAuth();
+  const { editMode, applyToModule } = useUiConfig();
+  /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
+  const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
+  const [layoutOpen, setLayoutOpen] = useState(false);
   const { rows, loading, error } = useCollection(config.collection);
   const refMaps = useRefMaps(config.fields);
   const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
@@ -85,6 +92,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
   const [editing, setEditing] = useState<EntityData | null>(null);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
+  const [viewing, setViewing] = useState<EntityData | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
@@ -199,10 +207,10 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
           : filter.equals;
       return `${field.label}: ${value}`;
     }
-    if (filter.boolValue) return `${field.label}: ${filter.boolValue === 'SI' ? 'Sí' : 'No'}`;
+    if (filter.boolValue) return `${field.label}: ${filter.boolValue === 'SI' ? 'Yes' : 'No'}`;
     const from = filter.from ?? '';
     const to = filter.to ?? '';
-    return `${field.label}: ${from || '…'} a ${to || '…'}`;
+    return `${field.label}: ${from || '…'} to ${to || '…'}`;
   };
 
   const columns: TableColumn[] = useMemo(
@@ -253,7 +261,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
         setFormOpen(false);
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo guardar');
+      setFormError(err instanceof Error ? err.message : 'Could not save');
     } finally {
       setBusy(false);
     }
@@ -279,21 +287,21 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
       required: false,
       type: 'text',
       hint:
-        'ID de AppSheet (opcional). Si viene, se usa como identificador: reimportar con el mismo ID actualiza el registro en vez de duplicarlo. Las columnas de referencia aceptan este ID o el nombre.',
+        'AppSheet ID (optional). When present it becomes the identifier: re-importing with the same ID updates the record instead of duplicating it. Reference columns accept this ID or the name.',
     };
     const dataFields: TemplateField[] = config.fields
       .filter((field) => field.form !== false)
       .map((field) => {
       let options: string[] | undefined;
-      let hint = 'Texto';
+      let hint = 'Text';
       switch (field.type) {
         case 'enum':
           options = [...(field.enumValues ?? [])];
-          hint = `Uno de: ${(field.enumValues ?? []).join(', ')}`;
+          hint = `One of: ${(field.enumValues ?? []).join(', ')}`;
           break;
         case 'bool':
-          options = ['SI', 'NO'];
-          hint = 'SI o NO';
+          options = ['YES', 'NO'];
+          hint = 'YES or NO';
           break;
         case 'ref': {
           const refData = field.refCollection ? refMaps[field.refCollection] : undefined;
@@ -309,21 +317,21 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
               .filter((label) => label !== '')
               .sort((a, b) => a.localeCompare(b));
           }
-          hint = 'Nombre exacto como aparece en el app (usa el desplegable)';
+          hint = 'Exact name as shown in the app (use the dropdown)';
           break;
         }
         case 'date':
-          hint = 'Fecha DD/MM/AAAA';
+          hint = 'Date DD/MM/YYYY';
           break;
         case 'number':
         case 'currency':
-          hint = 'Número';
+          hint = 'Number';
           break;
         case 'textarea':
-          hint = 'Texto largo';
+          hint = 'Long text';
           break;
         default:
-          hint = 'Texto';
+          hint = 'Text';
       }
       return { label: field.label, required: field.required === true, type: field.type, options, hint };
     });
@@ -339,7 +347,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
       if (to && (value === '' || value > to)) return false;
       return true;
     });
-    const rangeSuffix = from || to ? ` (${from || 'inicio'} a ${to || 'hoy'})` : '';
+    const rangeSuffix = from || to ? ` (${from || 'start'} to ${to || 'today'})` : '';
     await exportToExcel(
       `${config.title}${rangeSuffix}`,
       config.fields.map((field) => ({
@@ -357,7 +365,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
         <div className="crud-search">
           <Search size={16} />
           <input
-            placeholder={`Buscar en ${config.title.toLowerCase()}…`}
+            placeholder={`Search ${config.title.toLowerCase()}…`}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -370,21 +378,32 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
           <button
             type="button"
             className="btn btn-outline"
-            title="Descargar plantilla Excel para llenar (la importación es con CSV)"
+            title="Download the Excel template to fill (import is done with CSV)"
             onClick={() => void handleTemplate()}
           >
             <FileDown size={16} />
-            <span className="crud-btn-text">Plantilla</span>
+            <span className="crud-btn-text">Template</span>
           </button>
           {canCreate ? (
             <button
               type="button"
               className="btn btn-outline"
-              title="Importar registros desde un CSV"
+              title="Import records from a CSV file"
               onClick={() => setImportOpen(true)}
             >
               <FileUp size={16} />
-              <span className="crud-btn-text">Importar CSV</span>
+              <span className="crud-btn-text">Import CSV</span>
+            </button>
+          ) : null}
+          {editMode && isAdmin ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              title="Rename headers and reorder columns"
+              onClick={() => setLayoutOpen(true)}
+            >
+              <Pencil size={15} />
+              <span className="crud-btn-text">Edit table</span>
             </button>
           ) : null}
           <button
@@ -393,25 +412,25 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
             onClick={() => setFilterOpen(true)}
           >
             <Filter size={16} />
-            <span className="crud-btn-text">Filtros</span>
+            <span className="crud-btn-text">Filters</span>
             {Object.keys(filters).length > 0 ? (
               <span className="crud-filter-count">{Object.keys(filters).length}</span>
             ) : null}
           </button>
           <button type="button" className="btn btn-outline" onClick={() => setExportOpen(true)}>
             <FileSpreadsheet size={16} />
-            <span className="crud-btn-text">Exportar Excel</span>
+            <span className="crud-btn-text">Export Excel</span>
           </button>
           {canCreate ? (
             <button type="button" className="btn btn-primary" onClick={openCreate}>
               <Plus size={16} />
-              <span className="crud-btn-text">Agregar</span>
+              <span className="crud-btn-text">Add</span>
             </button>
           ) : null}
         </div>
       </div>
 
-      {error ? <p className="crud-error">Error al cargar: {error}</p> : null}
+      {error ? <p className="crud-error">Loading error: {error}</p> : null}
 
       {Object.keys(filters).length > 0 ? (
         <div className="crud-chips">
@@ -420,7 +439,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
               key={key}
               type="button"
               className="crud-chip"
-              title="Quitar filtro"
+              title="Remove filter"
               onClick={() => setColumnFilter(key, null)}
             >
               {filterChipLabel(key, filter)}
@@ -445,6 +464,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
+          onRowClick={(row) => setViewing(row)}
         />
       )}
 
@@ -470,6 +490,29 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
         onClose={() => setFilterOpen(false)}
       />
 
+      {viewing ? (
+        <RecordDetailModal
+          title={config.title}
+          fields={config.fields}
+          record={viewing}
+          refLabels={refLabel}
+          onEdit={
+            canEdit
+              ? () => {
+                  const row = viewing;
+                  setViewing(null);
+                  openEdit(row);
+                }
+              : undefined
+          }
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+
+      {layoutOpen ? (
+        <TableLayoutModal base={baseConfig} onClose={() => setLayoutOpen(false)} />
+      ) : null}
+
       {exportOpen ? (
         <ExportExcelModal
           title={config.title}
@@ -481,7 +524,7 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
 
       <CrudForm
         open={formOpen}
-        title={editing ? `Editar · ${config.title}` : `Agregar · ${config.title}`}
+        title={editing ? `Edit · ${config.title}` : `Add · ${config.title}`}
         fields={config.fields}
         initial={editing}
         refMaps={refMaps}
@@ -494,8 +537,8 @@ export function CrudModule({ config, headerExtra }: CrudModuleProps) {
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Eliminar registro"
-        message="¿Seguro que quieres eliminar este registro? Esta acción no se puede deshacer."
+        title="Delete record"
+        message="Are you sure you want to delete this record? This action cannot be undone."
         busy={busy}
         onCancel={() => setDeleting(null)}
         onConfirm={handleDelete}

@@ -30,6 +30,7 @@ export const USER_STATUS = ['ACTIVO', 'INACTIVO'] as const;
 
 /** Estados que se pintan en verde en las tablas. */
 export const POSITIVE_STATUS: readonly string[] = [
+  'YES',
   'SÍ',
   'SI',
   'ACTIVO',
@@ -45,6 +46,7 @@ export const POSITIVE_STATUS: readonly string[] = [
 
 /** Estados que se pintan en rojo. */
 export const NEGATIVE_STATUS: readonly string[] = [
+  'BAD',
   'NO',
   'NO ACTIVE',
   'INACTIVO',

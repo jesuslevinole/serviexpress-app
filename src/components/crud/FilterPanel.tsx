@@ -89,7 +89,7 @@ export function FilterPanel({
           <SearchableSelect
             value={filter.equals ?? ''}
             options={(field.enumValues ?? []).map((v) => ({ value: v, label: v }))}
-            placeholder="Todos"
+            placeholder="All"
             onChange={(v) => update(field.key, { equals: v })}
           />
         );
@@ -98,7 +98,7 @@ export function FilterPanel({
           <SearchableSelect
             value={filter.equals ?? ''}
             options={refOptionsByField[field.key] ?? []}
-            placeholder="Todos"
+            placeholder="All"
             onChange={(v) => update(field.key, { equals: v })}
           />
         );
@@ -107,10 +107,10 @@ export function FilterPanel({
           <SearchableSelect
             value={filter.boolValue ?? ''}
             options={[
-              { value: 'SI', label: 'Sí' },
+              { value: 'SI', label: 'Yes' },
               { value: 'NO', label: 'No' },
             ]}
-            placeholder="Todos"
+            placeholder="All"
             onChange={(v) =>
               update(field.key, { boolValue: v === 'SI' || v === 'NO' ? v : undefined })
             }
@@ -124,7 +124,7 @@ export function FilterPanel({
               value={filter.from ?? ''}
               onChange={(e) => update(field.key, { from: e.target.value })}
             />
-            <span>a</span>
+            <span>to</span>
             <input
               type="date"
               value={filter.to ?? ''}
@@ -138,14 +138,14 @@ export function FilterPanel({
           <div className="fpanel-range">
             <input
               type="number"
-              placeholder="Mín"
+              placeholder="Min"
               value={filter.from ?? ''}
               onChange={(e) => update(field.key, { from: e.target.value })}
             />
-            <span>a</span>
+            <span>to</span>
             <input
               type="number"
-              placeholder="Máx"
+              placeholder="Max"
               value={filter.to ?? ''}
               onChange={(e) => update(field.key, { to: e.target.value })}
             />
@@ -155,7 +155,7 @@ export function FilterPanel({
         return (
           <input
             className="fpanel-text"
-            placeholder="Contiene…"
+            placeholder="Contains…"
             value={filter.text ?? ''}
             onChange={(e) => update(field.key, { text: e.target.value })}
           />
@@ -166,20 +166,20 @@ export function FilterPanel({
   return (
     <>
       {open ? <div className="fpanel-backdrop" onClick={onClose} /> : null}
-      <aside className={`fpanel ${open ? 'is-open' : ''}`} aria-label="Filtros por columna">
+      <aside className={`fpanel ${open ? 'is-open' : ''}`} aria-label="Column filters">
         <div className="fpanel-header">
-          <strong>Filtros</strong>
+          <strong>Filters</strong>
           {activeCount > 0 ? <span className="fpanel-count">{activeCount}</span> : null}
           <button
             type="button"
             className="icon-btn"
-            title="Limpiar todos los filtros"
+            title="Clear all filters"
             onClick={onClearAll}
             disabled={activeCount === 0}
           >
             <Eraser size={16} />
           </button>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar filtros">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close filters">
             <X size={17} />
           </button>
         </div>

@@ -23,6 +23,26 @@
   color: var(--text-muted);
 }
 
+.usuarios-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--success-bg);
+  color: var(--success);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.usuarios-email-hint {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  background: var(--primary-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
 .usuarios-error {
   margin-right: auto;
   color: var(--danger);

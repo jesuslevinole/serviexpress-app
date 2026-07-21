@@ -35,7 +35,7 @@
 }
 
 .dtable tbody tr:hover td {
-  background: #faf9fd;
+  background: var(--surface-soft);
 }
 
 .dtable-empty {
@@ -83,4 +83,12 @@
 
 .dtable-sortable:hover .dtable-sort-idle {
   opacity: 0.8;
+}
+
+.dtable-row-click {
+  cursor: pointer;
+}
+
+.dtable-row-click:hover td {
+  background: var(--primary-bg);
 }

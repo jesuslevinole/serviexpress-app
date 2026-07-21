@@ -17,6 +17,7 @@ import {
 } from '../services/excelExport';
 import { normalizeText } from '../services/csv';
 import { ImportCsvModal } from '../components/crud/ImportCsvModal';
+import { RecordDetailModal } from '../components/crud/RecordDetailModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { SaveSummary } from '../components/crud/SaveSummary';
 import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
@@ -36,12 +37,12 @@ const ACTIONS: PermissionAction[] = ['ver', 'crear', 'editar', 'eliminar'];
 
 /** Campos que muestra el sumario lateral del modal de roles. */
 const ROLE_SUMMARY_FIELDS: FieldConfig[] = [
-  { key: 'name', label: 'Rol', type: 'text', required: true },
+  { key: 'name', label: 'Role', type: 'text', required: true },
 ];
 
 /** Campos del importador CSV: nombre + una columna de permisos por módulo. */
 const ROLE_IMPORT_FIELDS: FieldConfig[] = [
-  { key: 'name', label: 'Rol', type: 'text', required: true },
+  { key: 'name', label: 'Role', type: 'text', required: true },
   ...PERMISSION_MODULES.map(
     (module): FieldConfig => ({ key: module.id, label: module.title, type: 'text' }),
   ),
@@ -106,6 +107,7 @@ export function RolesPage() {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [viewing, setViewing] = useState<EntityData | null>(null);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -157,11 +159,11 @@ export function RolesPage() {
   };
 
   const columns: TableColumn[] = [
-    { key: 'name', label: 'Rol', render: (r) => String(r.name ?? '—') },
+    { key: 'name', label: 'Role', render: (r) => String(r.name ?? '—') },
     {
       key: 'permissions',
-      label: 'Permisos activos',
-      render: (r) => `${countPermissions(r as EntityData)} permisos`,
+      label: 'Active permissions',
+      render: (r) => `${countPermissions(r as EntityData)} permissions`,
     },
   ];
 
@@ -211,7 +213,7 @@ export function RolesPage() {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setError('El rol necesita un nombre');
+      setError('The role needs a name');
       return;
     }
     setBusy(true);
@@ -225,7 +227,7 @@ export function RolesPage() {
       }
       setFormOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el rol');
+      setError(err instanceof Error ? err.message : 'Could not save the role');
     } finally {
       setBusy(false);
     }
@@ -249,16 +251,16 @@ export function RolesPage() {
         label: 'ID',
         required: false,
         type: 'text',
-        hint: 'ID de AppSheet (opcional). Reimportar con el mismo ID actualiza el rol.',
+        hint: 'AppSheet ID (optional). Re-importing with the same ID updates the role.',
       },
-      { label: 'Rol', required: true, type: 'text', hint: 'Nombre del rol' },
+      { label: 'Role', required: true, type: 'text', hint: 'Role name' },
       ...PERMISSION_MODULES.map(
         (module): TemplateField => ({
           label: module.title,
           required: false,
           type: 'text',
           options: PERMISSION_COMBOS,
-          hint: 'Permisos separados por comas: ver, crear, editar, eliminar — o "todo". Vacío = sin acceso.',
+          hint: 'Comma separated permissions: ver, crear, editar, eliminar — or "todo". Empty = no access.',
         }),
       ),
     ];
@@ -308,7 +310,7 @@ export function RolesPage() {
         <div className="crud-search">
           <Search size={16} />
           <input
-            placeholder="Buscar roles…"
+            placeholder="Search roles…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -320,31 +322,31 @@ export function RolesPage() {
           <button
             type="button"
             className="btn btn-outline"
-            title="Descargar plantilla Excel de roles"
+            title="Download the roles Excel template"
             onClick={() => void handleTemplate()}
           >
             <FileDown size={16} />
-            Plantilla
+            Template
           </button>
           {can('roles', 'crear') ? (
             <button
               type="button"
               className="btn btn-outline"
-              title="Importar roles desde CSV"
+              title="Import roles from CSV"
               onClick={() => setImportOpen(true)}
             >
               <FileUp size={16} />
-              Importar CSV
+              Import CSV
             </button>
           ) : null}
           <button type="button" className="btn btn-outline" onClick={handleExport}>
             <FileSpreadsheet size={16} />
-            Exportar Excel
+            Export Excel
           </button>
           {can('roles', 'crear') ? (
             <button type="button" className="btn btn-primary" onClick={openCreate}>
               <Plus size={16} />
-              Agregar rol
+              Add role
             </button>
           ) : null}
         </div>
@@ -360,12 +362,52 @@ export function RolesPage() {
         sortKey={sortKey}
         sortDir={sortDir}
         onSort={handleSort}
+        onRowClick={(row) => setViewing(row)}
       />
       <Pagination page={safePage} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
 
+      {viewing ? (
+        <RecordDetailModal
+          title="Roles"
+          fields={ROLE_SUMMARY_FIELDS}
+          record={viewing}
+          refLabels={() => '—'}
+          extra={
+            <div className="roles-detail-perms">
+              <strong>Permissions per module</strong>
+              <ul>
+                {PERMISSION_MODULES.map((module) => {
+                  const perms = parsePermissions(viewing)[module.id];
+                  const active = perms
+                    ? ACTIONS.filter((action) => perms[action] === true)
+                    : [];
+                  if (active.length === 0) return null;
+                  return (
+                    <li key={module.id}>
+                      <span>{module.title}</span>
+                      <em>{active.join(', ')}</em>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          }
+          onEdit={
+            can('roles', 'editar')
+              ? () => {
+                  const row = viewing;
+                  setViewing(null);
+                  openEdit(row);
+                }
+              : undefined
+          }
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+
       <Modal
         open={formOpen}
-        title={editing ? 'Editar rol' : 'Agregar rol'}
+        title={editing ? 'Editar rol' : 'Add role'}
         onClose={() => setFormOpen(false)}
         size="lg"
         footer={
@@ -377,10 +419,10 @@ export function RolesPage() {
               onClick={() => setFormOpen(false)}
               disabled={busy}
             >
-              Cancelar
+              Cancel
             </button>
             <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={busy}>
-              {busy ? 'Guardando…' : 'Guardar'}
+              {busy ? 'Saving…' : 'Save'}
             </button>
           </>
         }
@@ -389,13 +431,13 @@ export function RolesPage() {
         <div className="roles-form-col">
         <div className="field roles-name">
           <label className="field-label">
-            Nombre del rol<span className="field-required">*</span>
+            Role name<span className="field-required">*</span>
           </label>
           <input
             className="field-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ej. Supervisor de estación"
+            placeholder="E.g. Station supervisor"
           />
         </div>
 
@@ -403,11 +445,11 @@ export function RolesPage() {
           <table className="roles-matrix">
             <thead>
               <tr>
-                <th>Módulo</th>
+                <th>Module</th>
                 {ACTIONS.map((action) => (
                   <th key={action}>{action}</th>
                 ))}
-                <th>Todo</th>
+                <th>All</th>
               </tr>
             </thead>
             <tbody>
@@ -432,7 +474,7 @@ export function RolesPage() {
                         className="roles-all-btn"
                         onClick={() => toggleAllForModule(module.id)}
                       >
-                        Alternar
+                        Toggle
                       </button>
                     </td>
                   </tr>
@@ -451,7 +493,7 @@ export function RolesPage() {
               total +
               PERMISSION_MODULES.filter((m) => matrix[m.id]?.[action] === true).length,
             0,
-          )} permisos activos en la matriz`}
+          )} active permissions in the matrix`}
         />
         </div>
       </Modal>
@@ -470,8 +512,8 @@ export function RolesPage() {
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Eliminar rol"
-        message="¿Seguro que quieres eliminar este rol? Los usuarios que lo tengan asignado perderán acceso."
+        title="Delete role"
+        message="Are you sure you want to delete this role? Users assigned to it will lose access."
         busy={busy}
         onCancel={() => setDeleting(null)}
         onConfirm={handleDelete}

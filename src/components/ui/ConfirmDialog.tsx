@@ -26,10 +26,10 @@ export function ConfirmDialog({
       footer={
         <>
           <button type="button" className="btn btn-outline" onClick={onCancel} disabled={busy}>
-            Cancelar
+            Cancel
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Eliminando…' : 'Eliminar'}
+            {busy ? 'Deleting…' : 'Delete'}
           </button>
         </>
       }

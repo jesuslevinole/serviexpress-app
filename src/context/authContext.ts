@@ -14,6 +14,12 @@ export interface AuthContextValue {
   /** TEMPORAL: entra sin credenciales (solo si bypassEnabled). */
   bypassLogin: () => void;
   can: (moduleId: string, action: PermissionAction) => boolean;
+  /** True cuando el rol REAL del usuario es admin. */
+  isAdmin: boolean;
+  /** Perfil que se está simulando con "View as" (null = vista propia). */
+  viewAs: UserProfile | null;
+  startViewAs: (profile: UserProfile) => Promise<void>;
+  stopViewAs: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

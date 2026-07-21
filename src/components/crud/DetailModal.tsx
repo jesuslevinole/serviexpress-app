@@ -15,6 +15,7 @@ import { DataTable, type TableColumn } from '../ui/DataTable';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
+import { RecordDetailModal } from './RecordDetailModal';
 import { displayValue } from './displayValue';
 import type { DetailConfig, EntityData, FieldValue } from '../../types/models';
 import './DetailModal.css';
@@ -50,6 +51,7 @@ export function DetailModal({
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EntityData | null>(null);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
+  const [viewing, setViewing] = useState<EntityData | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
@@ -93,7 +95,7 @@ export function DetailModal({
         setFormOpen(false);
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo guardar');
+      setFormError(err instanceof Error ? err.message : 'Could not save');
     } finally {
       setBusy(false);
     }
@@ -125,7 +127,7 @@ export function DetailModal({
       <div className="detail-toolbar">
         <button type="button" className="btn btn-outline" onClick={handleExport}>
           <FileSpreadsheet size={16} />
-          Exportar Excel
+          Export Excel
         </button>
         {canCreate ? (
           <button
@@ -138,7 +140,7 @@ export function DetailModal({
             }}
           >
             <Plus size={16} />
-            Agregar renglón
+            Add row
           </button>
         ) : null}
       </div>
@@ -149,7 +151,7 @@ export function DetailModal({
         <DataTable
           columns={columns}
           rows={rows}
-          emptyMessage="Este registro todavía no tiene renglones"
+          emptyMessage="This record has no rows yet"
           canEdit={canEdit}
           canDelete={canDelete}
           onEdit={(row) => {
@@ -158,12 +160,34 @@ export function DetailModal({
             setFormOpen(true);
           }}
           onDelete={(row) => setDeleting(row)}
+          onRowClick={(row) => setViewing(row)}
         />
       )}
 
+      {viewing ? (
+        <RecordDetailModal
+          title={detail.title}
+          fields={detail.fields}
+          record={viewing}
+          refLabels={refLabel}
+          onEdit={
+            canEdit
+              ? () => {
+                  const row = viewing;
+                  setViewing(null);
+                  setEditing(row);
+                  setFormError(null);
+                  setFormOpen(true);
+                }
+              : undefined
+          }
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+
       <CrudForm
         open={formOpen}
-        title={editing ? `Editar · ${detail.title}` : `Agregar · ${detail.title}`}
+        title={editing ? `Edit · ${detail.title}` : `Add · ${detail.title}`}
         fields={detail.fields}
         initial={editing}
         refMaps={refMaps}
@@ -176,8 +200,8 @@ export function DetailModal({
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Eliminar renglón"
-        message="¿Seguro que quieres eliminar este renglón del detalle?"
+        title="Delete row"
+        message="Are you sure you want to delete this detail row?"
         busy={busy}
         onCancel={() => setDeleting(null)}
         onConfirm={handleDelete}

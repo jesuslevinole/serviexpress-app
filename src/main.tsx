@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './context/AuthProvider';
+import { UiConfigProvider } from './context/UiConfigProvider';
 import './styles/variables.css';
 import './styles/index.css';
 
@@ -13,7 +14,9 @@ if (container) {
     <StrictMode>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <UiConfigProvider>
+            <App />
+          </UiConfigProvider>
         </AuthProvider>
       </BrowserRouter>
     </StrictMode>,

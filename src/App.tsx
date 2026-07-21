@@ -15,13 +15,13 @@ import './App.css';
 /** Protege una ruta: exige sesión iniciada y permiso de ver el módulo. */
 function Protected({ moduleId, children }: { moduleId: string; children: ReactNode }) {
   const { firebaseUser, loading, can } = useAuth();
-  if (loading) return <Spinner label="Verificando sesión…" />;
+  if (loading) return <Spinner label="Checking session…" />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
   if (!can(moduleId, 'ver')) {
     return (
       <div className="app-no-access">
-        <h2>Sin acceso</h2>
-        <p>Tu rol no tiene permiso para ver este módulo. Pide acceso a un administrador.</p>
+        <h2>No access</h2>
+        <p>Your role has no permission to view this module. Ask an administrator for access.</p>
       </div>
     );
   }

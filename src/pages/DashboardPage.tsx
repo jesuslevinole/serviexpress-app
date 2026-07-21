@@ -37,25 +37,25 @@ export function DashboardPage() {
   }, [trucks.rows, drivers.rows, shop.rows]);
 
   const columns: TableColumn[] = [
-    { key: 'unitN', label: 'Unidad', render: (r) => String(r.unitN ?? '—') },
-    { key: 'lPlate', label: 'Placa', render: (r) => String(r.lPlate ?? '—') },
-    { key: 'nextMant', label: 'Próximo mantenimiento', render: (r) => String(r.nextMant ?? '—') },
+    { key: 'unitN', label: 'Unit', render: (r) => String(r.unitN ?? '—') },
+    { key: 'lPlate', label: 'Plate', render: (r) => String(r.lPlate ?? '—') },
+    { key: 'nextMant', label: 'Next maintenance', render: (r) => String(r.nextMant ?? '—') },
     {
       key: 'status',
-      label: 'Estatus',
-      render: (r) => <Badge value={r.status === true ? 'Sí' : 'No'} />,
+      label: 'Status',
+      render: (r) => <Badge value={r.status === true ? 'Yes' : 'No'} />,
     },
   ];
 
   if (loading) return <Spinner />;
 
   const cards = [
-    { icon: Truck, label: 'Camiones activos', value: stats.activeTrucks, tone: 'primary' },
-    { icon: Users, label: 'Drivers activos', value: stats.activeDrivers, tone: 'success' },
-    { icon: Wrench, label: 'Órdenes de taller abiertas', value: stats.openOrders, tone: 'warning' },
+    { icon: Truck, label: 'Active trucks', value: stats.activeTrucks, tone: 'primary' },
+    { icon: Users, label: 'Active drivers', value: stats.activeDrivers, tone: 'success' },
+    { icon: Wrench, label: 'Open shop orders', value: stats.openOrders, tone: 'warning' },
     {
       icon: AlertTriangle,
-      label: `Mantenimientos en ${DAYS_AHEAD} días`,
+      label: `Maintenance in ${DAYS_AHEAD} days`,
       value: stats.upcoming.length,
       tone: 'danger',
     },
@@ -75,11 +75,11 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <h2 className="dashboard-subtitle">Mantenimientos próximos ({DAYS_AHEAD} días)</h2>
+      <h2 className="dashboard-subtitle">Upcoming maintenance ({DAYS_AHEAD} days)</h2>
       <DataTable
         columns={columns}
         rows={stats.upcoming}
-        emptyMessage="No hay mantenimientos próximos"
+        emptyMessage="No upcoming maintenance"
         canEdit={false}
         canDelete={false}
       />

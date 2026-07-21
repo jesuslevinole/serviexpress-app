@@ -25,13 +25,15 @@ interface DataTableProps<T extends { id: string }> {
   sortDir?: SortDirection | null;
   /** Si se define, los encabezados son clicables para ordenar. */
   onSort?: (key: string) => void;
+  /** Si se define, la fila completa es clicable (ver detalle del registro). */
+  onRowClick?: (row: T) => void;
 }
 
 /** Tabla genérica con acciones. Todas las tablas del app pasan por aquí. */
 export function DataTable<T extends { id: string }>({
   columns,
   rows,
-  emptyMessage = 'Sin registros todavía',
+  emptyMessage = 'No records yet',
   canEdit,
   canDelete,
   onEdit,
@@ -41,6 +43,7 @@ export function DataTable<T extends { id: string }>({
   sortKey = null,
   sortDir = null,
   onSort,
+  onRowClick,
 }: DataTableProps<T>) {
   const showActions = (canEdit && onEdit) || (canDelete && onDelete) || onDetail;
 
@@ -60,7 +63,7 @@ export function DataTable<T extends { id: string }>({
                   key={col.key}
                   className={`dtable-sortable ${sortKey === col.key && sortDir ? 'is-sorted' : ''}`}
                   onClick={() => onSort(col.key)}
-                  title={`Ordenar por ${col.label}`}
+                  title={`Sort by ${col.label}`}
                 >
                   <span className="dtable-th-inner">
                     {col.label}
@@ -71,7 +74,7 @@ export function DataTable<T extends { id: string }>({
                 <th key={col.key}>{col.label}</th>
               ),
             )}
-            {showActions ? <th className="dtable-actions-col">Acciones</th> : null}
+            {showActions ? <th className="dtable-actions-col">Actions</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -83,17 +86,21 @@ export function DataTable<T extends { id: string }>({
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.id}>
+              <tr
+                key={row.id}
+                className={onRowClick ? 'dtable-row-click' : ''}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
                 {columns.map((col) => (
                   <td key={col.key}>{col.render(row)}</td>
                 ))}
                 {showActions ? (
-                  <td className="dtable-actions">
+                  <td className="dtable-actions" onClick={(e) => e.stopPropagation()}>
                     {onDetail ? (
                       <button
                         type="button"
                         className="icon-btn"
-                        title={detailLabel ?? 'Detalle'}
+                        title={detailLabel ?? 'Detail'}
                         onClick={() => onDetail(row)}
                       >
                         <ListPlus size={16} />
@@ -103,7 +110,7 @@ export function DataTable<T extends { id: string }>({
                       <button
                         type="button"
                         className="icon-btn"
-                        title="Editar"
+                        title="Edit"
                         onClick={() => onEdit(row)}
                       >
                         <Pencil size={16} />
@@ -113,7 +120,7 @@ export function DataTable<T extends { id: string }>({
                       <button
                         type="button"
                         className="icon-btn danger"
-                        title="Eliminar"
+                        title="Delete"
                         onClick={() => onDelete(row)}
                       >
                         <Trash2 size={16} />

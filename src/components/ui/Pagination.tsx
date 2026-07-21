@@ -19,7 +19,7 @@ export function Pagination({ page, total, pageSize, onChange }: PaginationProps)
     return (
       <div className="pager">
         <span className="pager-info">
-          {total === 0 ? 'Sin registros' : `Mostrando ${from}–${to} de ${total}`}
+          {total === 0 ? 'No records' : `Showing ${from}–${to} of ${total}`}
         </span>
       </div>
     );
@@ -28,7 +28,7 @@ export function Pagination({ page, total, pageSize, onChange }: PaginationProps)
   return (
     <div className="pager">
       <span className="pager-info">
-        Mostrando {from}–{to} de {total}
+        Showing {from}–{to} of {total}
       </span>
       <div className="pager-controls">
         <button
@@ -36,19 +36,19 @@ export function Pagination({ page, total, pageSize, onChange }: PaginationProps)
           className="icon-btn"
           disabled={safePage <= 1}
           onClick={() => onChange(safePage - 1)}
-          aria-label="Página anterior"
+          aria-label="Previous page"
         >
           <ChevronLeft size={17} />
         </button>
         <span className="pager-page">
-          Página {safePage} de {totalPages}
+          Page {safePage} of {totalPages}
         </span>
         <button
           type="button"
           className="icon-btn"
           disabled={safePage >= totalPages}
           onClick={() => onChange(safePage + 1)}
-          aria-label="Página siguiente"
+          aria-label="Next page"
         >
           <ChevronRight size={17} />
         </button>

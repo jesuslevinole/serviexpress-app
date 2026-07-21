@@ -1,3 +1,5 @@
+
+
 export interface ExcelColumn {
   header: string;
   values: string[];
@@ -26,7 +28,7 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
   sheet.mergeCells(1, 1, 1, Math.max(colCount, 1));
 
   const dateRow = sheet.getRow(2);
-  dateRow.getCell(1).value = `Generado: ${new Date().toLocaleString('es-MX')}`;
+  dateRow.getCell(1).value = `Generated: ${new Date().toLocaleString('en-US')}`;
   dateRow.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF6F6D7C' } };
   sheet.mergeCells(2, 1, 2, Math.max(colCount, 1));
 
@@ -113,9 +115,9 @@ export async function downloadExcelTemplate(
     import('file-saver'),
   ]);
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Plantilla');
-  const listsSheet = workbook.addWorksheet('Listas');
-  const guideSheet = workbook.addWorksheet('Guía');
+  const sheet = workbook.addWorksheet('Template');
+  const listsSheet = workbook.addWorksheet('Lists');
+  const guideSheet = workbook.addWorksheet('Guide');
 
   // ===== Encabezados =====
   const headerRow = sheet.getRow(1);
@@ -150,15 +152,15 @@ export async function downloadExcelTemplate(
         allowBlank: !field.required,
         formulae: [range],
         showErrorMessage: true,
-        errorTitle: 'Valor inválido',
-        error: `Elige un valor de la lista de "${field.label}"`,
+        errorTitle: 'Invalid value',
+        error: `Pick a value from the "${field.label}" list`,
       };
     }
   });
 
   // ===== Guía =====
   const guideHeader = guideSheet.getRow(1);
-  ['Columna', 'Obligatoria', 'Formato / valores'].forEach((label, i) => {
+  ['Column', 'Required', 'Format / values'].forEach((label, i) => {
     const cell = guideHeader.getCell(i + 1);
     cell.value = label;
     cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -167,7 +169,7 @@ export async function downloadExcelTemplate(
   fields.forEach((field, i) => {
     const row = guideSheet.getRow(i + 2);
     row.getCell(1).value = field.label;
-    row.getCell(2).value = field.required ? 'Sí' : 'No';
+    row.getCell(2).value = field.required ? 'Yes' : 'No';
     row.getCell(3).value = field.hint;
     [1, 2, 3].forEach((c) => {
       row.getCell(c).font = { name: 'Arial', size: 10 };

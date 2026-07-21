@@ -106,6 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewAs, setViewAs] = useState<UserProfile | null>(null);
+  const [viewRole, setViewRole] = useState<Role | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -160,13 +162,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  /** Con "View as" activo, los permisos efectivos son los del usuario simulado. */
   const can = useCallback(
     (moduleId: string, action: PermissionAction): boolean => {
-      if (!role) return false;
-      return role.permissions[moduleId]?.[action] === true;
+      const effective = viewAs ? viewRole : role;
+      if (!effective) return false;
+      return effective.permissions[moduleId]?.[action] === true;
     },
-    [role],
+    [role, viewAs, viewRole],
   );
+
+  const isAdmin = role?.id === 'admin';
+
+  const startViewAs = useCallback(async (profile: UserProfile) => {
+    const loadedRole = await loadRole(profile.roleId);
+    setViewRole(loadedRole);
+    setViewAs(profile);
+  }, []);
+
+  const stopViewAs = useCallback(() => {
+    setViewAs(null);
+    setViewRole(null);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -179,8 +196,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       bypassEnabled: AUTH_BYPASS,
       bypassLogin,
+      isAdmin,
+      viewAs,
+      startViewAs,
+      stopViewAs,
     }),
-    [firebaseUser, profile, role, loading, login, logout, can, bypassLogin],
+    [
+      firebaseUser,
+      profile,
+      role,
+      loading,
+      login,
+      logout,
+      can,
+      bypassLogin,
+      isAdmin,
+      viewAs,
+      startViewAs,
+      stopViewAs,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

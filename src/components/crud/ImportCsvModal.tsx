@@ -115,7 +115,7 @@ export function ImportCsvModal({
   ): { value: FieldValue; error?: string; warning?: string } => {
     const trimmed = raw.trim();
     if (trimmed === '') {
-      if (field.required) return { value: null, error: `"${field.label}" es obligatorio` };
+      if (field.required) return { value: null, error: `"${field.label}" is required` };
       return { value: field.type === 'bool' ? false : null };
     }
     switch (field.type) {
@@ -123,19 +123,19 @@ export function ImportCsvModal({
       case 'currency': {
         const value = parseCsvNumber(trimmed);
         return value === null
-          ? { value: null, error: `"${field.label}": "${trimmed}" no es un número` }
+          ? { value: null, error: `"${field.label}": "${trimmed}" is not a number` }
           : { value };
       }
       case 'date': {
         const value = parseCsvDate(trimmed);
         return value === null
-          ? { value: null, error: `"${field.label}": "${trimmed}" no es fecha (usa DD/MM/AAAA)` }
+          ? { value: null, error: `"${field.label}": "${trimmed}" is not a date (use DD/MM/YYYY)` }
           : { value };
       }
       case 'bool': {
         const value = parseCsvBool(trimmed);
         return value === null
-          ? { value: null, error: `"${field.label}": usa SI o NO` }
+          ? { value: null, error: `"${field.label}": use YES or NO` }
           : { value };
       }
       case 'enum': {
@@ -145,13 +145,13 @@ export function ImportCsvModal({
         return match === undefined
           ? {
               value: null,
-              error: `"${field.label}": "${trimmed}" no está en: ${(field.enumValues ?? []).join(', ')}`,
+              error: `"${field.label}": "${trimmed}" is not one of: ${(field.enumValues ?? []).join(', ')}`,
             }
           : { value: match };
       }
       case 'ref': {
         const index = field.refCollection ? refIndexes[field.refCollection] : undefined;
-        if (!index) return { value: null, error: `"${field.label}": catálogo no disponible` };
+        if (!index) return { value: null, error: `"${field.label}": catalog not available` };
         // Primero: ¿es directamente un ID existente (AppSheet)?
         if (index.ids.has(trimmed)) return { value: trimmed };
         const normalized = normalizeText(trimmed);
@@ -159,7 +159,7 @@ export function ImportCsvModal({
         if (exactId !== undefined) return { value: exactId };
         const looseId = index.loose.get(normalized);
         if (looseId === AMBIGUOUS) {
-          return { value: null, error: `"${field.label}": "${trimmed}" es ambiguo, usa el nombre completo` };
+          return { value: null, error: `"${field.label}": "${trimmed}" is ambiguous, use the full name` };
         }
         if (looseId !== undefined) return { value: looseId };
         // Referencia a un registro que aún no existe (p. ej. driver dado de baja
@@ -167,14 +167,14 @@ export function ImportCsvModal({
         // cuando importes ese registro con el mismo ID de AppSheet.
         return {
           value: trimmed,
-          warning: `"${field.label}": "${trimmed}" no existe todavía — se guardará y se resolverá cuando importes ese registro`,
+          warning: `"${field.label}": "${trimmed}" does not exist yet — it will be saved and resolved once you import that record`,
         };
       }
       default:
         if (SCIENTIFIC_NOTATION.test(trimmed)) {
           return {
             value: null,
-            error: `"${field.label}": "${trimmed}" es notación científica de Excel — formatea esa columna como Texto sin formato en tu hoja y reexporta el CSV`,
+            error: `"${field.label}": "${trimmed}" is Excel scientific notation — format that column as Plain text in your sheet and re-export the CSV`,
           };
         }
         return { value: trimmed };
@@ -187,7 +187,7 @@ export function ImportCsvModal({
     const text = await file.text();
     const { headers, rows } = parseCsv(text);
     if (headers.length === 0 || rows.length === 0) {
-      setFileError('El archivo está vacío o no tiene filas de datos');
+      setFileError('The file is empty or has no data rows');
       return;
     }
 
@@ -221,9 +221,9 @@ export function ImportCsvModal({
         const rawId = (row[idColumnIndex] ?? '').trim();
         if (rawId !== '') {
           if (rawId.includes('/')) {
-            errors.push('El ID no puede contener "/"');
+            errors.push('The ID cannot contain "/"');
           } else if (seenIds.has(rawId)) {
-            errors.push(`ID "${rawId}" repetido en el archivo`);
+            errors.push(`ID "${rawId}" repeated in the file`);
           } else {
             seenIds.add(rawId);
             docId = rawId;
@@ -268,7 +268,7 @@ export function ImportCsvModal({
       } catch (err) {
         failed.push({
           index: row.index,
-          message: err instanceof Error ? err.message : 'No se pudo guardar',
+          message: err instanceof Error ? err.message : 'Could not save',
         });
       }
       processed += 1;
@@ -283,15 +283,15 @@ export function ImportCsvModal({
   const warningRows = prepared.filter((r) => r.errors.length === 0 && r.warnings.length > 0);
 
   return (
-    <Modal open title={`Importar CSV · ${title}`} onClose={onClose} size="lg"
+    <Modal open title={`Import CSV · ${title}`} onClose={onClose} size="lg"
       footer={
         phase === 'preview' && missingColumns.length === 0 ? (
           <>
             <span className="imp-footer-info">
-              {validRows.length} filas listas · {errorRows.length} con errores
+              {validRows.length} rows ready · {errorRows.length} with errors
             </span>
             <button type="button" className="btn btn-outline" onClick={onClose}>
-              Cancelar
+              Cancel
             </button>
             <button
               type="button"
@@ -300,12 +300,12 @@ export function ImportCsvModal({
               disabled={validRows.length === 0}
             >
               <Upload size={16} />
-              Importar {validRows.length} filas
+              Import {validRows.length} rows
             </button>
           </>
         ) : phase === 'done' ? (
           <button type="button" className="btn btn-primary" onClick={onClose}>
-            Cerrar
+            Close
           </button>
         ) : undefined
       }
@@ -314,8 +314,8 @@ export function ImportCsvModal({
         <div className="imp-pick">
           <button type="button" className="imp-drop" onClick={() => inputRef.current?.click()}>
             <FileUp size={30} />
-            <strong>Selecciona el archivo CSV</strong>
-            <span>Exportado desde Google Sheets: Archivo → Descargar → CSV</span>
+            <strong>Select the CSV file</strong>
+            <span>Exported from Google Sheets: File → Download → CSV</span>
             {fileName ? <em>{fileName}</em> : null}
           </button>
           <input
@@ -331,37 +331,37 @@ export function ImportCsvModal({
           {fileError ? <p className="imp-error">{fileError}</p> : null}
 
           <div className="imp-guide">
-            <h3>Guía de llenado</h3>
+            <h3>Filling guide</h3>
             <p className="imp-guide-note">
-              Columna opcional <strong>ID</strong>: el ID de AppSheet. Si viene, se usa como
-              identificador (reimportar con el mismo ID actualiza en vez de duplicar) y las
-              columnas de referencia aceptan ese ID o el nombre.
+              Optional <strong>ID</strong> column: the AppSheet ID. When present it becomes the
+              identifier (re-importing with the same ID updates instead of duplicating) and
+              reference columns accept that ID or the name.
             </p>
             <table>
               <thead>
                 <tr>
-                  <th>Columna</th>
-                  <th>Obligatoria</th>
-                  <th>Formato / valores permitidos</th>
+                  <th>Column</th>
+                  <th>Required</th>
+                  <th>Format / allowed values</th>
                 </tr>
               </thead>
               <tbody>
                 {fields.map((field) => (
                   <tr key={field.key}>
                     <td>{field.label}</td>
-                    <td>{field.required ? 'Sí' : 'No'}</td>
+                    <td>{field.required ? 'Yes' : 'No'}</td>
                     <td>
                       {field.type === 'enum'
                         ? (field.enumValues ?? []).join(', ')
                         : field.type === 'date'
-                          ? 'DD/MM/AAAA'
+                          ? 'DD/MM/YYYY'
                           : field.type === 'bool'
-                            ? 'SI o NO'
+                            ? 'YES or NO'
                             : field.type === 'ref'
-                              ? 'Nombre exacto como aparece en el app'
+                              ? 'Exact name as shown in the app'
                               : field.type === 'number' || field.type === 'currency'
-                                ? 'Número'
-                                : 'Texto'}
+                                ? 'Number'
+                                : 'Text'}
                     </td>
                   </tr>
                 ))}
@@ -374,10 +374,10 @@ export function ImportCsvModal({
       {phase === 'preview' && missingColumns.length > 0 ? (
         <div className="imp-missing">
           <p className="imp-error">
-            Al CSV le faltan estas columnas obligatorias: {missingColumns.join(', ')}
+            The CSV is missing these required columns: {missingColumns.join(', ')}
           </p>
           <button type="button" className="btn btn-outline" onClick={() => setPhase('pick')}>
-            Elegir otro archivo
+            Choose another file
           </button>
         </div>
       ) : null}
@@ -386,30 +386,30 @@ export function ImportCsvModal({
         <div className="imp-preview">
           {errorRows.length > 0 ? (
             <div className="imp-errors-box">
-              <strong>Filas con errores (no se importarán):</strong>
+              <strong>Rows with errors (they will NOT be imported):</strong>
               <ul>
                 {errorRows.slice(0, 12).map((row) => (
                   <li key={row.index}>
-                    Fila {row.index}: {row.errors.join(' · ')}
+                    Row {row.index}: {row.errors.join(' · ')}
                   </li>
                 ))}
-                {errorRows.length > 12 ? <li>…y {errorRows.length - 12} más</li> : null}
+                {errorRows.length > 12 ? <li>…and {errorRows.length - 12} more</li> : null}
               </ul>
             </div>
           ) : null}
           {warningRows.length > 0 ? (
             <div className="imp-warnings-box">
               <strong>
-                Filas con avisos (SÍ se importan; las referencias se resolverán cuando importes
-                esos registros):
+                Rows with warnings (they ARE imported; the references will resolve once you
+                import those records):
               </strong>
               <ul>
                 {warningRows.slice(0, 8).map((row) => (
                   <li key={row.index}>
-                    Fila {row.index}: {row.warnings.join(' · ')}
+                    Row {row.index}: {row.warnings.join(' · ')}
                   </li>
                 ))}
-                {warningRows.length > 8 ? <li>…y {warningRows.length - 8} más</li> : null}
+                {warningRows.length > 8 ? <li>…and {warningRows.length - 8} more</li> : null}
               </ul>
             </div>
           ) : null}
@@ -418,7 +418,7 @@ export function ImportCsvModal({
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Estado</th>
+                  <th>Status</th>
                   {hasIdColumn ? <th>ID</th> : null}
                   {fields.map((f) => (
                     <th key={f.key}>{f.label}</th>
@@ -445,39 +445,39 @@ export function ImportCsvModal({
             </table>
           </div>
           {prepared.length > PREVIEW_LIMIT ? (
-            <p className="imp-more">Mostrando {PREVIEW_LIMIT} de {prepared.length} filas</p>
+            <p className="imp-more">Showing {PREVIEW_LIMIT} of {prepared.length} rows</p>
           ) : null}
         </div>
       ) : null}
 
       {phase === 'importing' ? (
         <p className="imp-progress">
-          Importando… {progress} de {validRows.length}
+          Importing… {progress} of {validRows.length}
         </p>
       ) : null}
 
       {phase === 'done' ? (
         <div className="imp-done">
           <p className="imp-done-ok">
-            ✔ Se importaron {imported} registros a {title}
-            {hasIdColumn ? ' (los que traían ID existente se actualizaron)' : ''}.
+            ✔ {imported} records imported into {title}
+            {hasIdColumn ? ' (rows with an existing ID were updated)' : ''}.
           </p>
           {errorRows.length > 0 ? (
             <p>
-              {errorRows.length} filas quedaron fuera por errores: corrígelas en tu hoja y vuelve a
-              importar solo esas.
+              {errorRows.length} rows were left out due to errors: fix them in your sheet and
+              re-import just those.
             </p>
           ) : null}
           {failures.length > 0 ? (
             <div className="imp-errors-box">
-              <strong>{failures.length} filas fallaron al guardarse:</strong>
+              <strong>{failures.length} rows failed to save:</strong>
               <ul>
                 {failures.slice(0, 10).map((f) => (
                   <li key={f.index}>
-                    Fila {f.index}: {f.message}
+                    Row {f.index}: {f.message}
                   </li>
                 ))}
-                {failures.length > 10 ? <li>…y {failures.length - 10} más</li> : null}
+                {failures.length > 10 ? <li>…and {failures.length - 10} more</li> : null}
               </ul>
             </div>
           ) : null}

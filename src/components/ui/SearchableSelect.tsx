@@ -19,7 +19,7 @@ interface SearchableSelectProps {
 export function SearchableSelect({
   value,
   options,
-  placeholder = 'Selecciona…',
+  placeholder = 'Select…',
   invalid = false,
   onChange,
 }: SearchableSelectProps) {
@@ -68,7 +68,7 @@ export function SearchableSelect({
             <span
               className="sselect-clear"
               role="button"
-              aria-label="Limpiar"
+              aria-label="Clear"
               onClick={(e) => {
                 e.stopPropagation();
                 pick('');
@@ -84,13 +84,13 @@ export function SearchableSelect({
         <div className="sselect-menu">
           <input
             className="sselect-search"
-            placeholder="Buscar…"
+            placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
           />
           <ul role="listbox">
-            {filtered.length === 0 ? <li className="sselect-empty">Sin resultados</li> : null}
+            {filtered.length === 0 ? <li className="sselect-empty">No results</li> : null}
             {filtered.map((option) => (
               <li key={option.value}>
                 <button

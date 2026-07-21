@@ -38,7 +38,7 @@ export function Modal({ open, title, onClose, children, footer, size = 'md' }: M
       >
         <div className="modal-header">
           <h2>{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>

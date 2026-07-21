@@ -42,12 +42,12 @@ export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryPr
   const requiredMissing = requiredFields.filter((f) => isEmpty(values[f.key])).length;
 
   return (
-    <aside className="ssum" aria-label="Resumen del registro">
+    <aside className="ssum" aria-label="Record summary">
       <div className="ssum-header">
         <span className="ssum-header-icon">
           <ClipboardList size={15} />
         </span>
-        <strong>Resumen del registro</strong>
+        <strong>Record summary</strong>
       </div>
 
       <div className="ssum-progress">
@@ -66,7 +66,7 @@ export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryPr
           />
         </div>
         <span className="ssum-progress-text">
-          {filled.length} de {fields.length} campos
+          {filled.length} of {fields.length} fields
         </span>
       </div>
 
@@ -75,19 +75,19 @@ export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryPr
           <p className="ssum-required is-missing">
             <AlertCircle size={13} />
             {requiredMissing === 1
-              ? 'Falta 1 campo obligatorio'
-              : `Faltan ${requiredMissing} campos obligatorios`}
+              ? '1 required field missing'
+              : `${requiredMissing} required fields missing`}
           </p>
         ) : (
           <p className="ssum-required is-ok">
             <CheckCircle2 size={13} />
-            Obligatorios completos
+            Required fields complete
           </p>
         )
       ) : null}
 
       {filled.length === 0 ? (
-        <p className="ssum-empty">Empieza a llenar el formulario y aquí verás el resumen.</p>
+        <p className="ssum-empty">Start filling the form and the summary will appear here.</p>
       ) : (
         <dl className="ssum-list">
           {filled.map((item) => (

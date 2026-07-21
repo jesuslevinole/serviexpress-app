@@ -14,6 +14,7 @@ import {
 import { Badge } from '../components/ui/Badge';
 import { SaveSummary } from '../components/crud/SaveSummary';
 import { ImportCsvModal } from '../components/crud/ImportCsvModal';
+import { RecordDetailModal } from '../components/crud/RecordDetailModal';
 import type { RefMaps } from '../hooks/useRefMaps';
 import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
 import { Modal } from '../components/ui/Modal';
@@ -37,12 +38,20 @@ const EMPTY_FORM: UserFormState = {
   status: 'ACTIVO',
 };
 
+/** Campos que muestra el visor de detalle de un usuario. */
+const USER_DETAIL_FIELDS: FieldConfig[] = [
+  { key: 'name', label: 'Name', type: 'text' },
+  { key: 'email', label: 'Email', type: 'text' },
+  { key: 'roleId', label: 'Role', type: 'ref', refCollection: COLLECTIONS.roles },
+  { key: 'status', label: 'Status', type: 'text' },
+];
+
 /** Campos que valida el importador CSV de usuarios. */
 const USER_IMPORT_FIELDS: FieldConfig[] = [
-  { key: 'name', label: 'Nombre', type: 'text', required: true },
-  { key: 'email', label: 'Correo', type: 'text', required: true },
-  { key: 'roleId', label: 'Rol', type: 'ref', refCollection: COLLECTIONS.roles, required: true },
-  { key: 'status', label: 'Estatus', type: 'text' },
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  { key: 'email', label: 'Email', type: 'text', required: true },
+  { key: 'roleId', label: 'Role', type: 'ref', refCollection: COLLECTIONS.roles, required: true },
+  { key: 'status', label: 'Status', type: 'text' },
 ];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -58,10 +67,10 @@ function normalizeUserStatus(raw: FieldValue): string {
 
 /** Campos que muestra el sumario lateral del modal de usuarios. */
 const USER_SUMMARY_FIELDS: FieldConfig[] = [
-  { key: 'name', label: 'Nombre', type: 'text', required: true },
-  { key: 'email', label: 'Correo', type: 'text', required: true },
-  { key: 'roleId', label: 'Rol', type: 'text', required: true },
-  { key: 'status', label: 'Estatus', type: 'text', required: true },
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  { key: 'email', label: 'Email', type: 'text', required: true },
+  { key: 'roleId', label: 'Role', type: 'text', required: true },
+  { key: 'status', label: 'Status', type: 'text', required: true },
 ];
 
 /**
@@ -86,6 +95,7 @@ export function UsuariosPage() {
   const [sortDir, setSortDir] = useState<SortDirection | null>(null);
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
+  const [viewing, setViewing] = useState<EntityData | null>(null);
 
   const roleName = useMemo(() => {
     const map = new Map<string, string>();
@@ -133,14 +143,14 @@ export function UsuariosPage() {
   const pageRows = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const columns: TableColumn[] = [
-    { key: 'name', label: 'Nombre', render: (r) => String(r.name ?? '—') },
-    { key: 'email', label: 'Correo', render: (r) => String(r.email ?? '—') },
+    { key: 'name', label: 'Name', render: (r) => String(r.name ?? '—') },
+    { key: 'email', label: 'Email', render: (r) => String(r.email ?? '—') },
     {
       key: 'roleId',
-      label: 'Rol',
+      label: 'Role',
       render: (r) => roleName.get(String(r.roleId ?? '')) ?? '—',
     },
-    { key: 'status', label: 'Estatus', render: (r) => <Badge value={String(r.status ?? '—')} /> },
+    { key: 'status', label: 'Status', render: (r) => <Badge value={String(r.status ?? '—')} /> },
   ];
 
   const openCreate = () => {
@@ -169,7 +179,7 @@ export function UsuariosPage() {
     const missingCreate = !editing && !form.email.trim();
     if (missingBase || missingCreate) {
       setInvalid(true);
-      setError(editing ? 'Completa nombre, rol y estatus' : 'Completa todos los campos');
+      setError(editing ? 'Fill in name, role and status' : 'Fill in all the fields');
       return;
     }
     setBusy(true);
@@ -191,12 +201,12 @@ export function UsuariosPage() {
           status: form.status,
         });
         setNotice(
-          `Usuario creado. Cuando decidas, envíale la invitación con el botón de sobre en Acciones.`,
+          `User created. When you decide, send the invitation with the button in Actions.`,
         );
       }
       setFormOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el usuario');
+      setError(err instanceof Error ? err.message : 'Could not save the user');
     } finally {
       setBusy(false);
     }
@@ -208,9 +218,9 @@ export function UsuariosPage() {
     if (!email) return;
     try {
       await sendSetPasswordEmail(email);
-      setNotice(`Invitación enviada a ${email} para establecer su contraseña.`);
+      setNotice(`Invitation sent to ${email} to set their password.`);
     } catch {
-      setNotice(`No se pudo enviar la invitación a ${email}. Intenta de nuevo.`);
+      setNotice(`Could not send the invitation to ${email}. Try again.`);
     }
   };
 
@@ -222,26 +232,26 @@ export function UsuariosPage() {
         required: false,
         type: 'text',
         hint:
-          'ID de AppSheet (opcional, solo referencia histórica). El identificador de login lo genera Firebase.',
+          'AppSheet ID (optional, historical reference only). The login identifier is generated by Firebase.',
       },
-      { label: 'Nombre', required: true, type: 'text', hint: 'Texto' },
-      { label: 'Correo', required: true, type: 'text', hint: 'Correo electrónico único' },
+      { label: 'Name', required: true, type: 'text', hint: 'Text' },
+      { label: 'Email', required: true, type: 'text', hint: 'Unique email address' },
       {
-        label: 'Rol',
+        label: 'Role',
         required: true,
         type: 'ref',
         options: roles.rows
           .map((r) => String(r.name ?? ''))
           .filter((n) => n !== '')
           .sort((a, b) => a.localeCompare(b)),
-        hint: 'Nombre del rol tal como existe en el app (usa el desplegable)',
+        hint: 'Role name exactly as it exists in the app (use the dropdown)',
       },
       {
-        label: 'Estatus',
+        label: 'Status',
         required: false,
         type: 'text',
         options: [...USER_STATUS],
-        hint: 'ACTIVO/INACTIVO o TRUE/FALSE de AppSheet (vacío = ACTIVO)',
+        hint: 'ACTIVO/INACTIVO or AppSheet TRUE/FALSE (empty = ACTIVO)',
       },
     ];
     await downloadExcelTemplate('Usuarios', templateFields);
@@ -254,7 +264,7 @@ export function UsuariosPage() {
   ): Promise<void> => {
     const email = String(values.email ?? '').trim();
     if (!EMAIL_PATTERN.test(email)) {
-      throw new Error(`"${email}" no es un correo válido — la cuenta necesita un correo real`);
+      throw new Error(`"${email}" is not a valid email — the account needs a real email`);
     }
     await createUserWithProfile({
       name: String(values.name ?? ''),
@@ -295,7 +305,7 @@ export function UsuariosPage() {
         <div className="crud-search">
           <Search size={16} />
           <input
-            placeholder="Buscar usuarios…"
+            placeholder="Search users…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -307,31 +317,31 @@ export function UsuariosPage() {
           <button
             type="button"
             className="btn btn-outline"
-            title="Descargar plantilla Excel de usuarios"
+            title="Download the users Excel template"
             onClick={() => void handleTemplate()}
           >
             <FileDown size={16} />
-            Plantilla
+            Template
           </button>
           {can('users', 'crear') ? (
             <button
               type="button"
               className="btn btn-outline"
-              title="Importar usuarios desde CSV (crea sus cuentas, sin enviar correos)"
+              title="Import users from CSV (creates their accounts, no emails sent)"
               onClick={() => setImportOpen(true)}
             >
               <FileUp size={16} />
-              Importar CSV
+              Import CSV
             </button>
           ) : null}
           <button type="button" className="btn btn-outline" onClick={handleExport}>
             <FileSpreadsheet size={16} />
-            Exportar Excel
+            Export Excel
           </button>
           {can('users', 'crear') ? (
             <button type="button" className="btn btn-primary" onClick={openCreate}>
               <Plus size={16} />
-              Agregar usuario
+              Add user
             </button>
           ) : null}
         </div>
@@ -350,22 +360,42 @@ export function UsuariosPage() {
         canEdit={can('users', 'editar')}
         canDelete={false}
         onEdit={openEdit}
-        detailLabel="Enviar invitación para establecer contraseña"
+        detailLabel="Send invitation to set password"
         onDetail={(row) => void handleSendInvite(row)}
         sortKey={sortKey}
         sortDir={sortDir}
         onSort={handleSort}
+        onRowClick={(row) => setViewing(row)}
       />
       <Pagination page={safePage} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
+
+      {viewing ? (
+        <RecordDetailModal
+          title="Users"
+          fields={USER_DETAIL_FIELDS}
+          record={viewing}
+          refLabels={(_c, id) => roleName.get(id) ?? '—'}
+          onEdit={
+            can('users', 'editar')
+              ? () => {
+                  const row = viewing;
+                  setViewing(null);
+                  openEdit(row);
+                }
+              : undefined
+          }
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
       <p className="usuarios-hint">
-        Para dar de baja a alguien cámbialo a estatus INACTIVO: ya no podrá iniciar sesión. El
-        botón de la izquierda en Acciones envía la invitación para establecer contraseña — no se
-        envía ningún correo hasta que tú lo presiones.
+        To deactivate someone set their status to INACTIVO: they will no longer be able to sign
+        in. The left button in Actions sends the invitation to set their password — no email is
+        sent until you press it.
       </p>
 
       {importOpen ? (
         <ImportCsvModal
-          title="Usuarios"
+          title="Users"
           collection={COLLECTIONS.users}
           fields={USER_IMPORT_FIELDS}
           refMaps={importRefMaps}
@@ -377,7 +407,7 @@ export function UsuariosPage() {
 
       <Modal
         open={formOpen}
-        title={editing ? 'Editar usuario' : 'Agregar usuario'}
+        title={editing ? 'Editar usuario' : 'Add user'}
         onClose={() => setFormOpen(false)}
         footer={
           <>
@@ -388,10 +418,10 @@ export function UsuariosPage() {
               onClick={() => setFormOpen(false)}
               disabled={busy}
             >
-              Cancelar
+              Cancel
             </button>
             <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={busy}>
-              {busy ? 'Guardando…' : 'Guardar'}
+              {busy ? 'Saving…' : 'Save'}
             </button>
           </>
         }
@@ -400,7 +430,7 @@ export function UsuariosPage() {
         <div className="usuarios-form">
           <div className="field">
             <label className="field-label">
-              Nombre<span className="field-required">*</span>
+              Name<span className="field-required">*</span>
             </label>
             <input
               className={`field-input ${invalid && !form.name.trim() ? 'field-invalid' : ''}`}
@@ -410,7 +440,7 @@ export function UsuariosPage() {
           </div>
           <div className="field">
             <label className="field-label">
-              Correo electrónico<span className="field-required">*</span>
+              Email<span className="field-required">*</span>
             </label>
             <input
               className={`field-input ${invalid && !editing && !form.email.trim() ? 'field-invalid' : ''}`}
@@ -422,14 +452,13 @@ export function UsuariosPage() {
           </div>
           {!editing ? (
             <p className="usuarios-email-hint">
-              El usuario NO recibirá ningún correo al crearse. Cuando decidas, envíale la
-              invitación con el botón de sobre en la tabla y le llegará el enlace para establecer
-              su propia contraseña.
+              The user will NOT receive any email on creation. When you decide, send the invitation
+              with the button in the table and they will get the link to set their own password.
             </p>
           ) : null}
           <div className="field">
             <label className="field-label">
-              Rol<span className="field-required">*</span>
+              Role<span className="field-required">*</span>
             </label>
             <SearchableSelect
               value={form.roleId}
@@ -440,7 +469,7 @@ export function UsuariosPage() {
           </div>
           <div className="field">
             <label className="field-label">
-              Estatus<span className="field-required">*</span>
+              Status<span className="field-required">*</span>
             </label>
             <SearchableSelect
               value={form.status}

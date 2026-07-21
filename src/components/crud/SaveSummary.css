@@ -2,7 +2,7 @@
   width: 260px;
   flex-shrink: 0;
   align-self: flex-start;
-  background: linear-gradient(180deg, #fbfcff 0%, var(--surface) 60px);
+  background: linear-gradient(180deg, var(--surface-soft) 0%, var(--surface) 60px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);

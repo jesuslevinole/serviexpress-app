@@ -15,7 +15,7 @@ export function displayValue(
     case 'ref':
       return field.refCollection ? refLabels(field.refCollection, String(value)) : String(value);
     case 'bool':
-      return value === true ? 'Sí' : 'No';
+      return value === true ? 'Yes' : 'No';
     case 'currency':
       return typeof value === 'number' ? formatCurrency(value) : String(value);
     default:
