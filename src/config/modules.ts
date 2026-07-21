@@ -1,16 +1,11 @@
 import type { FieldConfig, ModuleConfig } from '../types/models';
 import { COLLECTIONS } from './collections';
 import {
-  ASSET_STATUS,
-  ASSET_TYPES,
   BC_STATUS,
   CHECK_VALUES,
   DOC_STATUS,
-  DRIVER_STATUS,
   REQUIREMENT_STATUS,
   SHOP_STATUS,
-  TRUCK_STATUS,
-  TRUCK_TYPES,
   UNIFORM_SIZES,
 } from './enums';
 
@@ -18,13 +13,17 @@ import {
  * Campos de contexto que se repiten en casi todas las tablas
  * (ID_ENTITY / ID_STATION del diagrama). Definidos una sola vez.
  */
-const contextFields = (tablaEntity = true, tablaStation = true): FieldConfig[] => [
+const contextFields = (
+  tablaEntity = true,
+  tablaStation = true,
+  required = true,
+): FieldConfig[] => [
   {
     key: 'idEntity',
     label: 'Entidad',
     type: 'ref',
     refCollection: COLLECTIONS.entities,
-    required: true,
+    required,
     table: tablaEntity,
   },
   {
@@ -32,7 +31,7 @@ const contextFields = (tablaEntity = true, tablaStation = true): FieldConfig[] =
     label: 'Estación',
     type: 'ref',
     refCollection: COLLECTIONS.stations,
-    required: true,
+    required,
     table: tablaStation,
   },
 ];
@@ -46,8 +45,8 @@ export const trucksModule: ModuleConfig = {
   autoUserField: 'idUsers',
   fields: [
     { key: 'unitN', label: 'Número de unidad', type: 'text', required: true },
-    { key: 'type', label: 'Tipo de unidad', type: 'enum', enumValues: TRUCK_TYPES, required: true },
-    { key: 'status', label: 'Estatus', type: 'enum', enumValues: TRUCK_STATUS, required: true, defaultValue: 'ACTIVO' },
+    { key: 'type', label: 'Tipo de unidad', type: 'text', required: true },
+    { key: 'status', label: 'Estatus', type: 'bool', defaultValue: true },
     { key: 'date', label: 'Fecha de registro', type: 'date', required: true, table: false },
     {
       key: 'idEntityReg',
@@ -107,11 +106,10 @@ export const driversModule: ModuleConfig = {
       label: 'Categoría',
       type: 'ref',
       refCollection: COLLECTIONS.driverCategories,
-      required: true,
     },
-    { key: 'fa', label: 'FA', type: 'text', table: false },
-    { key: 'sta', label: 'STA', type: 'text', table: false },
-    { key: 'status', label: 'Estatus', type: 'enum', enumValues: DRIVER_STATUS, required: true, defaultValue: 'ACTIVO' },
+    { key: 'fa', label: 'FA', type: 'bool', table: false },
+    { key: 'sta', label: 'STA', type: 'bool', table: false },
+    { key: 'status', label: 'Estatus', type: 'bool', defaultValue: true },
     { key: 'hiringDate', label: 'Fecha de contratación', type: 'date', table: false },
     { key: 'insurance', label: 'Aseguradora', type: 'text', table: false },
     { key: 'fedexId', label: 'FedEx ID', type: 'text' },
@@ -123,6 +121,13 @@ export const driversModule: ModuleConfig = {
     { key: 'qc', label: 'QC', type: 'text', table: false },
     { key: 'qcStatus', label: 'Estatus QC', type: 'enum', enumValues: DOC_STATUS, table: false },
     { key: 'eaExpDate', label: 'Vence EA', type: 'date', table: false },
+    {
+      key: 'idUsers',
+      label: 'Capturado por',
+      type: 'ref',
+      refCollection: COLLECTIONS.users,
+      form: false,
+    },
   ],
 };
 
@@ -133,26 +138,19 @@ export const assetsModule: ModuleConfig = {
   title: 'Assets',
   icon: 'ScanLine',
   fields: [
-    { key: 'type', label: 'Tipo de asset', type: 'enum', enumValues: ASSET_TYPES, required: true },
+    { key: 'type', label: 'Tipo de asset', type: 'text' },
     { key: 'mark', label: 'Marca', type: 'text' },
     { key: 'model', label: 'Modelo', type: 'text' },
-    { key: 'serialNumber', label: 'Número de serie', type: 'text', required: true },
+    { key: 'serialNumber', label: 'Número de serie', type: 'text' },
     { key: 'date', label: 'Fecha de registro', type: 'date', table: false },
-    {
-      key: 'status',
-      label: 'Estatus',
-      type: 'enum',
-      enumValues: ASSET_STATUS,
-      required: true,
-      defaultValue: 'DISPONIBLE',
-    },
+    { key: 'status', label: 'Estatus', type: 'text' },
     {
       key: 'idDriver',
       label: 'Driver asignado',
       type: 'ref',
       refCollection: COLLECTIONS.drivers,
     },
-    ...contextFields(false, false),
+    ...contextFields(false, false, false),
     { key: 'observation', label: 'Observaciones', type: 'textarea', table: false },
   ],
 };
@@ -246,7 +244,7 @@ const bcDetailFields: FieldConfig[] = [
     refCollection: COLLECTIONS.trucks,
     required: true,
   },
-  { key: 'type', label: 'Tipo', type: 'enum', enumValues: TRUCK_TYPES },
+  { key: 'type', label: 'Tipo', type: 'text' },
   { key: 'actualMileage', label: 'Millaje actual', type: 'number' },
   { key: 'nextMant', label: 'Próximo mantenimiento', type: 'date', table: false },
   { key: 'frontLeftDriver', label: 'Llanta del. izq (driver)', type: 'enum', enumValues: CHECK_VALUES, table: false },

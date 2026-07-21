@@ -1,6 +1,7 @@
 .login {
   min-height: 100vh;
   display: flex;
+  background: var(--bg);
 }
 
 .login-panel {
@@ -14,8 +15,19 @@
 .login-brand {
   background: var(--surface);
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   text-align: center;
+}
+
+.login-brand img {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
 }
 
 .login-brand h1 {
@@ -30,7 +42,7 @@
 }
 
 .login-form-panel {
-  background: linear-gradient(160deg, var(--primary-dark), var(--primary));
+  background: linear-gradient(160deg, #4a9cff, var(--primary-dark));
   clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%);
 }
 
@@ -48,7 +60,7 @@
 }
 
 .login-label {
-  color: #e6e3fa;
+  color: #dcebff;
   font-size: 12.5px;
   font-weight: 600;
   margin-bottom: 6px;
@@ -63,7 +75,23 @@
 }
 
 .login-form input:focus {
-  outline: 3px solid rgba(255, 255, 255, 0.4);
+  outline: 3px solid rgba(255, 255, 255, 0.45);
+}
+
+.login-forgot {
+  align-self: flex-end;
+  margin-top: -8px;
+  margin-bottom: 16px;
+  background: none;
+  border: none;
+  color: #dcebff;
+  font-size: 12.5px;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.login-forgot:hover {
+  color: #fff;
 }
 
 .login-error {
@@ -76,20 +104,6 @@
   color: #d4f7e7;
   font-size: 12.5px;
   margin-bottom: 12px;
-}
-
-.login-forgot {
-  margin-top: 12px;
-  background: none;
-  border: none;
-  color: #e6e3fa;
-  font-size: 12.5px;
-  text-decoration: underline;
-  align-self: center;
-}
-
-.login-forgot:hover {
-  color: #fff;
 }
 
 .login-submit {
@@ -109,7 +123,7 @@
   justify-content: center;
   background: transparent;
   border: 1px dashed rgba(255, 255, 255, 0.55);
-  color: #e6e3fa;
+  color: #dcebff;
   padding: 11px;
   font-size: 13px;
 }

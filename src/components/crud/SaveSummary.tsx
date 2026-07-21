@@ -1,89 +1,105 @@
-import { useMemo } from 'react';
-import { CheckCircle2, ListChecks } from 'lucide-react';
+import { useMemo, type ReactNode } from 'react';
+import { AlertCircle, CheckCircle2, ClipboardList } from 'lucide-react';
 import { displayValue } from './displayValue';
-import type { EntityData, FieldConfig } from '../../types/models';
+import type { FieldConfig, FieldValue } from '../../types/models';
 import './SaveSummary.css';
 
 interface SaveSummaryProps {
-  /** Campos del módulo (se usan para elegir qué mostrar de cada registro). */
+  /** Campos del formulario (en el mismo orden en que se capturan). */
   fields: FieldConfig[];
-  /** Registros de la colección en tiempo real (ya vienen ordenados por fecha desc). */
-  rows: EntityData[];
+  /** Valores actuales del formulario. */
+  values: Record<string, FieldValue>;
   /** Resolución id -> nombre para refs. */
   refLabels: (collection: string, id: string) => string;
-  /** Ids guardados durante esta sesión de captura (se resaltan como nuevos). */
-  sessionIds: ReadonlySet<string>;
-  /** Máximo de registros a listar. */
-  limit?: number;
+  /** Contenido extra opcional al pie (p. ej. permisos activos en Roles). */
+  footer?: ReactNode;
 }
 
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+function isEmpty(value: FieldValue | undefined): boolean {
+  return value === null || value === undefined || value === '';
 }
 
 /**
- * Sumario lateral de captura: muestra en tiempo real los registros
- * que se van guardando, con los más recientes arriba y los de esta
- * sesión resaltados. Reutilizado por TODOS los formularios del app.
+ * Sumario en vivo del registro en captura: muestra de forma resumida y
+ * ordenada la información que se va llenando en el formulario, con el
+ * avance de campos y el estado de los obligatorios.
  */
-export function SaveSummary({
-  fields,
-  rows,
-  refLabels,
-  sessionIds,
-  limit = 12,
-}: SaveSummaryProps) {
-  const visibleFields = useMemo(() => {
-    const tableFields = fields.filter((f) => f.table !== false);
-    const source = tableFields.length > 0 ? tableFields : fields;
-    return { primary: source[0], secondary: source.slice(1, 4) };
-  }, [fields]);
+export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryProps) {
+  const filled = useMemo(
+    () =>
+      fields
+        .filter((field) => !isEmpty(values[field.key]))
+        .map((field) => ({
+          key: field.key,
+          label: field.label,
+          value: displayValue(field, values[field.key] ?? null, refLabels),
+          long: field.type === 'textarea',
+        })),
+    [fields, values, refLabels],
+  );
 
-  const items = useMemo(() => rows.slice(0, limit), [rows, limit]);
+  const requiredFields = fields.filter((f) => f.required);
+  const requiredMissing = requiredFields.filter((f) => isEmpty(values[f.key])).length;
 
   return (
-    <aside className="ssum" aria-label="Sumario de registros guardados">
+    <aside className="ssum" aria-label="Resumen del registro">
       <div className="ssum-header">
-        <ListChecks size={16} />
-        <span>Sumario</span>
-        <span className="ssum-count">{rows.length}</span>
+        <span className="ssum-header-icon">
+          <ClipboardList size={15} />
+        </span>
+        <strong>Resumen del registro</strong>
       </div>
-      {sessionIds.size > 0 ? (
-        <p className="ssum-session">
-          <CheckCircle2 size={13} />
-          {sessionIds.size === 1
-            ? '1 guardado en esta sesión'
-            : `${sessionIds.size} guardados en esta sesión`}
-        </p>
+
+      <div className="ssum-progress">
+        <div className="ssum-progress-bar">
+          <span
+            className="ssum-progress-fill"
+            data-width={Math.round((filled.length / Math.max(fields.length, 1)) * 100)}
+            ref={(el) => {
+              if (el) {
+                el.style.setProperty(
+                  '--fill',
+                  `${Math.round((filled.length / Math.max(fields.length, 1)) * 100)}%`,
+                );
+              }
+            }}
+          />
+        </div>
+        <span className="ssum-progress-text">
+          {filled.length} de {fields.length} campos
+        </span>
+      </div>
+
+      {requiredFields.length > 0 ? (
+        requiredMissing > 0 ? (
+          <p className="ssum-required is-missing">
+            <AlertCircle size={13} />
+            {requiredMissing === 1
+              ? 'Falta 1 campo obligatorio'
+              : `Faltan ${requiredMissing} campos obligatorios`}
+          </p>
+        ) : (
+          <p className="ssum-required is-ok">
+            <CheckCircle2 size={13} />
+            Obligatorios completos
+          </p>
+        )
       ) : null}
-      <ul className="ssum-list">
-        {items.length === 0 ? <li className="ssum-empty">Aún no hay registros</li> : null}
-        {items.map((row) => {
-          const isNew = sessionIds.has(row.id);
-          const primary = visibleFields.primary
-            ? displayValue(visibleFields.primary, row[visibleFields.primary.key] ?? null, refLabels)
-            : '—';
-          const secondary = visibleFields.secondary
-            .map((f) => displayValue(f, row[f.key] ?? null, refLabels))
-            .filter((v) => v !== '—')
-            .join(' · ');
-          const savedAt = typeof row.createdAt === 'string' ? formatTime(row.createdAt) : '';
-          return (
-            <li key={row.id} className={`ssum-item ${isNew ? 'is-new' : ''}`}>
-              <div className="ssum-item-main">
-                <strong>{primary}</strong>
-                {secondary ? <span>{secondary}</span> : null}
-              </div>
-              <div className="ssum-item-meta">
-                {isNew ? <em>Nuevo</em> : null}
-                {savedAt ? <time>{savedAt}</time> : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+
+      {filled.length === 0 ? (
+        <p className="ssum-empty">Empieza a llenar el formulario y aquí verás el resumen.</p>
+      ) : (
+        <dl className="ssum-list">
+          {filled.map((item) => (
+            <div key={item.key} className="ssum-item">
+              <dt>{item.label}</dt>
+              <dd className={item.long ? 'is-long' : ''}>{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {footer ? <div className="ssum-footer">{footer}</div> : null}
     </aside>
   );
 }

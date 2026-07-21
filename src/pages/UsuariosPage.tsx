@@ -1,19 +1,26 @@
 import { useMemo, useState } from 'react';
-import { FileSpreadsheet, MailPlus, Plus, Search } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, MailPlus, Plus, Search } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useCollection } from '../hooks/useCollection';
 import { COLLECTIONS } from '../config/collections';
 import { USER_STATUS } from '../config/enums';
 import { createUserWithProfile, sendSetPasswordEmail } from '../services/userService';
 import { updateDocument } from '../services/firestoreService';
-import { exportToExcel } from '../services/excelExport';
+import {
+  downloadExcelTemplate,
+  exportToExcel,
+  type TemplateField,
+} from '../services/excelExport';
 import { Badge } from '../components/ui/Badge';
 import { SaveSummary } from '../components/crud/SaveSummary';
-import { DataTable, type TableColumn } from '../components/ui/DataTable';
+import { ImportCsvModal } from '../components/crud/ImportCsvModal';
+import type { RefMaps } from '../hooks/useRefMaps';
+import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
 import { Modal } from '../components/ui/Modal';
+import { Pagination } from '../components/ui/Pagination';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Spinner } from '../components/ui/Spinner';
-import type { EntityData, FieldConfig } from '../types/models';
+import type { EntityData, FieldConfig, FieldValue } from '../types/models';
 import './UsuariosPage.css';
 
 interface UserFormState {
@@ -30,11 +37,31 @@ const EMPTY_FORM: UserFormState = {
   status: 'ACTIVO',
 };
 
+/** Campos que valida el importador CSV de usuarios. */
+const USER_IMPORT_FIELDS: FieldConfig[] = [
+  { key: 'name', label: 'Nombre', type: 'text', required: true },
+  { key: 'email', label: 'Correo', type: 'text', required: true },
+  { key: 'roleId', label: 'Rol', type: 'ref', refCollection: COLLECTIONS.roles, required: true },
+  { key: 'status', label: 'Estatus', type: 'text' },
+];
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** TRUE/SI/ACTIVO -> ACTIVO · FALSE/NO/INACTIVO -> INACTIVO · vacío -> ACTIVO. */
+function normalizeUserStatus(raw: FieldValue): string {
+  const text = String(raw ?? '').trim().toUpperCase();
+  if (text === '' ) return 'ACTIVO';
+  if (['TRUE', 'SI', 'SÍ', '1', 'ACTIVO', 'ACTIVE'].includes(text)) return 'ACTIVO';
+  if (['FALSE', 'NO', '0', 'INACTIVO', 'INACTIVE'].includes(text)) return 'INACTIVO';
+  return 'ACTIVO';
+}
+
 /** Campos que muestra el sumario lateral del modal de usuarios. */
 const USER_SUMMARY_FIELDS: FieldConfig[] = [
-  { key: 'name', label: 'Nombre', type: 'text' },
-  { key: 'email', label: 'Correo', type: 'text' },
-  { key: 'status', label: 'Estatus', type: 'text' },
+  { key: 'name', label: 'Nombre', type: 'text', required: true },
+  { key: 'email', label: 'Correo', type: 'text', required: true },
+  { key: 'roleId', label: 'Rol', type: 'text', required: true },
+  { key: 'status', label: 'Estatus', type: 'text', required: true },
 ];
 
 /**
@@ -54,8 +81,11 @@ export function UsuariosPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-  const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection | null>(null);
+  const [page, setPage] = useState(1);
+  const [importOpen, setImportOpen] = useState(false);
 
   const roleName = useMemo(() => {
     const map = new Map<string, string>();
@@ -72,6 +102,35 @@ export function UsuariosPage() {
         .some((v) => v.includes(term)),
     );
   }, [users.rows, search, roleName]);
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      setSortKey(null);
+      setSortDir(null);
+    }
+    setPage(1);
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey || !sortDir) return filtered;
+    const direction = sortDir === 'asc' ? 1 : -1;
+    const textOf = (u: EntityData): string => {
+      if (sortKey === 'roleId') return roleName.get(String(u.roleId ?? '')) ?? '';
+      return String(u[sortKey] ?? '');
+    };
+    return [...filtered].sort(
+      (a, b) => textOf(a).toLowerCase().localeCompare(textOf(b).toLowerCase()) * direction,
+    );
+  }, [filtered, sortKey, sortDir, roleName]);
+
+  const PAGE_SIZE = 50;
+  const safePage = Math.min(page, Math.max(1, Math.ceil(sorted.length / PAGE_SIZE)));
+  const pageRows = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const columns: TableColumn[] = [
     { key: 'name', label: 'Nombre', render: (r) => String(r.name ?? '—') },
@@ -122,19 +181,17 @@ export function UsuariosPage() {
           roleId: form.roleId,
           status: form.status,
         });
-        setSessionIds((prev) => new Set(prev).add(editing.id));
         setNotice(null);
       } else {
         const email = form.email.trim();
-        const uid = await createUserWithProfile({
+        await createUserWithProfile({
           name: form.name.trim(),
           email,
           roleId: form.roleId,
           status: form.status,
         });
-        setSessionIds((prev) => new Set(prev).add(uid));
         setNotice(
-          `Usuario creado. Se envió un correo a ${email} para que establezca su contraseña.`,
+          `Usuario creado. Cuando decidas, envíale la invitación con el botón de sobre en Acciones.`,
         );
       }
       setFormOpen(false);
@@ -145,16 +202,74 @@ export function UsuariosPage() {
     }
   };
 
-  /** Reenvía el correo para establecer contraseña (por si expiró o no llegó). */
-  const handleResendEmail = async (row: EntityData) => {
+  /** Envía (o reenvía) la invitación para establecer contraseña. */
+  const handleSendInvite = async (row: EntityData) => {
     const email = String(row.email ?? '');
     if (!email) return;
     try {
       await sendSetPasswordEmail(email);
-      setNotice(`Se reenvió el correo para establecer contraseña a ${email}.`);
+      setNotice(`Invitación enviada a ${email} para establecer su contraseña.`);
     } catch {
-      setNotice(`No se pudo enviar el correo a ${email}. Intenta de nuevo.`);
+      setNotice(`No se pudo enviar la invitación a ${email}. Intenta de nuevo.`);
     }
+  };
+
+  /** Plantilla Excel de usuarios con dropdowns de rol y estatus. */
+  const handleTemplate = async () => {
+    const templateFields: TemplateField[] = [
+      {
+        label: 'ID',
+        required: false,
+        type: 'text',
+        hint:
+          'ID de AppSheet (opcional, solo referencia histórica). El identificador de login lo genera Firebase.',
+      },
+      { label: 'Nombre', required: true, type: 'text', hint: 'Texto' },
+      { label: 'Correo', required: true, type: 'text', hint: 'Correo electrónico único' },
+      {
+        label: 'Rol',
+        required: true,
+        type: 'ref',
+        options: roles.rows
+          .map((r) => String(r.name ?? ''))
+          .filter((n) => n !== '')
+          .sort((a, b) => a.localeCompare(b)),
+        hint: 'Nombre del rol tal como existe en el app (usa el desplegable)',
+      },
+      {
+        label: 'Estatus',
+        required: false,
+        type: 'text',
+        options: [...USER_STATUS],
+        hint: 'ACTIVO/INACTIVO o TRUE/FALSE de AppSheet (vacío = ACTIVO)',
+      },
+    ];
+    await downloadExcelTemplate('Usuarios', templateFields);
+  };
+
+  /** Escritor del importador: crea la cuenta en Auth + el perfil, SIN enviar correo. */
+  const importUserRow = async (
+    docId: string | null,
+    values: Record<string, FieldValue>,
+  ): Promise<void> => {
+    const email = String(values.email ?? '').trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      throw new Error(`"${email}" no es un correo válido — la cuenta necesita un correo real`);
+    }
+    await createUserWithProfile({
+      name: String(values.name ?? ''),
+      email,
+      roleId: String(values.roleId ?? ''),
+      status: normalizeUserStatus(values.status ?? null),
+      appsheetId: docId,
+    });
+  };
+
+  const importRefMaps: RefMaps = {
+    [COLLECTIONS.roles]: {
+      labels: new Map(roles.rows.map((r) => [r.id, String(r.name ?? r.id)])),
+      rows: roles.rows,
+    },
   };
 
   const handleExport = async () => {
@@ -182,10 +297,33 @@ export function UsuariosPage() {
           <input
             placeholder="Buscar usuarios…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <div className="crud-toolbar-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            title="Descargar plantilla Excel de usuarios"
+            onClick={() => void handleTemplate()}
+          >
+            <FileDown size={16} />
+            Plantilla
+          </button>
+          {can('users', 'crear') ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Importar usuarios desde CSV (crea sus cuentas, sin enviar correos)"
+              onClick={() => setImportOpen(true)}
+            >
+              <FileUp size={16} />
+              Importar CSV
+            </button>
+          ) : null}
           <button type="button" className="btn btn-outline" onClick={handleExport}>
             <FileSpreadsheet size={16} />
             Exportar Excel
@@ -208,17 +346,34 @@ export function UsuariosPage() {
 
       <DataTable
         columns={columns}
-        rows={filtered}
+        rows={pageRows}
         canEdit={can('users', 'editar')}
         canDelete={false}
         onEdit={openEdit}
-        detailLabel="Reenviar correo de contraseña"
-        onDetail={(row) => void handleResendEmail(row)}
+        detailLabel="Enviar invitación para establecer contraseña"
+        onDetail={(row) => void handleSendInvite(row)}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
       />
+      <Pagination page={safePage} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
       <p className="usuarios-hint">
         Para dar de baja a alguien cámbialo a estatus INACTIVO: ya no podrá iniciar sesión. El
-        botón de la izquierda en Acciones reenvía el correo para establecer contraseña.
+        botón de la izquierda en Acciones envía la invitación para establecer contraseña — no se
+        envía ningún correo hasta que tú lo presiones.
       </p>
+
+      {importOpen ? (
+        <ImportCsvModal
+          title="Usuarios"
+          collection={COLLECTIONS.users}
+          fields={USER_IMPORT_FIELDS}
+          refMaps={importRefMaps}
+          currentUid={null}
+          writeRow={importUserRow}
+          onClose={() => setImportOpen(false)}
+        />
+      ) : null}
 
       <Modal
         open={formOpen}
@@ -267,8 +422,9 @@ export function UsuariosPage() {
           </div>
           {!editing ? (
             <p className="usuarios-email-hint">
-              El usuario recibirá un correo en esa dirección con un enlace para establecer su
-              propia contraseña. Nadie más la conoce.
+              El usuario NO recibirá ningún correo al crearse. Cuando decidas, envíale la
+              invitación con el botón de sobre en la tabla y le llegará el enlace para establecer
+              su propia contraseña.
             </p>
           ) : null}
           <div className="field">
@@ -296,9 +452,13 @@ export function UsuariosPage() {
         </div>
         <SaveSummary
           fields={USER_SUMMARY_FIELDS}
-          rows={users.rows}
+          values={{
+            name: form.name,
+            email: form.email,
+            status: form.status,
+            roleId: form.roleId === '' ? '' : (roleName.get(form.roleId) ?? form.roleId),
+          }}
           refLabels={() => '—'}
-          sessionIds={sessionIds}
         />
         </div>
       </Modal>

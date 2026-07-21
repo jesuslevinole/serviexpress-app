@@ -15,10 +15,6 @@ interface CrudFormProps {
   refMaps: RefMaps;
   busy: boolean;
   error: string | null;
-  /** Registros de la colección para el sumario lateral en tiempo real. */
-  summaryRows: EntityData[];
-  /** Ids guardados en esta sesión de captura (se resaltan en el sumario). */
-  sessionIds: ReadonlySet<string>;
   /** Se incrementa cuando un "Guardar y agregar otro" fue exitoso: limpia el formulario. */
   resetSignal: number;
   onClose: () => void;
@@ -59,8 +55,6 @@ export function CrudForm({
   refMaps,
   busy,
   error,
-  summaryRows,
-  sessionIds,
   resetSignal,
   onClose,
   onSubmit,
@@ -68,16 +62,19 @@ export function CrudForm({
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [touchedSubmit, setTouchedSubmit] = useState(false);
 
+  /** Campos que sí se capturan (los form:false los llena el sistema). */
+  const formFields = useMemo(() => fields.filter((f) => f.form !== false), [fields]);
+
   useEffect(() => {
     if (open) {
-      setValues(buildInitialValues(fields, initial));
+      setValues(buildInitialValues(formFields, initial));
       setTouchedSubmit(false);
     }
-  }, [open, fields, initial, resetSignal]);
+  }, [open, formFields, initial, resetSignal]);
 
   const refOptionsByField = useMemo(() => {
     const map: Record<string, SelectOption[]> = {};
-    fields.forEach((field) => {
+    formFields.forEach((field) => {
       if (field.type !== 'ref' || !field.refCollection) return;
       const refData = refMaps[field.refCollection];
       if (!refData) {
@@ -93,11 +90,11 @@ export function CrudForm({
         .sort((a, b) => a.label.localeCompare(b.label));
     });
     return map;
-  }, [fields, refMaps]);
+  }, [formFields, refMaps]);
 
   const missing = useMemo(
-    () => fields.filter((f) => f.required && isEmpty(values[f.key])).map((f) => f.key),
-    [fields, values],
+    () => formFields.filter((f) => f.required && isEmpty(values[f.key])).map((f) => f.key),
+    [formFields, values],
   );
 
   const handleChange = (key: string, value: FieldValue) => {
@@ -148,7 +145,7 @@ export function CrudForm({
     >
       <div className="crudform-layout">
         <div className="crudform-grid">
-          {fields.map((field) => (
+          {formFields.map((field) => (
             <FormField
               key={field.key}
               field={field}
@@ -159,12 +156,7 @@ export function CrudForm({
             />
           ))}
         </div>
-        <SaveSummary
-          fields={fields}
-          rows={summaryRows}
-          refLabels={refLabel}
-          sessionIds={sessionIds}
-        />
+        <SaveSummary fields={formFields} values={values} refLabels={refLabel} />
       </div>
     </Modal>
   );

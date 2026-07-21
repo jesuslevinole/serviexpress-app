@@ -52,7 +52,6 @@ export function DetailModal({
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(new Set());
   const [resetSignal, setResetSignal] = useState(0);
 
   const canCreate = can(moduleId, 'crear');
@@ -85,10 +84,8 @@ export function DetailModal({
       const payload = { ...values, [detail.parentKey]: parent.id };
       if (editing) {
         await updateDocument(detail.collection, editing.id, payload);
-        setSessionIds((prev) => new Set(prev).add(editing.id));
       } else {
-        const newId = await createDocument(detail.collection, payload);
-        setSessionIds((prev) => new Set(prev).add(newId));
+        await createDocument(detail.collection, payload);
       }
       if (keepOpen && !editing) {
         setResetSignal((n) => n + 1);
@@ -172,8 +169,6 @@ export function DetailModal({
         refMaps={refMaps}
         busy={busy}
         error={formError}
-        summaryRows={rows}
-        sessionIds={sessionIds}
         resetSignal={resetSignal}
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}

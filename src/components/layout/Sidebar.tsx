@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { CRUD_MODULES } from '../../config/modules';
+import logoUrl from '../../assets/logo.svg';
 import './Sidebar.css';
 
 const ICONS: Record<string, LucideIcon> = {
@@ -48,7 +49,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {open ? <div className="sidebar-backdrop" onClick={onClose} /> : null}
       <aside className={`sidebar ${open ? 'is-open' : ''}`}>
         <div className="sidebar-brand">
-          <img src="/logo.svg" alt="ServiExpress" width={34} height={34} />
+          <img src={logoUrl} alt="ServiExpress" width={34} height={34} />
           <div>
             <strong>ServiExpress</strong>
             <span>Control de flotilla</span>

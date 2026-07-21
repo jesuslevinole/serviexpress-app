@@ -1,123 +1,146 @@
 .ssum {
-  width: 250px;
+  width: 260px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  padding-left: 16px;
+  align-self: flex-start;
+  background: linear-gradient(180deg, #fbfcff 0%, var(--surface) 60px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 60vh;
+  gap: 12px;
+  max-height: 62vh;
+  overflow-y: auto;
 }
 
 .ssum-header {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--primary-dark);
+  gap: 9px;
 }
 
-.ssum-count {
-  margin-left: auto;
+.ssum-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   background: var(--primary-bg);
   color: var(--primary-dark);
-  border-radius: 20px;
-  padding: 1px 9px;
-  font-size: 11.5px;
 }
 
-.ssum-session {
+.ssum-header strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ssum-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ssum-progress-bar {
+  height: 6px;
+  border-radius: 6px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.ssum-progress-fill {
+  display: block;
+  height: 100%;
+  width: var(--fill, 0%);
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--primary-light), var(--primary));
+  transition: width 0.25s ease;
+}
+
+.ssum-progress-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ssum-required {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11.5px;
-  color: var(--success);
-  background: var(--success-bg);
+  font-weight: 600;
   border-radius: var(--radius-sm);
-  padding: 6px 9px;
+  padding: 7px 10px;
 }
 
-.ssum-list {
-  list-style: none;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-right: 4px;
+.ssum-required.is-missing {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.ssum-required.is-ok {
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .ssum-empty {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-muted);
-  padding: 14px 0;
-  text-align: center;
+  line-height: 1.5;
+  padding: 8px 0;
+}
+
+.ssum-list {
+  display: flex;
+  flex-direction: column;
 }
 
 .ssum-item {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  background: var(--surface);
-  animation: ssum-appear 0.25s ease;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  animation: ssum-appear 0.2s ease;
 }
 
-.ssum-item.is-new {
-  border-color: var(--success);
-  background: var(--success-bg);
+.ssum-item:last-child {
+  border-bottom: none;
 }
 
-.ssum-item-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ssum-item-main strong {
-  font-size: 12.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ssum-item-main span {
-  font-size: 11.5px;
-  color: var(--text-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ssum-item-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.ssum-item-meta em {
-  font-style: normal;
+.ssum-item dt {
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--success);
+  color: var(--text-muted);
+  margin-bottom: 2px;
 }
 
-.ssum-item-meta time {
-  font-size: 10.5px;
-  color: var(--text-muted);
+.ssum-item dd {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.ssum-item dd.is-long {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-weight: 500;
+}
+
+.ssum-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--text-soft);
 }
 
 @keyframes ssum-appear {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-3px);
   }
   to {
     opacity: 1;
@@ -128,10 +151,6 @@
 @media (max-width: 760px) {
   .ssum {
     width: 100%;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    padding-left: 0;
-    padding-top: 14px;
-    max-height: 220px;
+    max-height: 240px;
   }
 }

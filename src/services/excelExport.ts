@@ -1,5 +1,3 @@
-
-
 export interface ExcelColumn {
   header: string;
   values: string[];
@@ -24,7 +22,7 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
 
   const titleRow = sheet.getRow(1);
   titleRow.getCell(1).value = title;
-  titleRow.getCell(1).font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF443BA3' } };
+  titleRow.getCell(1).font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF2E6FDD' } };
   sheet.mergeCells(1, 1, 1, Math.max(colCount, 1));
 
   const dateRow = sheet.getRow(2);
@@ -38,7 +36,7 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
     const cell = headerRow.getCell(i + 1);
     cell.value = col.header;
     cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF5A4FCF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3E8BFF' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.border = {
       top: { style: 'thin' },
@@ -75,4 +73,113 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
   });
   const fileName = `${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   saveAs(blob, fileName);
+}
+
+/** Letra de columna de Excel (1 -> A, 27 -> AA). */
+function columnLetter(index: number): string {
+  let n = index;
+  let letters = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+export interface TemplateField {
+  label: string;
+  required: boolean;
+  type: string;
+  /** Valores para lista desplegable (enums, SI/NO o nombres de catálogo). */
+  options?: string[];
+  /** Texto de ayuda para la hoja Guía. */
+  hint: string;
+}
+
+const TEMPLATE_ROWS = 1000;
+
+/**
+ * Plantilla de captura en Excel: hoja "Plantilla" con encabezados de marca,
+ * listas desplegables (enums, SI/NO y catálogos con sus nombres reales),
+ * hoja "Guía" con el formato de cada columna y hoja "Listas" con los valores.
+ */
+export async function downloadExcelTemplate(
+  title: string,
+  fields: TemplateField[],
+): Promise<void> {
+  const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
+    import('exceljs'),
+    import('file-saver'),
+  ]);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Plantilla');
+  const listsSheet = workbook.addWorksheet('Listas');
+  const guideSheet = workbook.addWorksheet('Guía');
+
+  // ===== Encabezados =====
+  const headerRow = sheet.getRow(1);
+  fields.forEach((field, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = field.required ? `${field.label} *` : field.label;
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3E8BFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getColumn(i + 1).width = Math.max(field.label.length + 4, 16);
+  });
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // ===== Listas desplegables =====
+  let listColumn = 0;
+  fields.forEach((field, i) => {
+    if (!field.options || field.options.length === 0) return;
+    listColumn += 1;
+    const letter = columnLetter(listColumn);
+    listsSheet.getCell(`${letter}1`).value = field.label;
+    listsSheet.getCell(`${letter}1`).font = { name: 'Arial', size: 10, bold: true };
+    field.options.forEach((option, j) => {
+      listsSheet.getCell(`${letter}${j + 2}`).value = option;
+    });
+    listsSheet.getColumn(listColumn).width = 26;
+
+    const targetLetter = columnLetter(i + 1);
+    const range = `Listas!$${letter}$2:$${letter}$${field.options.length + 1}`;
+    for (let row = 2; row <= TEMPLATE_ROWS; row += 1) {
+      sheet.getCell(`${targetLetter}${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: !field.required,
+        formulae: [range],
+        showErrorMessage: true,
+        errorTitle: 'Valor inválido',
+        error: `Elige un valor de la lista de "${field.label}"`,
+      };
+    }
+  });
+
+  // ===== Guía =====
+  const guideHeader = guideSheet.getRow(1);
+  ['Columna', 'Obligatoria', 'Formato / valores'].forEach((label, i) => {
+    const cell = guideHeader.getCell(i + 1);
+    cell.value = label;
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E6FDD' } };
+  });
+  fields.forEach((field, i) => {
+    const row = guideSheet.getRow(i + 2);
+    row.getCell(1).value = field.label;
+    row.getCell(2).value = field.required ? 'Sí' : 'No';
+    row.getCell(3).value = field.hint;
+    [1, 2, 3].forEach((c) => {
+      row.getCell(c).font = { name: 'Arial', size: 10 };
+    });
+  });
+  guideSheet.getColumn(1).width = 30;
+  guideSheet.getColumn(2).width = 12;
+  guideSheet.getColumn(3).width = 70;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  saveAs(blob, `Plantilla_${title.replace(/\s+/g, '_')}.xlsx`);
 }

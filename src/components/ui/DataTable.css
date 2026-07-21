@@ -57,3 +57,30 @@
     min-width: 520px;
   }
 }
+
+.dtable-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dtable-sortable:hover {
+  color: var(--primary);
+}
+
+.dtable-sortable.is-sorted {
+  color: var(--primary-dark);
+}
+
+.dtable-th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dtable-sort-idle {
+  opacity: 0.35;
+}
+
+.dtable-sortable:hover .dtable-sort-idle {
+  opacity: 0.8;
+}

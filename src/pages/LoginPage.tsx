@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { sendSetPasswordEmail } from '../services/userService';
 import { Spinner } from '../components/ui/Spinner';
+import logoUrl from '../assets/logo.svg';
 import './LoginPage.css';
 
 export function LoginPage() {
@@ -51,7 +52,7 @@ export function LoginPage() {
   return (
     <div className="login">
       <div className="login-panel login-brand">
-        <img src="/logo.svg" alt="ServiExpress" width={110} height={110} />
+        <img src={logoUrl} alt="ServiExpress" width={110} height={110} />
         <h1>ServiExpress</h1>
         <p>Control de flotilla · mantenimiento, taller, drivers y unidades</p>
       </div>
@@ -80,11 +81,6 @@ export function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error ? <p className="login-error">{error}</p> : null}
-          {info ? <p className="login-info">{info}</p> : null}
-          <button type="submit" className="btn btn-primary login-submit" disabled={busy}>
-            {busy ? 'Entrando…' : 'Entrar'}
-          </button>
           <button
             type="button"
             className="login-forgot"
@@ -92,6 +88,11 @@ export function LoginPage() {
             disabled={busy}
           >
             ¿Olvidaste tu contraseña?
+          </button>
+          {error ? <p className="login-error">{error}</p> : null}
+          {info ? <p className="login-info">{info}</p> : null}
+          <button type="submit" className="btn btn-primary login-submit" disabled={busy}>
+            {busy ? 'Entrando…' : 'Entrar'}
           </button>
           {bypassEnabled ? (
             <button

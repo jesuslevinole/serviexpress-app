@@ -25,8 +25,8 @@ export function DashboardPage() {
   const loading = trucks.loading || drivers.loading || shop.loading;
 
   const stats = useMemo(() => {
-    const activeTrucks = trucks.rows.filter((t) => t.status === 'ACTIVO').length;
-    const activeDrivers = drivers.rows.filter((d) => d.status === 'ACTIVO').length;
+    const activeTrucks = trucks.rows.filter((t) => t.status === true).length;
+    const activeDrivers = drivers.rows.filter((d) => d.status === true).length;
     const openOrders = shop.rows.filter(
       (o) => o.status === 'ABIERTA' || o.status === 'EN PROCESO',
     ).length;
@@ -43,7 +43,7 @@ export function DashboardPage() {
     {
       key: 'status',
       label: 'Estatus',
-      render: (r) => <Badge value={String(r.status ?? '—')} />,
+      render: (r) => <Badge value={r.status === true ? 'Sí' : 'No'} />,
     },
   ];
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileSpreadsheet, Plus, Search } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, Plus, Search } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useCollection } from '../hooks/useCollection';
 import { COLLECTIONS } from '../config/collections';
@@ -7,17 +7,26 @@ import { PERMISSION_MODULES } from '../config/modules';
 import {
   createDocument,
   deleteDocument,
+  setDocument,
   updateDocument,
 } from '../services/firestoreService';
-import { exportToExcel } from '../services/excelExport';
+import {
+  downloadExcelTemplate,
+  exportToExcel,
+  type TemplateField,
+} from '../services/excelExport';
+import { normalizeText } from '../services/csv';
+import { ImportCsvModal } from '../components/crud/ImportCsvModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { SaveSummary } from '../components/crud/SaveSummary';
-import { DataTable, type TableColumn } from '../components/ui/DataTable';
+import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
 import { Modal } from '../components/ui/Modal';
+import { Pagination } from '../components/ui/Pagination';
 import { Spinner } from '../components/ui/Spinner';
 import type {
   EntityData,
   FieldConfig,
+  FieldValue,
   ModulePermissions,
   PermissionAction,
 } from '../types/models';
@@ -26,7 +35,47 @@ import './RolesPage.css';
 const ACTIONS: PermissionAction[] = ['ver', 'crear', 'editar', 'eliminar'];
 
 /** Campos que muestra el sumario lateral del modal de roles. */
-const ROLE_SUMMARY_FIELDS: FieldConfig[] = [{ key: 'name', label: 'Rol', type: 'text' }];
+const ROLE_SUMMARY_FIELDS: FieldConfig[] = [
+  { key: 'name', label: 'Rol', type: 'text', required: true },
+];
+
+/** Campos del importador CSV: nombre + una columna de permisos por módulo. */
+const ROLE_IMPORT_FIELDS: FieldConfig[] = [
+  { key: 'name', label: 'Rol', type: 'text', required: true },
+  ...PERMISSION_MODULES.map(
+    (module): FieldConfig => ({ key: module.id, label: module.title, type: 'text' }),
+  ),
+];
+
+const PERMISSION_COMBOS = [
+  'todo',
+  'ver',
+  'ver, crear',
+  'ver, crear, editar',
+  'ver, crear, editar, eliminar',
+];
+
+/** "ver, crear" | "todo" -> permisos del módulo. Otorgar algo implica ver. */
+function parsePermissionTokens(raw: string): ModulePermissions | null {
+  const tokens = raw
+    .split(/[,;/\s]+/)
+    .map((t) => normalizeText(t))
+    .filter((t) => t !== '');
+  if (tokens.length === 0) return null;
+  const perms: ModulePermissions = {};
+  tokens.forEach((token) => {
+    if (token === 'todo' || token === 'all') {
+      perms.ver = true;
+      perms.crear = true;
+      perms.editar = true;
+      perms.eliminar = true;
+    } else if (token === 'ver' || token === 'crear' || token === 'editar' || token === 'eliminar') {
+      perms[token] = true;
+    }
+  });
+  if (perms.crear || perms.editar || perms.eliminar) perms.ver = true;
+  return Object.values(perms).some((v) => v === true) ? perms : null;
+}
 
 type PermissionMatrix = Record<string, ModulePermissions>;
 
@@ -53,13 +102,50 @@ export function RolesPage() {
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return roles.rows;
     return roles.rows.filter((r) => String(r.name ?? '').toLowerCase().includes(term));
   }, [roles.rows, search]);
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      setSortKey(null);
+      setSortDir(null);
+    }
+    setPage(1);
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey || !sortDir) return filtered;
+    const direction = sortDir === 'asc' ? 1 : -1;
+    if (sortKey === 'permissions') {
+      return [...filtered].sort(
+        (a, b) => (countPermissions(a) - countPermissions(b)) * direction,
+      );
+    }
+    return [...filtered].sort(
+      (a, b) =>
+        String(a.name ?? '')
+          .toLowerCase()
+          .localeCompare(String(b.name ?? '').toLowerCase()) * direction,
+    );
+     
+  }, [filtered, sortKey, sortDir]);
+
+  const PAGE_SIZE = 50;
+  const safePage = Math.min(page, Math.max(1, Math.ceil(sorted.length / PAGE_SIZE)));
+  const pageRows = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const countPermissions = (row: EntityData): number => {
     const permissions = parsePermissions(row);
@@ -134,10 +220,8 @@ export function RolesPage() {
       const payload = { name: name.trim(), permissions: matrix };
       if (editing) {
         await updateDocument(COLLECTIONS.roles, editing.id, payload);
-        setSessionIds((prev) => new Set(prev).add(editing.id));
       } else {
-        const newId = await createDocument(COLLECTIONS.roles, payload);
-        setSessionIds((prev) => new Set(prev).add(newId));
+        await createDocument(COLLECTIONS.roles, payload);
       }
       setFormOpen(false);
     } catch (err) {
@@ -155,6 +239,49 @@ export function RolesPage() {
     } finally {
       setDeleting(null);
       setBusy(false);
+    }
+  };
+
+  /** Plantilla Excel de roles: una columna de permisos por módulo. */
+  const handleTemplate = async () => {
+    const templateFields: TemplateField[] = [
+      {
+        label: 'ID',
+        required: false,
+        type: 'text',
+        hint: 'ID de AppSheet (opcional). Reimportar con el mismo ID actualiza el rol.',
+      },
+      { label: 'Rol', required: true, type: 'text', hint: 'Nombre del rol' },
+      ...PERMISSION_MODULES.map(
+        (module): TemplateField => ({
+          label: module.title,
+          required: false,
+          type: 'text',
+          options: PERMISSION_COMBOS,
+          hint: 'Permisos separados por comas: ver, crear, editar, eliminar — o "todo". Vacío = sin acceso.',
+        }),
+      ),
+    ];
+    await downloadExcelTemplate('Roles', templateFields);
+  };
+
+  /** Escritor del importador: arma la matriz de permisos desde las columnas. */
+  const importRoleRow = async (
+    docId: string | null,
+    values: Record<string, FieldValue>,
+  ): Promise<void> => {
+    const permissions: PermissionMatrix = {};
+    PERMISSION_MODULES.forEach((module) => {
+      const raw = values[module.id];
+      if (typeof raw !== 'string' || raw.trim() === '') return;
+      const perms = parsePermissionTokens(raw);
+      if (perms) permissions[module.id] = perms;
+    });
+    const payload = { name: String(values.name ?? ''), permissions };
+    if (docId) {
+      await setDocument(COLLECTIONS.roles, docId, payload);
+    } else {
+      await createDocument(COLLECTIONS.roles, payload);
     }
   };
 
@@ -183,10 +310,33 @@ export function RolesPage() {
           <input
             placeholder="Buscar roles…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <div className="crud-toolbar-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            title="Descargar plantilla Excel de roles"
+            onClick={() => void handleTemplate()}
+          >
+            <FileDown size={16} />
+            Plantilla
+          </button>
+          {can('roles', 'crear') ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Importar roles desde CSV"
+              onClick={() => setImportOpen(true)}
+            >
+              <FileUp size={16} />
+              Importar CSV
+            </button>
+          ) : null}
           <button type="button" className="btn btn-outline" onClick={handleExport}>
             <FileSpreadsheet size={16} />
             Exportar Excel
@@ -202,12 +352,16 @@ export function RolesPage() {
 
       <DataTable
         columns={columns}
-        rows={filtered}
+        rows={pageRows}
         canEdit={can('roles', 'editar')}
         canDelete={can('roles', 'eliminar')}
         onEdit={openEdit}
         onDelete={(row) => setDeleting(row)}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
       />
+      <Pagination page={safePage} total={sorted.length} pageSize={PAGE_SIZE} onChange={setPage} />
 
       <Modal
         open={formOpen}
@@ -290,12 +444,29 @@ export function RolesPage() {
         </div>
         <SaveSummary
           fields={ROLE_SUMMARY_FIELDS}
-          rows={filtered}
+          values={{ name }}
           refLabels={() => '—'}
-          sessionIds={sessionIds}
+          footer={`${ACTIONS.reduce(
+            (total, action) =>
+              total +
+              PERMISSION_MODULES.filter((m) => matrix[m.id]?.[action] === true).length,
+            0,
+          )} permisos activos en la matriz`}
         />
         </div>
       </Modal>
+
+      {importOpen ? (
+        <ImportCsvModal
+          title="Roles"
+          collection={COLLECTIONS.roles}
+          fields={ROLE_IMPORT_FIELDS}
+          refMaps={{}}
+          currentUid={null}
+          writeRow={importRoleRow}
+          onClose={() => setImportOpen(false)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleting !== null}

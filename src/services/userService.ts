@@ -11,7 +11,7 @@ import { setDocument } from './firestoreService';
 
 /**
  * Contraseña temporal aleatoria y fuerte que nadie conoce ni usa:
- * el usuario define la suya con el enlace que recibe por correo.
+ * el usuario define la suya con el enlace de invitación.
  */
 function randomTempPassword(): string {
   const bytes = new Uint8Array(24);
@@ -19,21 +19,25 @@ function randomTempPassword(): string {
   return `Tmp!${Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('')}`;
 }
 
-/**
- * Alta de usuario SIN contraseña del admin:
- * 1. Se crea la cuenta en Firebase Auth con una contraseña temporal aleatoria
- *    (vía instancia secundaria, para no cerrar la sesión del administrador).
- * 2. Se guarda el perfil en Firestore.
- * 3. Firebase le envía un correo al usuario con el enlace para establecer
- *    su propia contraseña.
- */
-export async function createUserWithProfile(params: {
+interface NewUserParams {
   name: string;
   email: string;
   roleId: string;
   status: string;
-}): Promise<string> {
-  const secondaryApp = initializeApp(firebaseConfig, `secondary-${Date.now()}`);
+  /** ID original de AppSheet (solo referencia histórica; el login usa el uid). */
+  appsheetId?: string | null;
+}
+
+/**
+ * Alta de usuario SIN enviar correo:
+ * 1. Se crea la cuenta en Firebase Auth con una contraseña temporal aleatoria
+ *    (vía instancia secundaria, para no cerrar la sesión del administrador).
+ * 2. Se guarda el perfil en Firestore (id = uid).
+ * La invitación para establecer contraseña se envía después, cuando el
+ * administrador presiona el botón de invitación del usuario.
+ */
+export async function createUserWithProfile(params: NewUserParams): Promise<string> {
+  const secondaryApp = initializeApp(firebaseConfig, `secondary-${Date.now()}-${Math.random()}`);
   const secondaryAuth = getAuth(secondaryApp);
   secondaryAuth.languageCode = 'es';
   try {
@@ -48,8 +52,8 @@ export async function createUserWithProfile(params: {
       email: params.email,
       roleId: params.roleId,
       status: params.status,
+      appsheetId: params.appsheetId ?? null,
     });
-    await sendPasswordResetEmail(secondaryAuth, params.email);
     await signOut(secondaryAuth);
     return uid;
   } finally {
@@ -57,7 +61,7 @@ export async function createUserWithProfile(params: {
   }
 }
 
-/** Reenvía el correo para establecer/restablecer contraseña. */
+/** Envía (o reenvía) la invitación para establecer/restablecer contraseña. */
 export async function sendSetPasswordEmail(email: string): Promise<void> {
   const { auth } = await import('../firebase/config');
   await sendPasswordResetEmail(auth, email);

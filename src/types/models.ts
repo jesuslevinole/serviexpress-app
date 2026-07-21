@@ -61,6 +61,8 @@ export interface FieldConfig {
   refFilter?: RefFilter;
   /** false = no aparece como columna en la tabla (sí en el formulario y el Excel). */
   table?: boolean;
+  /** false = no aparece en el formulario: lo llena el sistema (p. ej. capturista). */
+  form?: boolean;
   /** Valor por defecto al crear. */
   defaultValue?: FieldValue;
 }

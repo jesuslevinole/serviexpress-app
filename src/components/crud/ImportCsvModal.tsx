@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FileUp, Upload } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { createDocument } from '../../services/firestoreService';
+import { createDocument, setDocument } from '../../services/firestoreService';
 import {
   normalizeText,
   parseCsv,
@@ -23,14 +23,23 @@ interface ImportCsvModalProps {
   /** Campo que se llena con el uid del usuario actual (si el módulo lo define). */
   autoUserField?: string;
   currentUid: string | null;
+  /**
+   * Escritor personalizado por fila (p. ej. usuarios, que además crean cuenta
+   * en Firebase Auth). Si no se define, se escribe directo a la colección.
+   */
+  writeRow?: (docId: string | null, values: Record<string, FieldValue>) => Promise<void>;
   onClose: () => void;
 }
 
 interface PreparedRow {
   index: number;
+  /** ID de AppSheet (columna ID del CSV). Null = Firestore genera uno. */
+  docId: string | null;
   values: Record<string, FieldValue>;
   display: string[];
   errors: string[];
+  /** Avisos no bloqueantes (la fila SÍ se importa). */
+  warnings: string[];
 }
 
 type Phase = 'pick' | 'preview' | 'importing' | 'done';
@@ -38,13 +47,21 @@ type Phase = 'pick' | 'preview' | 'importing' | 'done';
 const AMBIGUOUS = '__AMBIGUO__';
 const PREVIEW_LIMIT = 60;
 
+/** "2,23135E+13" | "1.9E+14": número colapsado por Excel/Sheets — dato perdido. */
+const SCIENTIFIC_NOTATION = /^\d+([.,]\d+)?E[+-]?\d+$/i;
+
 /** Índices nombre-normalizado -> id por colección referenciada. */
 function buildRefIndexes(refMaps: RefMaps) {
-  const indexes: Record<string, { exact: Map<string, string>; loose: Map<string, string> }> = {};
+  const indexes: Record<
+    string,
+    { ids: Set<string>; exact: Map<string, string>; loose: Map<string, string> }
+  > = {};
   Object.entries(refMaps).forEach(([collectionName, data]) => {
+    const ids = new Set<string>();
     const exact = new Map<string, string>();
     const loose = new Map<string, string>();
     data.rows.forEach((row) => {
+      ids.add(row.id);
       exact.set(normalizeText(buildRefLabel(collectionName, row)), row.id);
       Object.entries(row).forEach(([key, value]) => {
         if (key === 'id' || key === 'createdAt' || key === 'updatedAt') return;
@@ -58,7 +75,7 @@ function buildRefIndexes(refMaps: RefMaps) {
         }
       });
     });
-    indexes[collectionName] = { exact, loose };
+    indexes[collectionName] = { ids, exact, loose };
   });
   return indexes;
 }
@@ -75,6 +92,7 @@ export function ImportCsvModal({
   refMaps,
   autoUserField,
   currentUid,
+  writeRow,
   onClose,
 }: ImportCsvModalProps) {
   const [phase, setPhase] = useState<Phase>('pick');
@@ -84,12 +102,17 @@ export function ImportCsvModal({
   const [missingColumns, setMissingColumns] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [imported, setImported] = useState(0);
+  const [failures, setFailures] = useState<{ index: number; message: string }[]>([]);
+  const [hasIdColumn, setHasIdColumn] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refIndexes = useMemo(() => buildRefIndexes(refMaps), [refMaps]);
   const validRows = prepared.filter((r) => r.errors.length === 0);
 
-  const convertCell = (field: FieldConfig, raw: string): { value: FieldValue; error?: string } => {
+  const convertCell = (
+    field: FieldConfig,
+    raw: string,
+  ): { value: FieldValue; error?: string; warning?: string } => {
     const trimmed = raw.trim();
     if (trimmed === '') {
       if (field.required) return { value: null, error: `"${field.label}" es obligatorio` };
@@ -129,6 +152,8 @@ export function ImportCsvModal({
       case 'ref': {
         const index = field.refCollection ? refIndexes[field.refCollection] : undefined;
         if (!index) return { value: null, error: `"${field.label}": catálogo no disponible` };
+        // Primero: ¿es directamente un ID existente (AppSheet)?
+        if (index.ids.has(trimmed)) return { value: trimmed };
         const normalized = normalizeText(trimmed);
         const exactId = index.exact.get(normalized);
         if (exactId !== undefined) return { value: exactId };
@@ -137,9 +162,21 @@ export function ImportCsvModal({
           return { value: null, error: `"${field.label}": "${trimmed}" es ambiguo, usa el nombre completo` };
         }
         if (looseId !== undefined) return { value: looseId };
-        return { value: null, error: `"${field.label}": "${trimmed}" no existe en el catálogo` };
+        // Referencia a un registro que aún no existe (p. ej. driver dado de baja
+        // que no viene en tu CSV): se guarda el ID tal cual y se resolverá solo
+        // cuando importes ese registro con el mismo ID de AppSheet.
+        return {
+          value: trimmed,
+          warning: `"${field.label}": "${trimmed}" no existe todavía — se guardará y se resolverá cuando importes ese registro`,
+        };
       }
       default:
+        if (SCIENTIFIC_NOTATION.test(trimmed)) {
+          return {
+            value: null,
+            error: `"${field.label}": "${trimmed}" es notación científica de Excel — formatea esa columna como Texto sin formato en tu hoja y reexporta el CSV`,
+          };
+        }
         return { value: trimmed };
     }
   };
@@ -159,6 +196,7 @@ export function ImportCsvModal({
       const idx = headers.findIndex((h) => normalizeText(h) === normalizeText(field.label));
       if (idx !== -1) columnByField.set(field.key, idx);
     });
+    const idColumnIndex = headers.findIndex((h) => normalizeText(h) === 'id');
 
     const missing = fields
       .filter((f) => f.required && !columnByField.has(f.key))
@@ -171,20 +209,41 @@ export function ImportCsvModal({
       return;
     }
 
+    const seenIds = new Set<string>();
     const preparedRows: PreparedRow[] = rows.map((row, rowIndex) => {
       const values: Record<string, FieldValue> = {};
       const display: string[] = [];
       const errors: string[] = [];
+      const warnings: string[] = [];
+
+      let docId: string | null = null;
+      if (idColumnIndex !== -1) {
+        const rawId = (row[idColumnIndex] ?? '').trim();
+        if (rawId !== '') {
+          if (rawId.includes('/')) {
+            errors.push('El ID no puede contener "/"');
+          } else if (seenIds.has(rawId)) {
+            errors.push(`ID "${rawId}" repetido en el archivo`);
+          } else {
+            seenIds.add(rawId);
+            docId = rawId;
+          }
+        }
+        display.push(rawId === '' ? '—' : rawId);
+      }
+
       fields.forEach((field) => {
         const columnIndex = columnByField.get(field.key);
         const raw = columnIndex === undefined ? '' : (row[columnIndex] ?? '');
-        const { value, error } = convertCell(field, raw);
+        const { value, error, warning } = convertCell(field, raw);
         values[field.key] = value;
         display.push(raw.trim() === '' ? '—' : raw.trim());
         if (error) errors.push(error);
+        if (warning) warnings.push(warning);
       });
-      return { index: rowIndex + 2, values, display, errors };
+      return { index: rowIndex + 2, docId, values, display, errors, warnings };
     });
+    setHasIdColumn(idColumnIndex !== -1);
     setPrepared(preparedRows);
     setPhase('preview');
   };
@@ -192,18 +251,36 @@ export function ImportCsvModal({
   const handleImport = async () => {
     setPhase('importing');
     let count = 0;
+    let processed = 0;
+    const failed: { index: number; message: string }[] = [];
     for (const row of validRows) {
       const payload = { ...row.values };
       if (autoUserField && currentUid) payload[autoUserField] = currentUid;
-      await createDocument(collection, payload);
-      count += 1;
-      setProgress(count);
+      try {
+        if (writeRow) {
+          await writeRow(row.docId, payload);
+        } else if (row.docId) {
+          await setDocument(collection, row.docId, payload);
+        } else {
+          await createDocument(collection, payload);
+        }
+        count += 1;
+      } catch (err) {
+        failed.push({
+          index: row.index,
+          message: err instanceof Error ? err.message : 'No se pudo guardar',
+        });
+      }
+      processed += 1;
+      setProgress(processed);
     }
     setImported(count);
+    setFailures(failed);
     setPhase('done');
   };
 
   const errorRows = prepared.filter((r) => r.errors.length > 0);
+  const warningRows = prepared.filter((r) => r.errors.length === 0 && r.warnings.length > 0);
 
   return (
     <Modal open title={`Importar CSV · ${title}`} onClose={onClose} size="lg"
@@ -255,6 +332,11 @@ export function ImportCsvModal({
 
           <div className="imp-guide">
             <h3>Guía de llenado</h3>
+            <p className="imp-guide-note">
+              Columna opcional <strong>ID</strong>: el ID de AppSheet. Si viene, se usa como
+              identificador (reimportar con el mismo ID actualiza en vez de duplicar) y las
+              columnas de referencia aceptan ese ID o el nombre.
+            </p>
             <table>
               <thead>
                 <tr>
@@ -315,12 +397,29 @@ export function ImportCsvModal({
               </ul>
             </div>
           ) : null}
+          {warningRows.length > 0 ? (
+            <div className="imp-warnings-box">
+              <strong>
+                Filas con avisos (SÍ se importan; las referencias se resolverán cuando importes
+                esos registros):
+              </strong>
+              <ul>
+                {warningRows.slice(0, 8).map((row) => (
+                  <li key={row.index}>
+                    Fila {row.index}: {row.warnings.join(' · ')}
+                  </li>
+                ))}
+                {warningRows.length > 8 ? <li>…y {warningRows.length - 8} más</li> : null}
+              </ul>
+            </div>
+          ) : null}
           <div className="imp-table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>#</th>
                   <th>Estado</th>
+                  {hasIdColumn ? <th>ID</th> : null}
                   {fields.map((f) => (
                     <th key={f.key}>{f.label}</th>
                   ))}
@@ -331,7 +430,11 @@ export function ImportCsvModal({
                   <tr key={row.index} className={row.errors.length > 0 ? 'is-invalid' : ''}>
                     <td>{row.index}</td>
                     <td>
-                      <Badge value={row.errors.length > 0 ? 'MAL' : 'OK'} />
+                      <Badge
+                        value={
+                          row.errors.length > 0 ? 'MAL' : row.warnings.length > 0 ? 'AVISO' : 'OK'
+                        }
+                      />
                     </td>
                     {row.display.map((cell, i) => (
                       <td key={i}>{cell}</td>
@@ -355,12 +458,28 @@ export function ImportCsvModal({
 
       {phase === 'done' ? (
         <div className="imp-done">
-          <p className="imp-done-ok">✔ Se importaron {imported} registros a {title}.</p>
+          <p className="imp-done-ok">
+            ✔ Se importaron {imported} registros a {title}
+            {hasIdColumn ? ' (los que traían ID existente se actualizaron)' : ''}.
+          </p>
           {errorRows.length > 0 ? (
             <p>
               {errorRows.length} filas quedaron fuera por errores: corrígelas en tu hoja y vuelve a
               importar solo esas.
             </p>
+          ) : null}
+          {failures.length > 0 ? (
+            <div className="imp-errors-box">
+              <strong>{failures.length} filas fallaron al guardarse:</strong>
+              <ul>
+                {failures.slice(0, 10).map((f) => (
+                  <li key={f.index}>
+                    Fila {f.index}: {f.message}
+                  </li>
+                ))}
+                {failures.length > 10 ? <li>…y {failures.length - 10} más</li> : null}
+              </ul>
+            </div>
           ) : null}
         </div>
       ) : null}

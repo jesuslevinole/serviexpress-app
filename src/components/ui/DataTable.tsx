@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pencil, Trash2, ListPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2, ListPlus } from 'lucide-react';
 import './DataTable.css';
 
 export interface TableColumn {
@@ -7,6 +7,8 @@ export interface TableColumn {
   label: string;
   render: (row: Record<string, unknown> & { id: string }) => ReactNode;
 }
+
+export type SortDirection = 'asc' | 'desc';
 
 interface DataTableProps<T extends { id: string }> {
   columns: TableColumn[];
@@ -18,6 +20,11 @@ interface DataTableProps<T extends { id: string }> {
   onDelete?: (row: T) => void;
   detailLabel?: string;
   onDetail?: (row: T) => void;
+  /** Columna por la que se ordena (null = orden original). */
+  sortKey?: string | null;
+  sortDir?: SortDirection | null;
+  /** Si se define, los encabezados son clicables para ordenar. */
+  onSort?: (key: string) => void;
 }
 
 /** Tabla genérica con acciones. Todas las tablas del app pasan por aquí. */
@@ -31,17 +38,39 @@ export function DataTable<T extends { id: string }>({
   onDelete,
   detailLabel,
   onDetail,
+  sortKey = null,
+  sortDir = null,
+  onSort,
 }: DataTableProps<T>) {
   const showActions = (canEdit && onEdit) || (canDelete && onDelete) || onDetail;
+
+  const sortIcon = (key: string) => {
+    if (sortKey !== key || !sortDir) return <ChevronsUpDown size={13} className="dtable-sort-idle" />;
+    return sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  };
 
   return (
     <div className="dtable-wrap">
       <table className="dtable">
         <thead>
           <tr>
-            {columns.map((col) => (
-              <th key={col.key}>{col.label}</th>
-            ))}
+            {columns.map((col) =>
+              onSort ? (
+                <th
+                  key={col.key}
+                  className={`dtable-sortable ${sortKey === col.key && sortDir ? 'is-sorted' : ''}`}
+                  onClick={() => onSort(col.key)}
+                  title={`Ordenar por ${col.label}`}
+                >
+                  <span className="dtable-th-inner">
+                    {col.label}
+                    {sortIcon(col.key)}
+                  </span>
+                </th>
+              ) : (
+                <th key={col.key}>{col.label}</th>
+              ),
+            )}
             {showActions ? <th className="dtable-actions-col">Acciones</th> : null}
           </tr>
         </thead>
