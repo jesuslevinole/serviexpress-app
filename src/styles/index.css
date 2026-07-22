@@ -98,3 +98,261 @@ textarea {
   background: var(--danger-bg);
   color: var(--danger);
 }
+
+/* ============================================================
+   Experiencia móvil (≤640px): targets táctiles grandes,
+   tipografía cómoda e inputs a 16px (evita el zoom de iOS).
+   Los !important son necesarios para vencer la especificidad
+   de los CSS de componentes dentro de esta capa global.
+   ============================================================ */
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
+
+  /* --- Botones: mínimo 46px de alto, fáciles de presionar --- */
+  .btn {
+    min-height: 50px;
+    padding: 14px 18px;
+    font-size: 15px !important;
+    border-radius: 13px;
+    gap: 9px;
+  }
+
+  .icon-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+  }
+
+  /* --- Inputs: 16px evita el auto-zoom de iOS al enfocar --- */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .field-input,
+  .sselect-control {
+    min-height: 50px;
+    padding: 14px;
+    border-radius: 13px;
+    font-size: 16px !important;
+  }
+
+  .field-label {
+    font-size: 13.5px;
+  }
+
+  .field-check input,
+  .roles-matrix input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* --- Selects con buscador: opciones altas y legibles --- */
+  .sselect-search {
+    padding: 14px;
+  }
+
+  .sselect-menu li button {
+    padding: 14px;
+    font-size: 15px;
+  }
+
+  .sselect-menu ul {
+    max-height: 46vh;
+  }
+
+  /* --- Tablas: filas más altas y texto más grande --- */
+  .dtable th {
+    padding: 12px;
+    font-size: 12px;
+  }
+
+  .dtable td {
+    padding: 14px 12px;
+    font-size: 14px;
+  }
+
+  .dtable-actions .icon-btn {
+    width: 46px;
+    height: 46px;
+  }
+
+  .badge-pill {
+    font-size: 12.5px;
+    padding: 5px 14px;
+  }
+
+  /* --- Barra de herramientas: búsqueda a lo ancho y botones en grid --- */
+  .crud-search {
+    min-height: 52px;
+    border-radius: 13px;
+  }
+
+  .crud-toolbar-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .crud-toolbar-actions .btn {
+    justify-content: center;
+    padding: 14px 8px;
+    min-height: 50px;
+  }
+
+  .crud-chip {
+    padding: 10px 15px;
+    font-size: 13px;
+  }
+
+  /* --- Paginador --- */
+  .pager-controls .icon-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .pager-page {
+    font-size: 13.5px;
+  }
+
+  /* --- Modales (bottom sheet): más aire y zona segura --- */
+  .modal-header {
+    padding: 16px 18px 12px;
+  }
+
+  .modal-header h2 {
+    font-size: 17px;
+  }
+
+  .modal-body {
+    padding: 18px 16px;
+  }
+
+  .modal-footer {
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+  }
+
+  .modal-footer .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* --- Panel de filtros a pantalla completa --- */
+  .fpanel {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .fpanel-field label {
+    font-size: 13px;
+  }
+
+  .fpanel-text,
+  .fpanel-range input {
+    min-height: 48px;
+    border-radius: 12px;
+  }
+
+  /* --- Visor de detalle y sumario --- */
+  .rdetail-label {
+    font-size: 11px;
+  }
+
+  .rdetail-value {
+    font-size: 15px;
+  }
+
+  .ssum {
+    max-height: 260px;
+  }
+
+  /* --- Dashboard: números protagonistas --- */
+  .dashboard-card {
+    padding: 20px;
+  }
+
+  .dashboard-card strong {
+    font-size: 28px;
+  }
+
+  /* --- Login: campos y botones de 50px --- */
+  .login-form input {
+    min-height: 54px;
+    border-radius: 13px;
+  }
+
+  .login-submit,
+  .login-bypass {
+    min-height: 54px;
+    border-radius: 13px;
+  }
+
+  /* --- Catálogos: pestañas presionables --- */
+  .catalogs-tab {
+    min-height: 48px;
+    padding: 13px 18px;
+    font-size: 14.5px;
+    border-radius: 12px;
+  }
+
+  /* --- Importador --- */
+  .imp-drop {
+    padding: 34px 20px;
+    border-radius: 14px;
+  }
+}
+
+/* Tablet y drawer del menú (≤900px) */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 292px;
+  }
+
+  /* Menú de navegación: elementos altos, fáciles de presionar */
+  .sidebar-link {
+    min-height: 54px;
+    padding: 15px 16px;
+    font-size: 15.5px;
+    border-radius: 13px;
+    gap: 13px;
+  }
+
+  .sidebar-nav {
+    gap: 5px;
+    padding: 14px 12px;
+  }
+
+  .sidebar-section {
+    margin: 18px 14px 8px;
+    font-size: 11px;
+  }
+
+  .sidebar-brand {
+    padding: 20px 16px;
+  }
+
+  .sidebar-mini-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .topbar {
+    height: 64px;
+    padding: 0 14px;
+  }
+
+  .topbar .icon-btn {
+    width: 46px;
+    height: 46px;
+  }
+
+  .topbar-edit {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+}
