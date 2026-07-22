@@ -69,6 +69,21 @@ body.modal-open {
 
   .modal-card {
     max-height: 96vh;
-    border-radius: var(--radius) var(--radius) 0 0;
+    border-radius: 18px 18px 0 0;
+    padding-top: 8px;
+    position: relative;
+  }
+
+  /* Asa visual del bottom sheet, como en apps nativas */
+  .modal-card::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 44px;
+    height: 5px;
+    border-radius: 5px;
+    background: var(--border-strong);
   }
 }
