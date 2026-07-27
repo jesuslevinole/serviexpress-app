@@ -1,16 +1,19 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileUp, Upload } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
 import { createDocument, setDocument } from '../../services/firestoreService';
 import {
+  normalizeHeader,
   normalizeText,
   parseCsv,
   parseCsvBool,
+  inferDateOrder,
   parseCsvDate,
   parseCsvNumber,
+  type DateOrder,
 } from '../../services/csv';
-import { buildRefLabel } from '../../config/collections';
+import { COLLECTIONS, buildRefLabel } from '../../config/collections';
 import type { RefMaps } from '../../hooks/useRefMaps';
 import type { FieldConfig, FieldValue } from '../../types/models';
 import './ImportCsvModal.css';
@@ -28,6 +31,8 @@ interface ImportCsvModalProps {
    * en Firebase Auth). Si no se define, se escribe directo a la colección.
    */
   writeRow?: (docId: string | null, values: Record<string, FieldValue>) => Promise<void>;
+  /** Acción extra en la zona de selección de archivo (p. ej. descargar plantilla). */
+  headerExtra?: ReactNode;
   onClose: () => void;
 }
 
@@ -48,6 +53,24 @@ const AMBIGUOUS = '__AMBIGUO__';
 const PREVIEW_LIMIT = 60;
 
 /** "2,23135E+13" | "1.9E+14": número colapsado por Excel/Sheets — dato perdido. */
+/** Nombre legible de cada colección para los avisos del importador. */
+const COLLECTION_LABELS: Record<string, string> = {
+  [COLLECTIONS.entities]: 'Entities',
+  [COLLECTIONS.stations]: 'Stations',
+  [COLLECTIONS.trucks]: 'Trucks',
+  [COLLECTIONS.drivers]: 'Drivers',
+  [COLLECTIONS.assets]: 'Assets',
+  [COLLECTIONS.users]: 'Users',
+  [COLLECTIONS.routes]: 'Routes',
+  [COLLECTIONS.team]: 'Team',
+  [COLLECTIONS.sizes]: 'Sizes',
+  [COLLECTIONS.uniformItems]: 'Uniform items',
+  [COLLECTIONS.requestTypes]: 'Request types',
+  [COLLECTIONS.shopNames]: 'Shops',
+  [COLLECTIONS.vendors]: 'Vendors',
+  [COLLECTIONS.driverCategories]: 'Driver categories',
+};
+
 const SCIENTIFIC_NOTATION = /^\d+([.,]\d+)?E[+-]?\d+$/i;
 
 /** Índices nombre-normalizado -> id por colección referenciada. */
@@ -93,6 +116,7 @@ export function ImportCsvModal({
   autoUserField,
   currentUid,
   writeRow,
+  headerExtra,
   onClose,
 }: ImportCsvModalProps) {
   const [phase, setPhase] = useState<Phase>('pick');
@@ -112,6 +136,7 @@ export function ImportCsvModal({
   const convertCell = (
     field: FieldConfig,
     raw: string,
+    dateOrder: DateOrder = 'dmy',
   ): { value: FieldValue; error?: string; warning?: string } => {
     const trimmed = raw.trim();
     if (trimmed === '') {
@@ -127,9 +152,12 @@ export function ImportCsvModal({
           : { value };
       }
       case 'date': {
-        const value = parseCsvDate(trimmed);
+        const value = parseCsvDate(trimmed, dateOrder);
         return value === null
-          ? { value: null, error: `"${field.label}": "${trimmed}" is not a date (use DD/MM/YYYY)` }
+          ? {
+              value: null,
+              error: `"${field.label}": "${trimmed}" is not a date (use DD/MM/YYYY or MM/DD/YYYY)`,
+            }
           : { value };
       }
       case 'bool': {
@@ -162,6 +190,18 @@ export function ImportCsvModal({
           return { value: null, error: `"${field.label}": "${trimmed}" is ambiguous, use the full name` };
         }
         if (looseId !== undefined) return { value: looseId };
+        // ¿El valor existe como ID en OTRA colección? Casi siempre significa
+        // que dos columnas del CSV están intercambiadas.
+        const otherCollection = Object.entries(refIndexes).find(
+          ([name, other]) => name !== field.refCollection && other.ids.has(trimmed),
+        );
+        if (otherCollection) {
+          const otherLabel = COLLECTION_LABELS[otherCollection[0]] ?? otherCollection[0];
+          return {
+            value: trimmed,
+            warning: `"${field.label}": "${trimmed}" is not in this catalog, but it does exist in ${otherLabel} — check whether those two columns are swapped in your file`,
+          };
+        }
         // Referencia a un registro que aún no existe (p. ej. driver dado de baja
         // que no viene en tu CSV): se guarda el ID tal cual y se resolverá solo
         // cuando importes ese registro con el mismo ID de AppSheet.
@@ -192,11 +232,16 @@ export function ImportCsvModal({
     }
 
     const columnByField = new Map<string, number>();
+    const normalizedHeaders = headers.map((h) => normalizeHeader(h));
     fields.forEach((field) => {
-      const idx = headers.findIndex((h) => normalizeText(h) === normalizeText(field.label));
+      // Se acepta la etiqueta del campo o cualquiera de sus nombres alternos.
+      const candidates = [field.label, ...(field.importAliases ?? [])].map((name) =>
+        normalizeHeader(name),
+      );
+      const idx = normalizedHeaders.findIndex((h) => candidates.includes(h));
       if (idx !== -1) columnByField.set(field.key, idx);
     });
-    const idColumnIndex = headers.findIndex((h) => normalizeText(h) === 'id');
+    const idColumnIndex = normalizedHeaders.findIndex((h) => h === 'id');
 
     const missing = fields
       .filter((f) => f.required && !columnByField.has(f.key))
@@ -209,12 +254,24 @@ export function ImportCsvModal({
       return;
     }
 
+    // Orden de fecha por columna: el archivo puede traer DD/MM en una y MM/DD en otra.
+    const dateOrders = new Map<string, DateOrder>();
+    fields.forEach((field) => {
+      if (field.type !== 'date') return;
+      const columnIndex = columnByField.get(field.key);
+      if (columnIndex === undefined) return;
+      const columnValues = rows.map((row) => row[columnIndex] ?? '');
+      dateOrders.set(field.key, inferDateOrder(columnValues));
+    });
+
     const seenIds = new Set<string>();
     const preparedRows: PreparedRow[] = rows.map((row, rowIndex) => {
       const values: Record<string, FieldValue> = {};
       const display: string[] = [];
       const errors: string[] = [];
       const warnings: string[] = [];
+      /** Aviso por campo: permite sustituirlo si se detecta un cruce de columnas. */
+      const warningByField = new Map<string, string>();
 
       let docId: string | null = null;
       if (idColumnIndex !== -1) {
@@ -223,7 +280,11 @@ export function ImportCsvModal({
           if (rawId.includes('/')) {
             errors.push('The ID cannot contain "/"');
           } else if (seenIds.has(rawId)) {
-            errors.push(`ID "${rawId}" repeated in the file`);
+            // El ID ya venía en el archivo: la fila SÍ se importa, pero con un
+            // identificador nuevo para no sobrescribir a la primera que lo usó.
+            warnings.push(
+              `ID "${rawId}" is repeated in the file — this row will be imported with a new ID`,
+            );
           } else {
             seenIds.add(rawId);
             docId = rawId;
@@ -235,11 +296,55 @@ export function ImportCsvModal({
       fields.forEach((field) => {
         const columnIndex = columnByField.get(field.key);
         const raw = columnIndex === undefined ? '' : (row[columnIndex] ?? '');
-        const { value, error, warning } = convertCell(field, raw);
+        const { value, error, warning } = convertCell(
+          field,
+          raw,
+          dateOrders.get(field.key) ?? 'dmy',
+        );
         values[field.key] = value;
         display.push(raw.trim() === '' ? '—' : raw.trim());
         if (error) errors.push(error);
-        if (warning) warnings.push(warning);
+        if (warning) warningByField.set(field.key, warning);
+      });
+
+      // Columnas intercambiadas: si el valor de A pertenece al catálogo de B y
+      // el de B al catálogo de A, se corrige el cruce automáticamente.
+      const refFields = fields.filter(
+        (f) => f.type === 'ref' && f.refCollection && typeof values[f.key] === 'string',
+      );
+      for (let i = 0; i < refFields.length; i += 1) {
+        for (let j = i + 1; j < refFields.length; j += 1) {
+          const fieldA = refFields[i];
+          const fieldB = refFields[j];
+          if (fieldA.refCollection === fieldB.refCollection) continue;
+          const valueA = values[fieldA.key];
+          const valueB = values[fieldB.key];
+          if (typeof valueA !== 'string' || typeof valueB !== 'string') continue;
+          if (valueA === '' || valueB === '') continue;
+          const indexA = refIndexes[fieldA.refCollection!];
+          const indexB = refIndexes[fieldB.refCollection!];
+          if (!indexA || !indexB) continue;
+          // Cruce inequívoco: cada valor existe en el catálogo del otro campo.
+          if (indexB.ids.has(valueA) && indexA.ids.has(valueB)) {
+            values[fieldA.key] = valueB;
+            values[fieldB.key] = valueA;
+            warningByField.set(
+              fieldA.key,
+              `"${fieldA.label}" and "${fieldB.label}" were swapped in the file — corrected automatically`,
+            );
+            warningByField.delete(fieldB.key);
+          }
+        }
+      }
+      warningByField.forEach((message) => warnings.push(message));
+      // Copia el nombre resuelto de las referencias marcadas con copyLabelTo.
+      fields.forEach((field) => {
+        if (!field.copyLabelTo || !field.refCollection) return;
+        const chosen = values[field.key];
+        if (typeof chosen === 'string' && chosen !== '') {
+          values[field.copyLabelTo] =
+            refMaps[field.refCollection]?.labels.get(chosen) ?? chosen;
+        }
       });
       return { index: rowIndex + 2, docId, values, display, errors, warnings };
     });
@@ -255,7 +360,14 @@ export function ImportCsvModal({
     const failed: { index: number; message: string }[] = [];
     for (const row of validRows) {
       const payload = { ...row.values };
-      if (autoUserField && currentUid) payload[autoUserField] = currentUid;
+      // El capturista de la sesión solo se usa cuando la fila no trae uno:
+      // si el CSV especifica el usuario, ese valor manda.
+      if (autoUserField && currentUid) {
+        const provided = payload[autoUserField];
+        if (typeof provided !== 'string' || provided === '') {
+          payload[autoUserField] = currentUid;
+        }
+      }
       try {
         if (writeRow) {
           await writeRow(row.docId, payload);
@@ -316,6 +428,7 @@ export function ImportCsvModal({
             <FileUp size={30} />
             <strong>Select the CSV file</strong>
             <span>Exported from Google Sheets: File → Download → CSV</span>
+            {headerExtra ? <div className="imp-drop-extra">{headerExtra}</div> : null}
             {fileName ? <em>{fileName}</em> : null}
           </button>
           <input

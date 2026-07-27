@@ -1,18 +1,50 @@
-import type { FieldConfig, ModuleConfig } from '../types/models';
+import type { EntityData, FieldConfig, FieldValue, ModuleConfig } from '../types/models';
+
+/**
+ * Fórmula de AppSheet para estatus de vencimiento:
+ * >30 días = OK · ≤15 días (o sin fecha / vencido) = ALERT · 16-30 = CAUTION.
+ */
+function expirationStatus(dateKey: string): (row: EntityData) => FieldValue {
+  return (row) => {
+    const raw = row[dateKey];
+    if (typeof raw !== 'string' || raw === '') return 'ALERT';
+    const target = new Date(`${raw.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(target.getTime())) return 'ALERT';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    if (days > 30) return 'OK';
+    if (days <= 15) return 'ALERT';
+    return 'CAUTION';
+  };
+}
 import { COLLECTIONS } from './collections';
 import {
-  BC_STATUS,
-  CHECK_VALUES,
+  MAINTENANCE_STATUS,
   DOC_STATUS,
   REQUIREMENT_STATUS,
+  TYPE_SIZES,
   SHOP_STATUS,
-  UNIFORM_SIZES,
 } from './enums';
 
 /**
  * Campos de contexto que se repiten en casi todas las tablas
  * (ID_ENTITY / ID_STATION del diagrama). Definidos una sola vez.
  */
+/**
+ * Capturista del registro: lo llena el sistema, pero SÍ aparece en la plantilla
+ * y en la importación para poder migrar quién capturó cada registro.
+ */
+const capturedByField: FieldConfig = {
+  key: 'idUsers',
+  label: 'Captured by',
+  importAliases: ['Responsable', 'Responsible', 'BC', 'User', 'Usuario'],
+  type: 'ref',
+  refCollection: COLLECTIONS.users,
+  form: false,
+  importable: true,
+};
+
 const contextFields = (
   tablaEntity = true,
   tablaStation = true,
@@ -25,6 +57,7 @@ const contextFields = (
     refCollection: COLLECTIONS.entities,
     required,
     table: tablaEntity,
+    defaultFromUserScope: 'entity',
   },
   {
     key: 'idStation',
@@ -33,6 +66,7 @@ const contextFields = (
     refCollection: COLLECTIONS.stations,
     required,
     table: tablaStation,
+    defaultFromUserScope: 'station',
   },
 ];
 
@@ -44,18 +78,7 @@ export const trucksModule: ModuleConfig = {
   icon: 'Truck',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'unitN', label: 'Unit number', type: 'text', required: true },
-    { key: 'type', label: 'Unit type', type: 'text', required: true },
-    { key: 'status', label: 'Status', type: 'bool', defaultValue: true },
     { key: 'date', label: 'Register date', type: 'date', required: true, table: false },
-    {
-      key: 'idEntityReg',
-      label: 'Register entity',
-      type: 'ref',
-      refCollection: COLLECTIONS.entities,
-      required: true,
-      table: false,
-    },
     {
       key: 'idStationReg',
       label: 'Register station',
@@ -63,13 +86,33 @@ export const trucksModule: ModuleConfig = {
       refCollection: COLLECTIONS.stations,
       required: true,
       table: false,
+      defaultFromUserScope: 'station',
     },
+    {
+      key: 'idEntityReg',
+      label: 'Register entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      required: true,
+      table: false,
+      defaultFromUserScope: 'entity',
+    },
+    { key: 'vMake', label: 'V/Make', type: 'text', table: false },
+    { key: 'unitN', label: 'Unit number', type: 'text', required: true },
+    { key: 'type', label: 'Unit type', type: 'enum', enumValues: ['TRUCK', 'SCANNER'], required: true },
+    { key: 'vYear', label: 'V/Year', type: 'number', table: false },
+    { key: 'lPlate', label: 'License plate', type: 'text', required: true },
+    { key: 'nextMant', label: 'Next maintenance', type: 'number' },
+    { key: 'vinNumber', label: 'VIN number', type: 'text', table: false },
+    { key: 'ezTagNumber', label: 'EZ Tag number', type: 'text', table: false },
+    { key: 'schB', label: 'Sch/B', type: 'text', table: false },
     {
       key: 'idEntityActual',
       label: 'Current entity',
       type: 'ref',
       refCollection: COLLECTIONS.entities,
       required: true,
+      defaultFromUserScope: 'entity',
     },
     {
       key: 'idStationActual',
@@ -77,16 +120,114 @@ export const trucksModule: ModuleConfig = {
       type: 'ref',
       refCollection: COLLECTIONS.stations,
       required: true,
+      defaultFromUserScope: 'station',
     },
-    { key: 'nextMant', label: 'Next maintenance', type: 'date' },
-    { key: 'vMake', label: 'Make', type: 'text', table: false },
-    { key: 'vYear', label: 'Year', type: 'number', table: false },
-    { key: 'lPlate', label: 'License plate', type: 'text', required: true },
-    { key: 'vinNumber', label: 'VIN number', type: 'text', table: false },
-    { key: 'ezTagNumber', label: 'EZ Tag number', type: 'text', table: false },
-    { key: 'schB', label: 'Schedule B', type: 'text', table: false },
-    { key: 'regExpDate', label: 'Registration exp. date', type: 'date', table: false },
-    { key: 'inspExpDate', label: 'Inspection exp. date', type: 'date', table: false },
+    { key: 'regExpDate', label: 'Reg Exp. Date', type: 'date', table: false },
+    {
+      key: 'resStatus',
+      label: 'Res status',
+      type: 'text',
+      form: false,
+      badge: true,
+      compute: expirationStatus('regExpDate'),
+    },
+    { key: 'inspExpDate', label: 'Insp Exp. Date', type: 'date', table: false },
+    {
+      key: 'insStatus',
+      label: 'Ins status',
+      type: 'text',
+      form: false,
+      badge: true,
+      compute: expirationStatus('inspExpDate'),
+    },
+    { key: 'status', label: 'Status', type: 'bool', defaultValue: true },
+    capturedByField,
+  ],
+  /** Bitácora: cada cambio de entidad/estación actual queda registrado. */
+  changeLog: {
+    collection: COLLECTIONS.truckHistory,
+    foreignKey: 'idTruck',
+    watch: ['idEntityActual', 'idStationActual'],
+  },
+  relatedViews: [
+    {
+      id: 'corrective',
+      title: 'Corrective maintenance',
+      collection: COLLECTIONS.maintenance,
+      foreignKey: 'idTruck',
+      filter: { field: 'type', value: 'Corrective' },
+      emptyMessage: 'This truck has no corrective maintenance yet',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date' },
+        {
+          key: 'idStation',
+          label: 'Station',
+          type: 'ref',
+          refCollection: COLLECTIONS.stations,
+        },
+        { key: 'differenceMileage', label: 'Difference Mileage', type: 'number' },
+        { key: 'observation', label: 'Observation', type: 'text' },
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'enum',
+          enumValues: MAINTENANCE_STATUS,
+          badge: true,
+        },
+        {
+          key: 'idUsers',
+          label: 'Captured by',
+          type: 'ref',
+          refCollection: COLLECTIONS.users,
+        },
+      ],
+    },
+    {
+      id: 'preventive',
+      title: 'Preventive maintenance',
+      collection: COLLECTIONS.maintenance,
+      foreignKey: 'idTruck',
+      filter: { field: 'type', value: 'Preventive' },
+      emptyMessage: 'This truck has no preventive maintenance yet',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+        { key: 'nextMant', label: 'Next mant', type: 'number' },
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'enum',
+          enumValues: MAINTENANCE_STATUS,
+          badge: true,
+        },
+        { key: 'origin', label: 'Source', type: 'text' },
+        {
+          key: 'idUsers',
+          label: 'Captured by',
+          type: 'ref',
+          refCollection: COLLECTIONS.users,
+        },
+      ],
+    },
+    {
+      id: 'moves',
+      title: 'Entity / Station history',
+      collection: COLLECTIONS.truckHistory,
+      foreignKey: 'idTruck',
+      emptyMessage: 'This truck has not changed entity or station yet',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'fieldLabel', label: 'Field', type: 'text' },
+        { key: 'fromLabel', label: 'From', type: 'text' },
+        { key: 'toLabel', label: 'To', type: 'text' },
+        {
+          key: 'idUsers',
+          label: 'Changed by',
+          type: 'ref',
+          refCollection: COLLECTIONS.users,
+        },
+      ],
+    },
   ],
 };
 
@@ -98,9 +239,22 @@ export const driversModule: ModuleConfig = {
   icon: 'Users',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'name', label: 'Driver name', type: 'text', required: true },
+    {
+      key: 'idTeam',
+      label: 'Driver name',
+      type: 'ref',
+      refCollection: COLLECTIONS.team,
+      required: true,
+      // El nombre elegido se copia a "name" para que el resto del app
+      // (Assets, Fleet, Accidents, Requirements) siga mostrándolo.
+      copyLabelTo: 'name',
+      // Mientras un driver no tenga su referencia a Team, se muestra el
+      // nombre que ya estaba guardado en el registro.
+      fallbackField: 'name',
+    },
+    { key: 'name', label: 'Name (from Team)', type: 'text', form: false, table: false },
     { key: 'date', label: 'Register date', type: 'date', table: false },
-    ...contextFields(),
+    ...contextFields(true, true, false),
     {
       key: 'idCategoryDriver',
       label: 'Category',
@@ -121,13 +275,7 @@ export const driversModule: ModuleConfig = {
     { key: 'qc', label: 'QC', type: 'text', table: false },
     { key: 'qcStatus', label: 'QC status', type: 'enum', enumValues: DOC_STATUS, table: false },
     { key: 'eaExpDate', label: 'EA exp. date', type: 'date', table: false },
-    {
-      key: 'idUsers',
-      label: 'Captured by',
-      type: 'ref',
-      refCollection: COLLECTIONS.users,
-      form: false,
-    },
+    capturedByField,
   ],
 };
 
@@ -137,6 +285,7 @@ export const assetsModule: ModuleConfig = {
   collection: COLLECTIONS.assets,
   title: 'Assets',
   icon: 'ScanLine',
+  autoUserField: 'idUsers',
   fields: [
     { key: 'type', label: 'Asset type', type: 'text' },
     { key: 'mark', label: 'Make', type: 'text' },
@@ -152,6 +301,7 @@ export const assetsModule: ModuleConfig = {
     },
     ...contextFields(false, false, false),
     { key: 'observation', label: 'Observations', type: 'textarea', table: false },
+    capturedByField,
   ],
 };
 
@@ -161,6 +311,7 @@ export const fleetModule: ModuleConfig = {
   collection: COLLECTIONS.fleet,
   title: 'Fleet',
   icon: 'Route',
+  autoUserField: 'idUsers',
   fields: [
     { key: 'route', label: 'Route', type: 'text', required: true },
     {
@@ -189,6 +340,7 @@ export const fleetModule: ModuleConfig = {
     { key: 'vTruck', label: 'V Truck', type: 'text', table: false },
     { key: 'stop', label: 'Stop', type: 'text' },
     { key: 'observation', label: 'Observations', type: 'textarea', table: false },
+    capturedByField,
   ],
 };
 
@@ -232,32 +384,57 @@ export const shopModule: ModuleConfig = {
     { key: 'closedDate', label: 'Closed date', type: 'date', table: false },
     { key: 'warranty', label: 'Warranty', type: 'bool', table: false },
     { key: 'expirationDate', label: 'Warranty exp. date', type: 'date', table: false },
+    capturedByField,
   ],
 };
 
 /** Renglones del reporte BC (BD_BCREPORTDETAIL). */
+/** Tipos de recorrido del BC Report y el tipo de unidad que habilitan. */
+export const BC_TYPES = ['TRUCK + SCANNER', 'ONLY TRUCK', 'ONLY SCANNER'] as const;
+
+const BC_TYPE_TO_UNIT: Record<string, string | null> = {
+  'TRUCK + SCANNER': null,
+  'ONLY TRUCK': 'TRUCK',
+  'ONLY SCANNER': 'SCANNER',
+};
+
+/**
+ * Renglones del BC Report: la captura de mantenimiento PREVENTIVO.
+ * Las claves coinciden con las de Maintenance para que cada renglón se
+ * copie tal cual al módulo de mantenimiento.
+ */
 const bcDetailFields: FieldConfig[] = [
+  {
+    key: 'unitType',
+    label: 'Type',
+    type: 'enum',
+    enumValues: BC_TYPES,
+    required: true,
+    defaultValue: 'TRUCK + SCANNER',
+  },
   {
     key: 'idTruck',
     label: 'Truck',
     type: 'ref',
     refCollection: COLLECTIONS.trucks,
     required: true,
+    refFilterFromField: { field: 'unitType', targetField: 'type', map: BC_TYPE_TO_UNIT },
   },
-  { key: 'type', label: 'Type', type: 'text' },
-  { key: 'actualMileage', label: 'Actual mileage', type: 'number' },
-  { key: 'nextMant', label: 'Next maintenance', type: 'date', table: false },
-  { key: 'frontLeftDriver', label: 'Front left tire (driver)', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'frontRightPass', label: 'Front right tire (passenger)', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'backLeftDriverOut', label: 'Back left outer tire', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'backRightPassOut', label: 'Back right outer tire', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'vdr', label: 'VDR', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'fuses', label: 'Fuses', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'pouch', label: 'Pouch', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'fireExt', label: 'Fire extinguisher', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'triangle', label: 'Triangles', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'inspection', label: 'Inspection', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'dolly', label: 'Dolly', type: 'enum', enumValues: CHECK_VALUES, table: false },
+  { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+  { key: 'nextMant', label: 'Next mant', type: 'number' },
+  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number', table: false },
+  { key: 'frontRPass', label: 'Front R/Pass', type: 'number', table: false },
+  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', table: false },
+  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number', table: false },
+  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number', table: false },
+  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number', table: false },
+  { key: 'vedr', label: 'Vdr', type: 'bool', table: false },
+  { key: 'fuses', label: 'Fuses', type: 'bool', table: false },
+  { key: 'pouch', label: 'Pouch', type: 'bool', table: false },
+  { key: 'fireExt', label: 'Fire ext', type: 'bool', table: false },
+  { key: 'triangle', label: 'Triangle', type: 'bool', table: false },
+  { key: 'inspection', label: 'Inspection', type: 'bool', table: false },
+  { key: 'dolly', label: 'Dolly', type: 'number', table: false },
   {
     key: 'idScanner',
     label: 'Scanner',
@@ -266,23 +443,24 @@ const bcDetailFields: FieldConfig[] = [
     refFilter: { field: 'type', value: 'SCANNER' },
     table: false,
   },
-  { key: 'batteries', label: 'Batteries', type: 'enum', enumValues: CHECK_VALUES, table: false },
+  { key: 'batteries', label: 'Batteries', type: 'number', table: false },
   {
     key: 'idRoute',
     label: 'Route',
     type: 'ref',
     refCollection: COLLECTIONS.routes,
   },
-  { key: 'isClean', label: 'Unit clean', type: 'bool', table: false },
-  { key: 'cameraFunction', label: 'Camera working', type: 'enum', enumValues: CHECK_VALUES, table: false },
-  { key: 'observation', label: 'Observations', type: 'textarea', table: false },
+  { key: 'isClean', label: 'Is clean?', type: 'bool', table: false },
+  { key: 'cameraFunction', label: 'Camera Function', type: 'bool', table: false },
+  { key: 'observation', label: 'Observation', type: 'textarea', table: false },
   {
     key: 'status',
     label: 'Status',
     type: 'enum',
-    enumValues: BC_STATUS,
+    enumValues: MAINTENANCE_STATUS,
     required: true,
-    defaultValue: 'PENDIENTE',
+    defaultValue: 'Pending',
+    badge: true,
   },
 ];
 
@@ -293,12 +471,36 @@ export const bcReportsModule: ModuleConfig = {
   title: 'BC Reports',
   icon: 'ClipboardCheck',
   autoUserField: 'idUsers',
-  fields: [...contextFields()],
+  fields: [
+    { key: 'date', label: 'Date', type: 'date', required: true },
+    ...contextFields(),
+    { ...capturedByField, label: 'BC (captured by)' },
+  ],
+  bulkDetailImport: {
+    buttonLabel: 'Bulk import',
+    title: 'Bulk import · Preventive maintenance',
+    groupBy: ['date', 'idUsers', 'idEntity', 'idStation'],
+  },
   detail: {
     collection: COLLECTIONS.bcReportDetails,
     parentKey: 'idBcReport',
-    title: 'Inspection detail',
+    title: 'Preventive maintenance',
     fields: bcDetailFields,
+    /** Cada renglón se copia a Maintenance marcado con su origen. */
+    mirror: {
+      collection: COLLECTIONS.maintenance,
+      idPrefix: 'bc-',
+      build: (parentId, parent, row) => ({
+        ...row,
+        type: 'Preventive',
+        date: typeof parent.date === 'string' ? parent.date : null,
+        idEntity: typeof parent.idEntity === 'string' ? parent.idEntity : null,
+        idStation: typeof parent.idStation === 'string' ? parent.idStation : null,
+        idUsers: typeof parent.idUsers === 'string' ? parent.idUsers : null,
+        origin: 'BC Report',
+        idBcReport: parentId,
+      }),
+    },
   },
 };
 
@@ -335,6 +537,257 @@ export const rentalsModule: ModuleConfig = {
     { key: 'endDate', label: 'End date', type: 'date' },
     { key: 'gasCard', label: 'Gas card', type: 'text', table: false },
     { key: 'tdc', label: 'TDC', type: 'text', table: false },
+    capturedByField,
+  ],
+};
+
+
+/** Solo visible cuando el mantenimiento es de este tipo. */
+const whenPreventive = { field: 'type', value: 'Preventive' } as const;
+const whenCorrective = { field: 'type', value: 'Corrective' } as const;
+
+/** Módulo Maintenance — preventivo y correctivo en un solo módulo. */
+export const maintenanceModule: ModuleConfig = {
+  id: 'maintenance',
+  collection: COLLECTIONS.maintenance,
+  title: 'Maintenance',
+  icon: 'Wrench',
+  autoUserField: 'idUsers',
+  fields: [
+    {
+      key: 'type',
+      label: 'Type',
+      type: 'enum',
+      enumValues: ['Preventive', 'Corrective'],
+      required: true,
+      defaultValue: 'Preventive',
+    },
+    { key: 'date', label: 'Date', type: 'date', required: true },
+    {
+      key: 'idEntity',
+      label: 'Entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      required: true,
+      defaultFromUserScope: 'entity',
+      table: false,
+    },
+    {
+      key: 'idStation',
+      label: 'Station',
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      required: true,
+      defaultFromUserScope: 'station',
+      table: false,
+    },
+    {
+      key: 'idTruck',
+      label: 'Truck',
+      type: 'ref',
+      refCollection: COLLECTIONS.trucks,
+      required: true,
+      refFilterFromField: { field: 'unitType', targetField: 'type', map: BC_TYPE_TO_UNIT },
+    },
+    {
+      key: 'unitType',
+      label: 'Type select',
+      importAliases: ['Type_select'],
+      type: 'enum',
+      enumValues: BC_TYPES,
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'idRoute',
+      label: 'Route',
+      type: 'ref',
+      refCollection: COLLECTIONS.routes,
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    // ---- Preventive ----
+    {
+      key: 'permitImp',
+      label: 'Permit Imp',
+      importAliases: ['IMP', 'Imp'],
+      type: 'date',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'permitReg',
+      label: 'Permit Reg',
+      importAliases: ['REG', 'Reg'],
+      type: 'date',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'mileage',
+      label: 'Actual Mileage',
+      importAliases: ['Mileage'],
+      type: 'number',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'nextMant',
+      label: 'Next mant',
+      importAliases: ['NEXT mant'],
+      type: 'number',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'frontLDriver',
+      label: 'Front L/Driver',
+      importAliases: ['L/Driver'],
+      type: 'number',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    {
+      key: 'frontRPass',
+      label: 'Front R/Pass',
+      importAliases: ['R/Pass'],
+      type: 'number',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', table: false, visibleWhen: whenPreventive },
+    { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number', table: false, visibleWhen: whenPreventive },
+    { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number', table: false, visibleWhen: whenPreventive },
+    { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number', table: false, visibleWhen: whenPreventive },
+    {
+      key: 'vedr',
+      label: 'Vedr',
+      importAliases: ['Vdr'],
+      type: 'bool',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    { key: 'fuses', label: 'Fuses', type: 'bool', table: false, visibleWhen: whenPreventive },
+    { key: 'pouch', label: 'Pouch', type: 'bool', table: false, visibleWhen: whenPreventive },
+    { key: 'fireExt', label: 'Fire ext', type: 'bool', table: false, visibleWhen: whenPreventive },
+    { key: 'triangle', label: 'Triangle', type: 'bool', table: false, visibleWhen: whenPreventive },
+    { key: 'inspection', label: 'Inspection', type: 'bool', table: false, visibleWhen: whenPreventive },
+    { key: 'dolly', label: 'Dolly', type: 'number', table: false, visibleWhen: whenPreventive },
+    {
+      key: 'idScanner',
+      label: 'Scanner',
+      type: 'ref',
+      refCollection: COLLECTIONS.assets,
+      refFilter: { field: 'type', value: 'SCANNER' },
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    { key: 'batteries', label: 'Batteries', type: 'number', table: false, visibleWhen: whenPreventive },
+    { key: 'isClean', label: 'Is clean?', type: 'bool', table: false, visibleWhen: whenPreventive },
+    {
+      key: 'cameraFunction',
+      label: 'Camera Function',
+      type: 'bool',
+      table: false,
+      visibleWhen: whenPreventive,
+    },
+    // ---- Corrective (captura manual) ----
+    {
+      key: 'differenceMileage',
+      label: 'Difference Mileage (manual)',
+      importAliases: ['difference mileage', 'Difference Mileage'],
+      type: 'number',
+      table: false,
+      visibleWhen: whenCorrective,
+    },
+    // ---- Calculado para ambos: preventivo = Next mant - Mileage ----
+    {
+      key: 'diffMileage',
+      label: 'Difference mileage',
+      type: 'number',
+      form: false,
+      compute: (row) => {
+        if (row.type === 'Preventive') {
+          const next = typeof row.nextMant === 'number' ? row.nextMant : null;
+          const mil = typeof row.mileage === 'number' ? row.mileage : null;
+          if (next === null || mil === null) return null;
+          return next - mil;
+        }
+        return typeof row.differenceMileage === 'number' ? row.differenceMileage : null;
+      },
+    },
+    { key: 'observation', label: 'Observation', type: 'textarea', table: false },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'enum',
+      enumValues: MAINTENANCE_STATUS,
+      required: true,
+      defaultValue: 'Pending',
+      badge: true,
+    },
+    {
+      key: 'origin',
+      label: 'Source',
+      type: 'text',
+      form: false,
+      badge: true,
+      // El origen se deduce del vínculo: si el registro trae BC report,
+      // se capturó desde ahí; si no, se capturó directo en Maintenance.
+      compute: (row) => {
+        const link = row.idBcReport;
+        if (typeof link === 'string' && link.trim() !== '') return 'BC Report';
+        return typeof row.origin === 'string' && row.origin !== '' ? row.origin : 'Direct';
+      },
+    },
+    {
+      key: 'idBcReport',
+      label: 'BC report',
+      importAliases: ['bc report', 'BC Report id', 'idBcReport'],
+      type: 'ref',
+      refCollection: COLLECTIONS.bcReports,
+      form: false,
+      importable: true,
+      table: false,
+    },
+    capturedByField,
+  ],
+};
+
+
+/** Módulo BD_ACCIDENT — Accidentes. Todos los campos también son columnas. */
+export const accidentsModule: ModuleConfig = {
+  id: 'accidents',
+  collection: COLLECTIONS.accidents,
+  title: 'Accidents',
+  icon: 'AlertTriangle',
+  autoUserField: 'idUsers',
+  fields: [
+    { key: 'date', label: 'Accident Date', type: 'date', required: true },
+    {
+      key: 'idDriver',
+      label: 'Driver',
+      type: 'ref',
+      refCollection: COLLECTIONS.drivers,
+      required: true,
+    },
+    {
+      key: 'idStation',
+      label: 'Station',
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      defaultFromUserScope: 'station',
+    },
+    {
+      key: 'idEntity',
+      label: 'Entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      defaultFromUserScope: 'entity',
+    },
+    { key: 'reportToFedex', label: 'Report to Fedex', type: 'bool', defaultValue: false },
+    { key: 'amount', label: 'Amount', type: 'currency' },
+    capturedByField,
   ],
 };
 
@@ -370,22 +823,37 @@ export const requirementsModule: ModuleConfig = {
       required: true,
       defaultValue: 'PENDIENTE',
     },
+    capturedByField,
   ],
   detail: {
     collection: COLLECTIONS.uniforms,
     parentKey: 'idRequeriments',
     title: 'Requested uniforms',
+    /** La subtabla solo se habilita en solicitudes de uniformes. */
+    enabledWhen: { field: 'idRequest', refNameIn: ['Uniforms', 'Uniform', 'Uniformes'] },
     fields: [
+      { key: 'registerDate', label: 'Register date', type: 'date' },
       {
         key: 'idUniformItem',
-        label: 'Item',
+        label: 'Uniform',
         type: 'ref',
         refCollection: COLLECTIONS.uniformItems,
         required: true,
       },
-      { key: 'size', label: 'Size', type: 'enum', enumValues: UNIFORM_SIZES, required: true },
+      {
+        key: 'idSize',
+        label: 'Size',
+        type: 'ref',
+        refCollection: COLLECTIONS.sizes,
+        required: true,
+        // Solo las tallas del tipo que usa la prenda elegida.
+        refFilterFromRefField: {
+          field: 'idUniformItem',
+          sourceField: 'typeSize',
+          targetField: 'typeSize',
+        },
+      },
       { key: 'quantity', label: 'Quantity', type: 'number', required: true, defaultValue: 1 },
-      { key: 'registerDate', label: 'Register date', type: 'date' },
       { key: 'receivingDate', label: 'Receiving date', type: 'date' },
     ],
   },
@@ -396,14 +864,41 @@ const catalogFields: FieldConfig[] = [
   { key: 'name', label: 'Name', type: 'text', required: true },
 ];
 
+/** Prendas y tallas: comparten el tipo de talla (numérica o alfabética). */
+const typeSizeField: FieldConfig = {
+  key: 'typeSize',
+  label: 'Type Size',
+  type: 'enum',
+  enumValues: TYPE_SIZES,
+};
+
+const uniformItemFields: FieldConfig[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  typeSizeField,
+];
+
+const sizeFields: FieldConfig[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  typeSizeField,
+];
+
+/** Team: catálogo de personas con datos de contacto. */
+const teamFields: FieldConfig[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  { key: 'email', label: 'Email Address', type: 'text' },
+  { key: 'phone', label: 'Phone', type: 'text' },
+];
+
 export const catalogModules: ModuleConfig[] = [
+  { id: 'team', collection: COLLECTIONS.team, title: 'Team', icon: 'UsersRound', fields: teamFields },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
   { id: 'stations', collection: COLLECTIONS.stations, title: 'Stations', icon: 'MapPin', fields: catalogFields },
   { id: 'driverCategories', collection: COLLECTIONS.driverCategories, title: 'Driver categories', icon: 'Tags', fields: catalogFields },
   { id: 'shopNames', collection: COLLECTIONS.shopNames, title: 'Shops', icon: 'Store', fields: catalogFields },
   { id: 'vendors', collection: COLLECTIONS.vendors, title: 'Vendors', icon: 'Handshake', fields: catalogFields },
   { id: 'requestTypes', collection: COLLECTIONS.requestTypes, title: 'Request types', icon: 'ListChecks', fields: catalogFields },
-  { id: 'uniformItems', collection: COLLECTIONS.uniformItems, title: 'Uniform items', icon: 'Shirt', fields: catalogFields },
+  { id: 'uniformItems', collection: COLLECTIONS.uniformItems, title: 'Uniform items', icon: 'Shirt', fields: uniformItemFields },
+  { id: 'sizes', collection: COLLECTIONS.sizes, title: 'Sizes', icon: 'Ruler', fields: sizeFields },
   { id: 'routes', collection: COLLECTIONS.routes, title: 'Routes', icon: 'Signpost', fields: catalogFields },
 ];
 
@@ -414,6 +909,8 @@ export const CRUD_MODULES: ModuleConfig[] = [
   assetsModule,
   fleetModule,
   shopModule,
+  maintenanceModule,
+  accidentsModule,
   bcReportsModule,
   rentalsModule,
   requirementsModule,
@@ -429,4 +926,7 @@ export const PERMISSION_MODULES: { id: string; title: string }[] = [
   { id: 'catalogs', title: 'Catalogs' },
   { id: 'users', title: 'Users' },
   { id: 'roles', title: 'Roles' },
+  { id: 'customize', title: 'Customization (required fields & layout)' },
+  { id: 'capturedBy', title: 'Captured by (edit the capturing user)' },
+  { id: 'entityStation', title: 'Entity & Station fields (edit in forms)' },
 ];

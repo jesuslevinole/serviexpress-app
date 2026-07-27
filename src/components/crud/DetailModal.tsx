@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
-import { FileSpreadsheet, Plus } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import type { RefMaps } from '../../hooks/useRefMaps';
 import {
   createDocument,
   deleteDocument,
+  setDocument,
   updateDocument,
 } from '../../services/firestoreService';
-import { exportToExcel } from '../../services/excelExport';
+import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport';
+import { buildTemplateFields } from './templateFields';
+import { ImportCsvModal } from './ImportCsvModal';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DataTable, type TableColumn } from '../ui/DataTable';
@@ -16,7 +19,7 @@ import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
 import { RecordDetailModal } from './RecordDetailModal';
-import { displayValue } from './displayValue';
+import { displayValue, scalar } from './displayValue';
 import type { DetailConfig, EntityData, FieldValue } from '../../types/models';
 import './DetailModal.css';
 
@@ -52,6 +55,9 @@ export function DetailModal({
   const [editing, setEditing] = useState<EntityData | null>(null);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const detailFields = detail.fields;
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
@@ -65,18 +71,22 @@ export function DetailModal({
 
   const columns: TableColumn[] = useMemo(
     () =>
-      detail.fields
+      detailFields
         .filter((f) => f.table !== false)
         .map((field) => ({
           key: field.key,
           label: field.label,
           render: (row) => {
-            const text = displayValue(field, (row as EntityData)[field.key] ?? null, refLabel);
-            return field.key === 'status' && text !== '—' ? <Badge value={text} /> : text;
+            const text = displayValue(field, scalar((row as EntityData)[field.key]), refLabel);
+            return (field.key === 'status' || field.badge === true) && text !== '—' ? (
+              <Badge value={text} />
+            ) : (
+              text
+            );
           },
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detail.fields, refMaps],
+    [detailFields, refMaps],
   );
 
   const handleSubmit = async (values: Record<string, FieldValue>, keepOpen: boolean) => {
@@ -86,8 +96,22 @@ export function DetailModal({
       const payload = { ...values, [detail.parentKey]: parent.id };
       if (editing) {
         await updateDocument(detail.collection, editing.id, payload);
+        if (detail.mirror) {
+          await setDocument(
+            detail.mirror.collection,
+            `${detail.mirror.idPrefix}${editing.id}`,
+            detail.mirror.build(parent.id, parent, payload),
+          );
+        }
       } else {
-        await createDocument(detail.collection, payload);
+        const newId = await createDocument(detail.collection, payload);
+        if (detail.mirror) {
+          await setDocument(
+            detail.mirror.collection,
+            `${detail.mirror.idPrefix}${newId}`,
+            detail.mirror.build(parent.id, parent, payload),
+          );
+        }
       }
       if (keepOpen && !editing) {
         setResetSignal((n) => n + 1);
@@ -106,18 +130,50 @@ export function DetailModal({
     setBusy(true);
     try {
       await deleteDocument(detail.collection, deleting.id);
+      if (detail.mirror) {
+        await deleteDocument(detail.mirror.collection, `${detail.mirror.idPrefix}${deleting.id}`);
+      }
     } finally {
       setDeleting(null);
       setBusy(false);
     }
   };
 
+  /** Plantilla Excel de los renglones, con los desplegables del detalle. */
+  const handleTemplate = async () => {
+    await downloadExcelTemplate(
+      `${parentTitle} - ${detail.title}`,
+      buildTemplateFields(detailFields, refMaps),
+    );
+  };
+
+  /** Importación de renglones: van al registro maestro abierto y se espejean. */
+  const importRow = async (
+    docId: string | null,
+    values: Record<string, FieldValue>,
+  ): Promise<void> => {
+    const payload = { ...values, [detail.parentKey]: parent.id };
+    let rowId = docId;
+    if (docId) {
+      await setDocument(detail.collection, docId, payload);
+    } else {
+      rowId = await createDocument(detail.collection, payload);
+    }
+    if (detail.mirror && rowId) {
+      await setDocument(
+        detail.mirror.collection,
+        `${detail.mirror.idPrefix}${rowId}`,
+        detail.mirror.build(parent.id, parent, payload),
+      );
+    }
+  };
+
   const handleExport = async () => {
     await exportToExcel(
       `${parentTitle} - ${detail.title}`,
-      detail.fields.map((field) => ({
+      detailFields.map((field) => ({
         header: field.label,
-        values: rows.map((row) => displayValue(field, row[field.key] ?? null, refLabel)),
+        values: rows.map((row) => displayValue(field, scalar(row[field.key]), refLabel)),
       })),
     );
   };
@@ -125,6 +181,26 @@ export function DetailModal({
   return (
     <Modal open title={detail.title} onClose={onClose} size="lg">
       <div className="detail-toolbar">
+        <button
+          type="button"
+          className="btn btn-outline"
+          title="Download the Excel template for these rows"
+          onClick={() => void handleTemplate()}
+        >
+          <FileDown size={16} />
+          Template
+        </button>
+        {canCreate ? (
+          <button
+            type="button"
+            className="btn btn-outline"
+            title="Import rows from a CSV file into this record"
+            onClick={() => setImportOpen(true)}
+          >
+            <FileUp size={16} />
+            Import CSV
+          </button>
+        ) : null}
         <button type="button" className="btn btn-outline" onClick={handleExport}>
           <FileSpreadsheet size={16} />
           Export Excel
@@ -132,15 +208,16 @@ export function DetailModal({
         {canCreate ? (
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn-add"
+            title="Add row"
+            aria-label="Add row"
             onClick={() => {
               setEditing(null);
               setFormError(null);
               setFormOpen(true);
             }}
           >
-            <Plus size={16} />
-            Add row
+            <Plus size={22} strokeWidth={2.6} />
           </button>
         ) : null}
       </div>
@@ -164,10 +241,22 @@ export function DetailModal({
         />
       )}
 
+      {importOpen ? (
+        <ImportCsvModal
+          title={`${parentTitle} - ${detail.title}`}
+          collection={detail.collection}
+          fields={detailFields}
+          refMaps={refMaps}
+          currentUid={null}
+          writeRow={importRow}
+          onClose={() => setImportOpen(false)}
+        />
+      ) : null}
+
       {viewing ? (
         <RecordDetailModal
           title={detail.title}
-          fields={detail.fields}
+          fields={detailFields}
           record={viewing}
           refLabels={refLabel}
           onEdit={
@@ -188,7 +277,7 @@ export function DetailModal({
       <CrudForm
         open={formOpen}
         title={editing ? `Edit · ${detail.title}` : `Add · ${detail.title}`}
-        fields={detail.fields}
+        fields={detailFields}
         initial={editing}
         refMaps={refMaps}
         busy={busy}

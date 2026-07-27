@@ -16,6 +16,15 @@ export function normalizeText(value: string): string {
     .toLowerCase();
 }
 
+/**
+ * Normaliza un ENCABEZADO de columna: además de lo anterior, trata guiones y
+ * guiones bajos como espacios ("Type_select" == "Type select") y colapsa
+ * espacios repetidos.
+ */
+export function normalizeHeader(value: string): string {
+  return normalizeText(value).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
 /** Detecta el delimitador más frecuente en la primera línea (Sheets usa coma, Excel ES usa punto y coma). */
 function detectDelimiter(firstLine: string): string {
   const candidates = [',', ';', '\t'];
@@ -123,10 +132,53 @@ export function parseCsvNumber(raw: string): number | null {
 }
 
 /** DD/MM/AAAA, DD-MM-AAAA o AAAA-MM-DD -> "AAAA-MM-DD". Null si no es fecha válida. */
-export function parseCsvDate(raw: string): string | null {
+/**
+ * Número serie de fecha de Excel (p. ej. 45712 = 2025-02-24). Aparece cuando
+ * la columna se exporta con formato General/Número en vez de fecha.
+ * El rango aceptado (5000-80000) cubre de 1913 a 2119 y evita confundir
+ * años sueltos o cantidades pequeñas con fechas.
+ */
+function fromExcelSerial(value: number): string | null {
+  if (!Number.isFinite(value) || value < 5000 || value > 80000) return null;
+  const millis = Date.UTC(1899, 11, 30) + Math.round(value) * 86400000;
+  const date = new Date(millis);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+/** Orden de los dos primeros números de una fecha corta. */
+export type DateOrder = 'dmy' | 'mdy';
+
+const SHORT_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/;
+
+/**
+ * Deduce si una COLUMNA de fechas viene en DD/MM o MM/DD mirando todos sus
+ * valores: si algún primer número pasa de 12 es día primero; si algún segundo
+ * número pasa de 12 es mes primero. Un mismo archivo puede traer las dos
+ * convenciones en columnas distintas, y así cada una se lee bien.
+ */
+export function inferDateOrder(values: readonly string[]): DateOrder {
+  let dayFirst = 0;
+  let monthFirst = 0;
+  values.forEach((value) => {
+    const match = SHORT_DATE.exec(value.trim());
+    if (!match) return;
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    if (first > 12 && second <= 12) dayFirst += 1;
+    else if (second > 12 && first <= 12) monthFirst += 1;
+  });
+  return monthFirst > dayFirst ? 'mdy' : 'dmy';
+}
+
+export function parseCsvDate(raw: string, order: DateOrder = 'dmy'): string | null {
   const trimmed = raw.trim();
+  // Fecha exportada como número serie de Excel.
+  if (/^\d{4,5}([.,]0+)?$/.test(trimmed)) {
+    return fromExcelSerial(Number(trimmed.replace(',', '.')));
+  }
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(trimmed);
-  const latin = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(trimmed);
+  const latin = SHORT_DATE.exec(trimmed);
   let year: number;
   let month: number;
   let day: number;
@@ -135,9 +187,14 @@ export function parseCsvDate(raw: string): string | null {
     month = Number(iso[2]);
     day = Number(iso[3]);
   } else if (latin) {
-    day = Number(latin[1]);
-    month = Number(latin[2]);
+    const first = Number(latin[1]);
+    const second = Number(latin[2]);
     year = Number(latin[3]);
+    if (year < 100) year += 2000;
+    // El propio valor manda cuando es inequívoco; si no, el orden de la columna.
+    const monthFirst = second > 12 ? true : first > 12 ? false : order === 'mdy';
+    day = monthFirst ? second : first;
+    month = monthFirst ? first : second;
   } else {
     return null;
   }

@@ -4,6 +4,8 @@ import type { ModuleConfig } from '../types/models';
 export interface FieldOverride {
   label?: string;
   order?: number;
+  /** Obligatorio configurado por el admin (sobrescribe el del código). */
+  required?: boolean;
 }
 
 export interface ModuleOverride {

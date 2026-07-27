@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -18,13 +19,25 @@ import { db } from '../firebase/config';
 import type { EntityData, FieldValue } from '../types/models';
 
 /** Normaliza un valor crudo de Firestore al tipo FieldValue del app. */
-function normalizeValue(value: unknown): FieldValue {
+function normalizeValue(value: unknown): FieldValue | string[] {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
   }
   if (value instanceof Timestamp) {
     return value.toDate().toISOString().slice(0, 10);
+  }
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof value === 'object') {
+    // Objetos anidados (p. ej. la matriz de permisos de un rol): se conservan
+    // como JSON para que las pantallas puedan reconstruirlos al leer.
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
   return String(value);
 }
@@ -67,9 +80,15 @@ export function subscribeToCollection(
 }
 
 /** Crea un documento. Devuelve el id generado. */
+/** Lectura puntual de una colección (para reportes; no deja listener abierto). */
+export async function fetchCollection(collectionName: string): Promise<EntityData[]> {
+  const snapshot = await getDocs(collection(db, collectionName));
+  return snapshot.docs.map((d) => toEntity(d.id, d.data()));
+}
+
 export async function createDocument(
   collectionName: string,
-  data: Record<string, FieldValue | Record<string, unknown>>,
+  data: Record<string, FieldValue | string[] | Record<string, unknown>>,
 ): Promise<string> {
   const ref = await addDoc(collection(db, collectionName), {
     ...data,
@@ -83,7 +102,7 @@ export async function createDocument(
 export async function setDocument(
   collectionName: string,
   id: string,
-  data: Record<string, FieldValue | Record<string, unknown>>,
+  data: Record<string, FieldValue | string[] | Record<string, unknown>>,
 ): Promise<void> {
   await setDoc(doc(db, collectionName, id), {
     ...data,
@@ -96,7 +115,7 @@ export async function setDocument(
 export async function updateDocument(
   collectionName: string,
   id: string,
-  data: Record<string, FieldValue | Record<string, unknown>>,
+  data: Record<string, FieldValue | string[] | Record<string, unknown>>,
 ): Promise<void> {
   await updateDoc(doc(db, collectionName, id), {
     ...data,

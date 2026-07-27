@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pencil } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { displayValue } from './displayValue';
+import { displayCell } from './displayValue';
 import type { EntityData, FieldConfig } from '../../types/models';
 import './RecordDetailModal.css';
 
@@ -73,8 +73,8 @@ export function RecordDetailModal({
     >
       <div className="rdetail-grid">
         {fields.map((field) => {
-          const text = displayValue(field, record[field.key] ?? null, refLabels);
-          const isStatus = STATUS_KEYS.has(field.key) && text !== '—';
+          const text = displayCell(field, record, refLabels);
+          const isStatus = (STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—';
           return (
             <div
               key={field.key}

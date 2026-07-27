@@ -43,6 +43,13 @@ export function ViewAsModal({ onClose }: ViewAsModalProps) {
       email: String(row.email ?? ''),
       roleId: String(row.roleId ?? ''),
       status: String(row.status ?? ''),
+      scopeEntities: Array.isArray(row.scopeEntities)
+        ? (row.scopeEntities as unknown[]).filter((v): v is string => typeof v === 'string')
+        : [],
+      scopeStations: Array.isArray(row.scopeStations)
+        ? (row.scopeStations as unknown[]).filter((v): v is string => typeof v === 'string')
+        : [],
+      isOffice: row.isOffice === true,
     };
     await startViewAs(profile);
     setBusy(false);

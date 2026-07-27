@@ -1,5 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
-import { AlertCircle, CheckCircle2, ClipboardList } from 'lucide-react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { displayValue } from './displayValue';
 import type { FieldConfig, FieldValue } from '../../types/models';
 import './SaveSummary.css';
@@ -15,14 +14,17 @@ interface SaveSummaryProps {
   footer?: ReactNode;
 }
 
+/** Radio y circunferencia del anillo de progreso (SVG). */
+const RING_RADIUS = 26;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
 function isEmpty(value: FieldValue | undefined): boolean {
   return value === null || value === undefined || value === '';
 }
 
 /**
- * Sumario en vivo del registro en captura: muestra de forma resumida y
- * ordenada la información que se va llenando en el formulario, con el
- * avance de campos y el estado de los obligatorios.
+ * Sumario en vivo del registro en captura: anillo de progreso, estado de los
+ * campos obligatorios y la lista de lo capturado hasta el momento.
  */
 export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryProps) {
   const filled = useMemo(
@@ -34,64 +36,58 @@ export function SaveSummary({ fields, values, refLabels, footer }: SaveSummaryPr
           label: field.label,
           value: displayValue(field, values[field.key] ?? null, refLabels),
           long: field.type === 'textarea',
+          required: field.required === true,
         })),
     [fields, values, refLabels],
   );
 
   const requiredFields = fields.filter((f) => f.required);
   const requiredMissing = requiredFields.filter((f) => isEmpty(values[f.key])).length;
+  const complete = requiredFields.length > 0 && requiredMissing === 0;
+
+  const percent = Math.round((filled.length / Math.max(fields.length, 1)) * 100);
+  const ringStyle = {
+    '--ring-length': `${RING_LENGTH}`,
+    '--ring-offset': `${RING_LENGTH * (1 - percent / 100)}`,
+  } as CSSProperties;
 
   return (
-    <aside className="ssum" aria-label="Record summary">
-      <div className="ssum-header">
-        <span className="ssum-header-icon">
-          <ClipboardList size={15} />
-        </span>
-        <strong>Record summary</strong>
-      </div>
-
-      <div className="ssum-progress">
-        <div className="ssum-progress-bar">
-          <span
-            className="ssum-progress-fill"
-            data-width={Math.round((filled.length / Math.max(fields.length, 1)) * 100)}
-            ref={(el) => {
-              if (el) {
-                el.style.setProperty(
-                  '--fill',
-                  `${Math.round((filled.length / Math.max(fields.length, 1)) * 100)}%`,
-                );
-              }
-            }}
-          />
+    <aside className={`ssum ${complete ? 'is-complete' : ''}`} aria-label="Record summary">
+      <div className="ssum-top">
+        <div className="ssum-ring" style={ringStyle}>
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle className="ssum-ring-track" cx="32" cy="32" r={RING_RADIUS} />
+            <circle className="ssum-ring-value" cx="32" cy="32" r={RING_RADIUS} />
+          </svg>
+          <span className="ssum-ring-label">
+            <strong>{percent}</strong>
+            <small>%</small>
+          </span>
         </div>
-        <span className="ssum-progress-text">
-          {filled.length} of {fields.length} fields
-        </span>
+        <div className="ssum-heading">
+          <span className="ssum-eyebrow">Record summary</span>
+          <strong className="ssum-count">
+            {filled.length} <span>/ {fields.length} fields</span>
+          </strong>
+          {requiredFields.length > 0 ? (
+            <span className={`ssum-chip ${complete ? 'is-ok' : 'is-missing'}`}>
+              <i className="ssum-dot" />
+              {complete
+                ? 'Required complete'
+                : requiredMissing === 1
+                  ? '1 required field left'
+                  : `${requiredMissing} required fields left`}
+            </span>
+          ) : null}
+        </div>
       </div>
-
-      {requiredFields.length > 0 ? (
-        requiredMissing > 0 ? (
-          <p className="ssum-required is-missing">
-            <AlertCircle size={13} />
-            {requiredMissing === 1
-              ? '1 required field missing'
-              : `${requiredMissing} required fields missing`}
-          </p>
-        ) : (
-          <p className="ssum-required is-ok">
-            <CheckCircle2 size={13} />
-            Required fields complete
-          </p>
-        )
-      ) : null}
 
       {filled.length === 0 ? (
-        <p className="ssum-empty">Start filling the form and the summary will appear here.</p>
+        <p className="ssum-empty">Fill the form and each value will appear here as you type.</p>
       ) : (
         <dl className="ssum-list">
           {filled.map((item) => (
-            <div key={item.key} className="ssum-item">
+            <div key={item.key} className={`ssum-item ${item.required ? 'is-required' : ''}`}>
               <dt>{item.label}</dt>
               <dd className={item.long ? 'is-long' : ''}>{item.value}</dd>
             </div>

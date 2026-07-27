@@ -1,14 +1,16 @@
 .crudform-layout {
   display: flex;
-  gap: 18px;
+  gap: 22px;
+  align-items: flex-start;
 }
 
+/* Tres columnas en escritorio; los textarea ocupan el ancho completo. */
 .crudform-grid {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 18px;
   align-content: start;
 }
 
@@ -19,7 +21,13 @@
   align-self: center;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1180px) {
+  .crudform-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
   .crudform-layout {
     flex-direction: column;
   }
@@ -29,4 +37,30 @@
   .crudform-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.crudform-config {
+  margin-right: auto;
+}
+
+.crudform-locked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crudform-locked-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text-soft);
+}
+
+.crudform-locked-value {
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
 }

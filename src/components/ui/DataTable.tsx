@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2, ListPlus } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  History,
+  Pencil,
+  PlusCircle,
+  Trash2,
+} from 'lucide-react';
 import './DataTable.css';
 
 export interface TableColumn {
@@ -20,6 +28,8 @@ interface DataTableProps<T extends { id: string }> {
   onDelete?: (row: T) => void;
   detailLabel?: string;
   onDetail?: (row: T) => void;
+  /** Si se define, el botón de detalle solo aparece en las filas que cumplan. */
+  canDetail?: (row: T) => boolean;
   /** Columna por la que se ordena (null = orden original). */
   sortKey?: string | null;
   sortDir?: SortDirection | null;
@@ -27,6 +37,9 @@ interface DataTableProps<T extends { id: string }> {
   onSort?: (key: string) => void;
   /** Si se define, la fila completa es clicable (ver detalle del registro). */
   onRowClick?: (row: T) => void;
+  /** Acción extra por fila (historial / registros relacionados). */
+  historyLabel?: string;
+  onHistory?: (row: T) => void;
 }
 
 /** Tabla genérica con acciones. Todas las tablas del app pasan por aquí. */
@@ -40,12 +53,16 @@ export function DataTable<T extends { id: string }>({
   onDelete,
   detailLabel,
   onDetail,
+  canDetail,
   sortKey = null,
   sortDir = null,
   onSort,
   onRowClick,
+  historyLabel,
+  onHistory,
 }: DataTableProps<T>) {
-  const showActions = (canEdit && onEdit) || (canDelete && onDelete) || onDetail;
+  const showActions =
+    (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory;
 
   const sortIcon = (key: string) => {
     if (sortKey !== key || !sortDir) return <ChevronsUpDown size={13} className="dtable-sort-idle" />;
@@ -96,14 +113,24 @@ export function DataTable<T extends { id: string }>({
                 ))}
                 {showActions ? (
                   <td className="dtable-actions" onClick={(e) => e.stopPropagation()}>
-                    {onDetail ? (
+                    {onDetail && (!canDetail || canDetail(row)) ? (
                       <button
                         type="button"
                         className="icon-btn"
                         title={detailLabel ?? 'Detail'}
                         onClick={() => onDetail(row)}
                       >
-                        <ListPlus size={16} />
+                        <PlusCircle size={18} strokeWidth={2.2} />
+                      </button>
+                    ) : null}
+                    {onHistory ? (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={historyLabel ?? 'History'}
+                        onClick={() => onHistory(row)}
+                      >
+                        <History size={16} />
                       </button>
                     ) : null}
                     {canEdit && onEdit ? (

@@ -164,3 +164,7 @@
   color: var(--text-soft);
   align-self: center;
 }
+
+.imp-drop-extra {
+  margin-top: 14px;
+}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Building2,
@@ -28,6 +29,7 @@ import logoUrl from '../../assets/logo.svg';
 import './Sidebar.css';
 
 const ICONS: Record<string, LucideIcon> = {
+  AlertTriangle,
   Truck,
   Users,
   ScanLine,

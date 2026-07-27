@@ -30,10 +30,19 @@ import type {
   FieldValue,
   ModulePermissions,
   PermissionAction,
+  ViewScope,
 } from '../types/models';
 import './RolesPage.css';
 
 const ACTIONS: PermissionAction[] = ['ver', 'crear', 'editar', 'eliminar'];
+
+/** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
+const VIEW_SCOPES: { value: ViewScope; label: string }[] = [
+  { value: 'all', label: 'All records' },
+  { value: 'own', label: 'Own records only' },
+  { value: 'station', label: 'By station' },
+  { value: 'entity_station', label: 'By station & entity' },
+];
 
 /** Campos que muestra el sumario lateral del modal de roles. */
 const ROLE_SUMMARY_FIELDS: FieldConfig[] = [
@@ -83,6 +92,14 @@ type PermissionMatrix = Record<string, ModulePermissions>;
 function parsePermissions(row: EntityData | null): PermissionMatrix {
   if (!row) return {};
   const raw = (row as unknown as { permissions?: unknown }).permissions;
+  if (typeof raw === 'string' && raw.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed === 'object' && parsed !== null) return parsed as PermissionMatrix;
+    } catch {
+      return {};
+    }
+  }
   if (typeof raw !== 'object' || raw === null) return {};
   return raw as PermissionMatrix;
 }
@@ -198,6 +215,13 @@ export function RolesPage() {
       }
       return { ...prev, [moduleId]: nextModule };
     });
+  };
+
+  const setScope = (moduleId: string, alcance: ViewScope) => {
+    setMatrix((prev) => ({
+      ...prev,
+      [moduleId]: { ...(prev[moduleId] ?? {}), alcance },
+    }));
   };
 
   const toggleAllForModule = (moduleId: string) => {
@@ -450,6 +474,7 @@ export function RolesPage() {
                   <th key={action}>{action}</th>
                 ))}
                 <th>All</th>
+                  <th>Visibility</th>
               </tr>
             </thead>
             <tbody>
@@ -476,6 +501,20 @@ export function RolesPage() {
                       >
                         Toggle
                       </button>
+                    </td>
+                    <td>
+                      <select
+                        className="roles-scope-select"
+                        value={matrix[module.id]?.alcance ?? 'all'}
+                        onChange={(e) => setScope(module.id, e.target.value as ViewScope)}
+                        title="Which records this role can see in the module"
+                      >
+                        {VIEW_SCOPES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 );

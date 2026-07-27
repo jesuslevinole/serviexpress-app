@@ -1,5 +1,3 @@
-
-
 export interface ExcelColumn {
   header: string;
   values: string[];
@@ -11,13 +9,42 @@ export interface ExcelColumn {
  * Recibe los valores YA resueltos (nombres, nunca IDs).
  */
 export async function exportToExcel(title: string, columns: ExcelColumn[]): Promise<void> {
+  return writeWorkbook(`${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`, [
+    { name: title, columns },
+  ]);
+}
+
+export interface ExcelSheet {
+  name: string;
+  columns: ExcelColumn[];
+}
+
+/** Nombre de hoja válido para Excel (máx. 31 caracteres, sin []:*?/\). */
+function safeSheetName(name: string, index: number): string {
+  const clean = name.replace(/[[\]:*?/\\]/g, ' ').trim();
+  return (clean === '' ? `Sheet ${index + 1}` : clean).slice(0, 31);
+}
+
+/**
+ * Libro de Excel con una hoja por reporte, con el mismo formato de marca.
+ * Se usa para el paquete de reportes por rango de fechas del Dashboard.
+ */
+export async function exportWorkbook(fileName: string, sheets: ExcelSheet[]): Promise<void> {
+  return writeWorkbook(fileName, sheets);
+}
+
+async function writeWorkbook(fileName: string, sheets: ExcelSheet[]): Promise<void> {
   // Carga diferida: ExcelJS solo se descarga cuando el usuario exporta.
   const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
     import('exceljs'),
     import('file-saver'),
   ]);
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(title.slice(0, 31));
+
+  sheets.forEach((sheetSpec, sheetIndex) => {
+  const title = sheetSpec.name;
+  const columns = sheetSpec.columns;
+  const sheet = workbook.addWorksheet(safeSheetName(title, sheetIndex));
 
   const colCount = columns.length;
   const rowCount = columns[0]?.values.length ?? 0;
@@ -48,12 +75,22 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
     };
   });
 
+  const STATUS_COLORS: Record<string, string> = {
+    OK: 'FF1E8E3E',
+    ALERT: 'FFD93025',
+    CAUTION: 'FFE8710A',
+  };
+
   for (let r = 0; r < rowCount; r += 1) {
     const row = sheet.getRow(headerRowIndex + 1 + r);
     columns.forEach((col, c) => {
       const cell = row.getCell(c + 1);
-      cell.value = col.values[r] ?? '';
-      cell.font = { name: 'Arial', size: 10 };
+      const value = col.values[r] ?? '';
+      cell.value = value;
+      const statusColor = STATUS_COLORS[value];
+      cell.font = statusColor
+        ? { name: 'Arial', size: 10, bold: true, color: { argb: statusColor } }
+        : { name: 'Arial', size: 10 };
     });
   }
 
@@ -68,13 +105,13 @@ export async function exportToExcel(title: string, columns: ExcelColumn[]): Prom
       to: { row: headerRowIndex, column: colCount },
     };
   }
+  });
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const fileName = `${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  saveAs(blob, fileName);
+  saveAs(blob, `${fileName.replace(/\s+/g, '_')}.xlsx`);
 }
 
 /** Letra de columna de Excel (1 -> A, 27 -> AA). */

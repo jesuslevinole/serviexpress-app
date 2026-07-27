@@ -12,6 +12,8 @@ export const COLLECTIONS = {
   requestTypes: 'requestTypes',
   uniformItems: 'uniformItems',
   routes: 'routes',
+  team: 'team',
+  sizes: 'sizes',
   trucks: 'trucks',
   drivers: 'drivers',
   assets: 'assets',
@@ -20,6 +22,9 @@ export const COLLECTIONS = {
   bcReports: 'bcReports',
   bcReportDetails: 'bcReportDetails',
   rentals: 'rentals',
+  maintenance: 'maintenance',
+  accidents: 'accidents',
+  truckHistory: 'truck_history',
   requirements: 'requirements',
   uniforms: 'uniforms',
 } as const;
@@ -33,6 +38,10 @@ export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 export const REF_LABEL_BUILDERS: Record<string, (d: EntityData) => string> = {
   [COLLECTIONS.trucks]: (d) =>
     [d.unitN, d.lPlate].filter((v) => typeof v === 'string' && v !== '').join(' · ') || 'Camión',
+  [COLLECTIONS.bcReports]: (d) => {
+    const date = typeof d.date === 'string' && d.date !== '' ? d.date : 'BC Report';
+    return `BC ${date}`;
+  },
   [COLLECTIONS.assets]: (d) =>
     [d.type, d.mark, d.serialNumber]
       .filter((v) => typeof v === 'string' && v !== '')

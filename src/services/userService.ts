@@ -26,6 +26,9 @@ interface NewUserParams {
   status: string;
   /** ID original de AppSheet (solo referencia histórica; el login usa el uid). */
   appsheetId?: string | null;
+  scopeEntities?: string[];
+  scopeStations?: string[];
+  isOffice?: boolean;
 }
 
 /**
@@ -53,6 +56,9 @@ export async function createUserWithProfile(params: NewUserParams): Promise<stri
       roleId: params.roleId,
       status: params.status,
       appsheetId: params.appsheetId ?? null,
+      scopeEntities: params.scopeEntities ?? [],
+      scopeStations: params.scopeStations ?? [],
+      isOffice: params.isOffice === true,
     });
     await signOut(secondaryAuth);
     return uid;

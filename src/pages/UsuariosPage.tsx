@@ -15,6 +15,7 @@ import { Badge } from '../components/ui/Badge';
 import { SaveSummary } from '../components/crud/SaveSummary';
 import { ImportCsvModal } from '../components/crud/ImportCsvModal';
 import { RecordDetailModal } from '../components/crud/RecordDetailModal';
+import { Building2 } from 'lucide-react';
 import type { RefMaps } from '../hooks/useRefMaps';
 import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
 import { Modal } from '../components/ui/Modal';
@@ -29,6 +30,9 @@ interface UserFormState {
   email: string;
   roleId: string;
   status: string;
+  isOffice: boolean;
+  scopeEntities: string[];
+  scopeStations: string[];
 }
 
 const EMPTY_FORM: UserFormState = {
@@ -36,6 +40,9 @@ const EMPTY_FORM: UserFormState = {
   email: '',
   roleId: '',
   status: 'ACTIVO',
+  isOffice: false,
+  scopeEntities: [],
+  scopeStations: [],
 };
 
 /** Campos que muestra el visor de detalle de un usuario. */
@@ -82,6 +89,8 @@ export function UsuariosPage() {
   const { can } = useAuth();
   const users = useCollection(COLLECTIONS.users);
   const roles = useCollection(COLLECTIONS.roles);
+  const entities = useCollection(COLLECTIONS.entities);
+  const stations = useCollection(COLLECTIONS.stations);
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -168,6 +177,9 @@ export function UsuariosPage() {
       email: String(row.email ?? ''),
       roleId: String(row.roleId ?? ''),
       status: String(row.status ?? 'ACTIVO'),
+      isOffice: row.isOffice === true,
+      scopeEntities: Array.isArray(row.scopeEntities) ? row.scopeEntities : [],
+      scopeStations: Array.isArray(row.scopeStations) ? row.scopeStations : [],
     });
     setError(null);
     setInvalid(false);
@@ -190,6 +202,9 @@ export function UsuariosPage() {
           name: form.name.trim(),
           roleId: form.roleId,
           status: form.status,
+          isOffice: form.isOffice,
+          scopeEntities: form.isOffice ? [] : form.scopeEntities,
+          scopeStations: form.isOffice ? [] : form.scopeStations,
         });
         setNotice(null);
       } else {
@@ -199,6 +214,9 @@ export function UsuariosPage() {
           email,
           roleId: form.roleId,
           status: form.status,
+          isOffice: form.isOffice,
+          scopeEntities: form.isOffice ? [] : form.scopeEntities,
+          scopeStations: form.isOffice ? [] : form.scopeStations,
         });
         setNotice(
           `User created. When you decide, send the invitation with the button in Actions.`,
@@ -375,6 +393,49 @@ export function UsuariosPage() {
           fields={USER_DETAIL_FIELDS}
           record={viewing}
           refLabels={(_c, id) => roleName.get(id) ?? '—'}
+          extra={
+            <div className="usuarios-detail-scope">
+              <strong>Assigned scope</strong>
+              {viewing.isOffice === true ? (
+                <p className="usuarios-detail-office">
+                  Office — access to the records of ALL entities and stations
+                </p>
+              ) : (
+                <div className="usuarios-detail-lists">
+                  <div>
+                    <span>Entities</span>
+                    <ul>
+                      {!Array.isArray(viewing.scopeEntities) ||
+                      viewing.scopeEntities.length === 0 ? (
+                        <li className="is-empty">None assigned</li>
+                      ) : (
+                        viewing.scopeEntities.map((id) => (
+                          <li key={id}>
+                            {String(entities.rows.find((e) => e.id === id)?.name ?? id)}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                  <div>
+                    <span>Stations</span>
+                    <ul>
+                      {!Array.isArray(viewing.scopeStations) ||
+                      viewing.scopeStations.length === 0 ? (
+                        <li className="is-empty">None assigned</li>
+                      ) : (
+                        viewing.scopeStations.map((id) => (
+                          <li key={id}>
+                            {String(stations.rows.find((st) => st.id === id)?.name ?? id)}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          }
           onEdit={
             can('users', 'editar')
               ? () => {
@@ -450,6 +511,88 @@ export function UsuariosPage() {
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             />
           </div>
+          <div className="usuarios-scope">
+            <label className="usuarios-office">
+              <input
+                type="checkbox"
+                checked={form.isOffice}
+                onChange={(e) => setForm((f) => ({ ...f, isOffice: e.target.checked }))}
+              />
+              <span className="usuarios-office-icon">
+                <Building2 size={15} />
+              </span>
+              <span>
+                <strong>Office</strong>
+                <small>Access to the records of ALL entities and stations</small>
+              </span>
+            </label>
+
+            {!form.isOffice ? (
+              <div className="usuarios-scope-lists">
+                <div className="usuarios-checklist">
+                  <span className="usuarios-checklist-title">
+                    Entities ({form.scopeEntities.length})
+                  </span>
+                  <div className="usuarios-checklist-box">
+                    {entities.rows.length === 0 ? (
+                      <p className="usuarios-checklist-empty">No entities yet</p>
+                    ) : (
+                      entities.rows.map((entity) => (
+                        <label key={entity.id}>
+                          <input
+                            type="checkbox"
+                            checked={form.scopeEntities.includes(entity.id)}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                scopeEntities: e.target.checked
+                                  ? [...f.scopeEntities, entity.id]
+                                  : f.scopeEntities.filter((id) => id !== entity.id),
+                              }))
+                            }
+                          />
+                          {String(entity.name ?? entity.id)}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div className="usuarios-checklist">
+                  <span className="usuarios-checklist-title">
+                    Stations ({form.scopeStations.length})
+                  </span>
+                  <div className="usuarios-checklist-box">
+                    {stations.rows.length === 0 ? (
+                      <p className="usuarios-checklist-empty">No stations yet</p>
+                    ) : (
+                      stations.rows.map((station) => (
+                        <label key={station.id}>
+                          <input
+                            type="checkbox"
+                            checked={form.scopeStations.includes(station.id)}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                scopeStations: e.target.checked
+                                  ? [...f.scopeStations, station.id]
+                                  : f.scopeStations.filter((id) => id !== station.id),
+                              }))
+                            }
+                          />
+                          {String(station.name ?? station.id)}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <p className="usuarios-scope-hint">
+                  With no selection the user sees all records. Selecting entities/stations limits
+                  every module (Trucks, Drivers, Assets, Fleet, Shop…) to matching records only.
+                </p>
+              </div>
+            ) : null}
+          </div>
+
           {!editing ? (
             <p className="usuarios-email-hint">
               The user will NOT receive any email on creation. When you decide, send the invitation

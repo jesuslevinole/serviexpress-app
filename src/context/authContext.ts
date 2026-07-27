@@ -20,6 +20,8 @@ export interface AuthContextValue {
   viewAs: UserProfile | null;
   startViewAs: (profile: UserProfile) => Promise<void>;
   stopViewAs: () => void;
+  /** Rol con el que se evalúan permisos y visibilidad (el simulado en View as). */
+  effectiveRole: Role | null;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

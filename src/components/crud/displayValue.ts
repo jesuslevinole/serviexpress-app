@@ -1,4 +1,16 @@
-import type { FieldConfig, FieldValue } from '../../types/models';
+import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
+
+/** Colapsa un posible arreglo (asignaciones) a un valor escalar mostrable. */
+export function scalar(value: FieldValue | string[] | undefined): FieldValue {
+  if (value === undefined) return null;
+  return Array.isArray(value) ? value.join(', ') : value;
+}
+
+/** Valor efectivo de un campo: el calculado en vivo, o el guardado. */
+export function effectiveValue(field: FieldConfig, row: EntityData): FieldValue {
+  if (field.compute) return field.compute(row);
+  return scalar(row[field.key]);
+}
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('es-MX', { style: 'currency', currency: 'USD' });
@@ -21,4 +33,27 @@ export function displayValue(
     default:
       return String(value);
   }
+}
+
+/**
+ * Texto final de una celda: valor calculado o guardado y, si queda vacío,
+ * el del campo de respaldo (dato heredado de una migración).
+ */
+export function displayCell(
+  field: FieldConfig,
+  row: EntityData,
+  refLabels: (collection: string, id: string) => string,
+): string {
+  const text = displayValue(field, effectiveValue(field, row), refLabels);
+  if (text !== '' && text !== '—') return text;
+  if (!field.fallbackField) return text;
+  const fallback = scalar(row[field.fallbackField]);
+  if (fallback === null || fallback === '') return text;
+  // El valor heredado puede ser el ID del registro referenciado (migración):
+  // se intenta resolver a nombre y, si no existe, se muestra tal cual.
+  if (field.type === 'ref' && field.refCollection && typeof fallback === 'string') {
+    const resolved = refLabels(field.refCollection, fallback);
+    if (resolved !== '' && resolved !== '—') return resolved;
+  }
+  return String(fallback);
 }

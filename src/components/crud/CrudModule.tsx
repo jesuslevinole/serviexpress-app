@@ -1,18 +1,26 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { FileDown, FileSpreadsheet, FileUp, Filter, Pencil, Plus, Search, X } from 'lucide-react';
+import { useMemo, useState, type ReactNode, useRef } from 'react';
+import {
+  FileDown,
+  FileSpreadsheet,
+  FileUp,
+  Filter,
+  Layers,
+  Pencil,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
   createDocument,
+  setDocument,
   deleteDocument,
   updateDocument,
 } from '../../services/firestoreService';
-import {
-  downloadExcelTemplate,
-  exportToExcel,
-  type TemplateField,
-} from '../../services/excelExport';
+import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport';
+import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DataTable, type SortDirection, type TableColumn } from '../ui/DataTable';
@@ -23,10 +31,13 @@ import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
 import { TableLayoutModal } from './TableLayoutModal';
+import { RelatedRecordsModal } from './RelatedRecordsModal';
 import { useUiConfig } from '../../hooks/useUiConfig';
+import { useScopeFilter } from '../../hooks/useScope';
+import { COLLECTIONS } from '../../config/collections';
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
-import { displayValue } from './displayValue';
+import { displayCell, displayValue, effectiveValue, scalar } from './displayValue';
 import type { EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
@@ -78,13 +89,71 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  * y exportación a Excel. TODOS los módulos del app usan este componente.
  */
 export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
-  const { can, firebaseUser, isAdmin } = useAuth();
+  const { can, firebaseUser, isAdmin, profile } = useAuth();
   const { editMode, applyToModule } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
   const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
   const [layoutOpen, setLayoutOpen] = useState(false);
-  const { rows, loading, error } = useCollection(config.collection);
+  /** Puede personalizar layout y obligatorios: admin o rol con permiso Customization. */
+  const canCustomize = isAdmin || can('customize', 'editar');
+  /** Puede editar el campo "Captured by": admin o rol con ese permiso en Roles. */
+  const canEditCapturedBy =
+    config.autoUserField !== undefined && (isAdmin || can('capturedBy', 'editar'));
+
+  /**
+   * ¿La fila puede abrir su subtabla? Solo si el campo condicionado apunta a un
+   * registro con el nombre esperado (p. ej. tipo de solicitud = "Uniforms").
+   */
+  const detailEnabled = (row: EntityData): boolean => {
+    const condition = config.detail?.enabledWhen;
+    if (!condition) return true;
+    const value = row[condition.field];
+    if (typeof value !== 'string' || value === '') return false;
+    const field = config.fields.find((f) => f.key === condition.field);
+    const label = field?.refCollection ? refLabel(field.refCollection, value) : value;
+    return condition.refNameIn.some((name) => name.toLowerCase() === label.toLowerCase());
+  };
+
+  /** Puede editar Entity/Station en formularios: admin o permiso entityStation. */
+  const canEditContext = isAdmin || can('entityStation', 'editar');
+
+  /** Valores iniciales desde el alcance del usuario (su entidad/estación asignada). */
+  const scopePresets = useMemo(
+    () =>
+      Object.fromEntries(
+        config.fields
+          .filter((f) => f.defaultFromUserScope !== undefined)
+          .map((f) => [
+            f.key,
+            f.defaultFromUserScope === 'entity'
+              ? (profile?.scopeEntities?.[0] ?? null)
+              : (profile?.scopeStations?.[0] ?? null),
+          ]),
+      ),
+    [config.fields, profile],
+  );
+  const { rows: allRows, loading, error } = useCollection(config.collection);
+  const scopeFilter = useScopeFilter();
+  /** Filas dentro del alcance (entidades/estaciones asignadas al usuario). */
+  const rows = useMemo(
+    () => allRows.filter((row) => scopeFilter(config, row)),
+    [allRows, scopeFilter, config],
+  );
   const refMaps = useRefMaps(config.fields);
+
+  /** Alcance por usuario (para rellenar Entity/Station al elegir capturista). */
+  const userScopes = useMemo(() => {
+    const usersData = refMaps[COLLECTIONS.users];
+    const map: Record<string, { entity: string | null; station: string | null }> = {};
+    (usersData?.rows ?? []).forEach((u) => {
+      map[u.id] = {
+        entity: Array.isArray(u.scopeEntities) ? (u.scopeEntities[0] ?? null) : null,
+        station: Array.isArray(u.scopeStations) ? (u.scopeStations[0] ?? null) : null,
+      };
+    });
+    return map;
+  }, [refMaps]);
+
   const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
 
   const [search, setSearch] = useState('');
@@ -93,6 +162,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+  const [historyFor, setHistoryFor] = useState<EntityData | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  /** Encabezados creados durante la importación masiva (clave de grupo -> id). */
+  const bulkHeaders = useRef<Map<string, string>>(new Map());
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
@@ -125,14 +198,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         activeFilters.every(([key, filter]) => {
           const field = config.fields.find((f) => f.key === key);
           if (!field) return true;
-          return matchesFilter(field, row[key] ?? null, filter);
+          return matchesFilter(field, field.compute ? field.compute(row) : scalar(row[key]), filter);
         }),
       );
     }
     if (term) {
       result = result.filter((row) =>
         config.fields.some((field) =>
-          displayValue(field, row[field.key] ?? null, refLabel).toLowerCase().includes(term),
+          displayCell(field, row, refLabel).toLowerCase().includes(term),
         ),
       );
     }
@@ -160,8 +233,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (!field) return filteredRows;
     const direction = sortDir === 'asc' ? 1 : -1;
     return [...filteredRows].sort((a, b) => {
-      const rawA = a[sortKey] ?? null;
-      const rawB = b[sortKey] ?? null;
+      const rawA = field.compute ? field.compute(a) : scalar(a[sortKey]);
+      const rawB = field.compute ? field.compute(b) : scalar(b[sortKey]);
       if (field.type === 'number' || field.type === 'currency') {
         const numA = typeof rawA === 'number' ? rawA : Number.NEGATIVE_INFINITY;
         const numB = typeof rawB === 'number' ? rawB : Number.NEGATIVE_INFINITY;
@@ -219,8 +292,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         key: field.key,
         label: field.label,
         render: (row) => {
-          const text = displayValue(field, (row as EntityData)[field.key] ?? null, refLabel);
-          if (STATUS_KEYS.has(field.key) && text !== '—') {
+          const text = displayCell(field, row as EntityData, refLabel);
+          if ((STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—') {
             return <Badge value={text} />;
           }
           return text;
@@ -247,11 +320,46 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setFormError(null);
     try {
       const payload = { ...values };
+      // Copia el nombre resuelto de las referencias marcadas con copyLabelTo.
+      config.fields.forEach((field) => {
+        if (!field.copyLabelTo || !field.refCollection) return;
+        const chosen = payload[field.key];
+        if (typeof chosen === 'string' && chosen !== '') {
+          payload[field.copyLabelTo] = refLabel(field.refCollection, chosen);
+        }
+      });
       if (config.autoUserField && firebaseUser && !editing) {
-        payload[config.autoUserField] = firebaseUser.uid;
+        // Si el rol puede editar el capturista, se respeta su elección del formulario;
+        // si no, el sistema lo llena con la sesión actual.
+        const chosen = payload[config.autoUserField];
+        if (!canEditCapturedBy || typeof chosen !== 'string' || chosen === '') {
+          payload[config.autoUserField] = firebaseUser.uid;
+        }
       }
       if (editing) {
         await updateDocument(config.collection, editing.id, payload);
+        // Bitácora: deja constancia de los cambios en los campos vigilados.
+        if (config.changeLog) {
+          for (const key of config.changeLog.watch) {
+            const before = editing[key];
+            const after = payload[key];
+            if (before === after) continue;
+            const field = config.fields.find((f) => f.key === key);
+            const asLabel = (value: unknown): string => {
+              if (typeof value !== 'string' || value === '') return '—';
+              return field?.refCollection ? refLabel(field.refCollection, value) : value;
+            };
+            await createDocument(config.changeLog.collection, {
+              [config.changeLog.foreignKey]: editing.id,
+              date: new Date().toISOString().slice(0, 10),
+              field: key,
+              fieldLabel: field?.label ?? key,
+              fromLabel: asLabel(before),
+              toLabel: asLabel(after),
+              idUsers: firebaseUser?.uid ?? null,
+            });
+          }
+        }
       } else {
         await createDocument(config.collection, payload);
       }
@@ -282,63 +390,77 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
   /** Plantilla Excel con dropdowns: enums, SI/NO y nombres reales de catálogos. */
   const handleTemplate = async () => {
-    const idField: TemplateField = {
-      label: 'ID',
-      required: false,
-      type: 'text',
-      hint:
-        'AppSheet ID (optional). When present it becomes the identifier: re-importing with the same ID updates the record instead of duplicating it. Reference columns accept this ID or the name.',
-    };
-    const dataFields: TemplateField[] = config.fields
-      .filter((field) => field.form !== false)
-      .map((field) => {
-      let options: string[] | undefined;
-      let hint = 'Text';
-      switch (field.type) {
-        case 'enum':
-          options = [...(field.enumValues ?? [])];
-          hint = `One of: ${(field.enumValues ?? []).join(', ')}`;
-          break;
-        case 'bool':
-          options = ['YES', 'NO'];
-          hint = 'YES or NO';
-          break;
-        case 'ref': {
-          const refData = field.refCollection ? refMaps[field.refCollection] : undefined;
-          if (refData) {
-            let refRows = refData.rows;
-            if (field.refFilter) {
-              refRows = refRows.filter(
-                (r) => r[field.refFilter!.field] === field.refFilter!.value,
-              );
-            }
-            options = refRows
-              .map((r) => refData.labels.get(r.id) ?? '')
-              .filter((label) => label !== '')
-              .sort((a, b) => a.localeCompare(b));
-          }
-          hint = 'Exact name as shown in the app (use the dropdown)';
-          break;
-        }
-        case 'date':
-          hint = 'Date DD/MM/YYYY';
-          break;
-        case 'number':
-        case 'currency':
-          hint = 'Number';
-          break;
-        case 'textarea':
-          hint = 'Long text';
-          break;
-        default:
-          hint = 'Text';
-      }
-      return { label: field.label, required: field.required === true, type: field.type, options, hint };
-    });
-    await downloadExcelTemplate(config.title, [idField, ...dataFields]);
+    await downloadExcelTemplate(config.title, buildTemplateFields(config.fields, refMaps));
   };
 
-  /** Exporta con su propio rango de fechas, independiente de búsqueda y filtros. */
+  /** Campos del CSV masivo: encabezado (incluido el BC) + renglón de detalle. */
+  const bulkFields = useMemo(() => {
+    if (!config.bulkDetailImport || !config.detail) return [];
+    const headerFields = config.fields.filter((f) => f.compute === undefined);
+    const rowFields = config.detail.fields.filter((f) => f.compute === undefined);
+    return [...headerFields, ...rowFields];
+  }, [config]);
+
+  /**
+   * Cada fila del CSV trae encabezado + renglón: se busca (o se crea) el
+   * registro maestro que corresponde al grupo y el renglón se cuelga de él.
+   */
+  const bulkWriteRow = async (
+    _docId: string | null,
+    values: Record<string, FieldValue>,
+  ): Promise<void> => {
+    const bulk = config.bulkDetailImport;
+    const detail = config.detail;
+    if (!bulk || !detail) return;
+
+    const headerValues: Record<string, FieldValue> = {};
+    config.fields
+      .filter((f) => f.compute === undefined)
+      .forEach((field) => {
+        if (values[field.key] !== undefined) headerValues[field.key] = values[field.key];
+      });
+    if (config.autoUserField && !headerValues[config.autoUserField] && firebaseUser) {
+      headerValues[config.autoUserField] = firebaseUser.uid;
+    }
+
+    const groupKey = bulk.groupBy.map((key) => String(headerValues[key] ?? '')).join('|');
+    let headerId = bulkHeaders.current.get(groupKey);
+
+    if (!headerId) {
+      // ¿Ya existe un registro maestro con esa misma combinación?
+      const existing = allRows.find((row) =>
+        bulk.groupBy.every((key) => String(row[key] ?? '') === String(headerValues[key] ?? '')),
+      );
+      headerId = existing ? existing.id : await createDocument(config.collection, headerValues);
+      bulkHeaders.current.set(groupKey, headerId);
+    }
+
+    const rowValues: Record<string, FieldValue> = {};
+    detail.fields
+      .filter((f) => f.compute === undefined)
+      .forEach((field) => {
+        if (values[field.key] !== undefined) rowValues[field.key] = values[field.key];
+      });
+    rowValues[detail.parentKey] = headerId;
+
+    const rowId = await createDocument(detail.collection, rowValues);
+    if (detail.mirror) {
+      await setDocument(
+        detail.mirror.collection,
+        `${detail.mirror.idPrefix}${rowId}`,
+        detail.mirror.build(headerId, { id: headerId, ...headerValues }, rowValues),
+      );
+    }
+  };
+
+  /** Plantilla del CSV masivo: columnas del encabezado y del renglón juntas. */
+  const handleBulkTemplate = async () => {
+    await downloadExcelTemplate(
+      config.bulkDetailImport?.title ?? config.title,
+      buildTemplateFields(bulkFields, refMaps),
+    );
+  };
+
   const handleExport = async (dateField: string, from: string, to: string) => {
     const rowsForExport = rows.filter((row) => {
       const raw = row[dateField];
@@ -352,9 +474,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       `${config.title}${rangeSuffix}`,
       config.fields.map((field) => ({
         header: field.label,
-        values: rowsForExport.map((row) =>
-          displayValue(field, row[field.key] ?? null, refLabel),
-        ),
+        values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
       })),
     );
   };
@@ -395,11 +515,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Import CSV</span>
             </button>
           ) : null}
-          {editMode && isAdmin ? (
+          {(editMode && isAdmin) || (editMode && canCustomize) ? (
             <button
               type="button"
               className="btn btn-primary"
-              title="Rename headers and reorder columns"
+              title="Rename headers, reorder columns and set required fields"
               onClick={() => setLayoutOpen(true)}
             >
               <Pencil size={15} />
@@ -417,6 +537,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-filter-count">{Object.keys(filters).length}</span>
             ) : null}
           </button>
+          {config.bulkDetailImport && config.detail && canCreate ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Import many detail rows at once, grouped by user and date"
+              onClick={() => {
+                bulkHeaders.current = new Map();
+                setBulkOpen(true);
+              }}
+            >
+              <Layers size={16} />
+              <span className="crud-btn-text">{config.bulkDetailImport.buttonLabel}</span>
+            </button>
+          ) : null}
           <button type="button" className="btn btn-outline" onClick={() => setExportOpen(true)}>
             <FileSpreadsheet size={16} />
             <span className="crud-btn-text">Export Excel</span>
@@ -461,10 +595,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           onDelete={(row) => setDeleting(row)}
           detailLabel={config.detail ? config.detail.title : undefined}
           onDetail={config.detail ? (row) => setDetailParent(row) : undefined}
+          canDetail={detailEnabled}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
           onRowClick={(row) => setViewing(row)}
+          historyLabel={config.relatedViews?.[0]?.title ?? 'History'}
+          onHistory={config.relatedViews ? (row) => setHistoryFor(row) : undefined}
         />
       )}
 
@@ -489,6 +626,42 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }}
         onClose={() => setFilterOpen(false)}
       />
+
+      {bulkOpen && config.bulkDetailImport && config.detail ? (
+        <ImportCsvModal
+          title={config.bulkDetailImport.title}
+          collection={config.detail.collection}
+          fields={bulkFields}
+          refMaps={refMaps}
+          currentUid={firebaseUser?.uid ?? null}
+          writeRow={bulkWriteRow}
+          headerExtra={
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => void handleBulkTemplate()}
+            >
+              <FileDown size={16} />
+              Template
+            </button>
+          }
+          onClose={() => setBulkOpen(false)}
+        />
+      ) : null}
+
+      {historyFor && config.relatedViews ? (
+        <RelatedRecordsModal
+          title={config.title}
+          record={historyFor}
+          recordLabel={displayValue(
+            config.fields[0],
+            effectiveValue(config.fields[0], historyFor),
+            refLabel,
+          )}
+          views={config.relatedViews}
+          onClose={() => setHistoryFor(null)}
+        />
+      ) : null}
 
       {viewing ? (
         <RecordDetailModal
@@ -531,6 +704,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         busy={busy}
         error={formError}
         resetSignal={resetSignal}
+        onConfigure={canCustomize ? () => setLayoutOpen(true) : undefined}
+        editableCapturedByKey={canEditCapturedBy ? config.autoUserField : undefined}
+        currentUid={firebaseUser?.uid ?? null}
+        presetValues={scopePresets}
+        userScopes={userScopes}
+        contextEditable={canEditContext}
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
       />
@@ -548,7 +727,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <ImportCsvModal
           title={config.title}
           collection={config.collection}
-          fields={config.fields.filter((f) => f.form !== false)}
+          fields={config.fields.filter(
+            (f) => f.compute === undefined && (f.form !== false || f.importable === true),
+          )}
           refMaps={refMaps}
           autoUserField={config.autoUserField}
           currentUid={firebaseUser?.uid ?? null}

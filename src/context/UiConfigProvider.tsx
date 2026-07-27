@@ -75,12 +75,20 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
       if (!moduleOverride) return base;
       const fieldOverrides = moduleOverride.fields ?? {};
       const fields = base.fields
-        .map((field, index) => ({
-          field: fieldOverrides[field.key]?.label
-            ? { ...field, label: fieldOverrides[field.key]!.label! }
-            : field,
-          order: fieldOverrides[field.key]?.order ?? index,
-        }))
+        .map((field, index) => {
+          const override = fieldOverrides[field.key];
+          let next = field;
+          if (override?.label !== undefined || override?.required !== undefined) {
+            next = {
+              ...field,
+              ...(override.label !== undefined ? { label: override.label } : {}),
+              ...(override.required !== undefined && field.compute === undefined
+                ? { required: override.required }
+                : {}),
+            };
+          }
+          return { field: next, order: override?.order ?? index };
+        })
         .sort((a, b) => a.order - b.order)
         .map((item) => item.field);
       return {

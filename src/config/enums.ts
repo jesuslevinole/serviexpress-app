@@ -26,10 +26,16 @@ export const REQUIREMENT_STATUS = ['PENDIENTE', 'APROBADO', 'ENTREGADO', 'RECHAZ
 
 export const UNIFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'] as const;
 
+/** Tipo de talla que usa una prenda: numérica o alfabética. */
+export const TYPE_SIZES = ['Numerics', 'Alphabetics'] as const;
+
 export const USER_STATUS = ['ACTIVO', 'INACTIVO'] as const;
 
 /** Estados que se pintan en verde en las tablas. */
+export const MAINTENANCE_STATUS = ['Pending', 'In progress', 'Done'] as const;
+
 export const POSITIVE_STATUS: readonly string[] = [
+  'DONE',
   'YES',
   'SÍ',
   'SI',
@@ -46,6 +52,7 @@ export const POSITIVE_STATUS: readonly string[] = [
 
 /** Estados que se pintan en rojo. */
 export const NEGATIVE_STATUS: readonly string[] = [
+  'ALERT',
   'BAD',
   'NO',
   'NO ACTIVE',

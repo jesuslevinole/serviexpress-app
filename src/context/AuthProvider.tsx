@@ -64,6 +64,13 @@ async function loadProfile(uid: string): Promise<UserProfile | null> {
     email: typeof data.email === 'string' ? data.email : '',
     roleId: typeof data.roleId === 'string' ? data.roleId : '',
     status: typeof data.status === 'string' ? data.status : 'ACTIVO',
+    scopeEntities: Array.isArray(data.scopeEntities)
+      ? data.scopeEntities.filter((v): v is string => typeof v === 'string')
+      : [],
+    scopeStations: Array.isArray(data.scopeStations)
+      ? data.scopeStations.filter((v): v is string => typeof v === 'string')
+      : [],
+    isOffice: data.isOffice === true,
   };
 }
 
@@ -173,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const isAdmin = role?.id === 'admin';
+  const effectiveRole = viewAs ? viewRole : role;
 
   const startViewAs = useCallback(async (profile: UserProfile) => {
     const loadedRole = await loadRole(profile.roleId);
@@ -200,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       viewAs,
       startViewAs,
       stopViewAs,
+      effectiveRole,
     }),
     [
       firebaseUser,
@@ -214,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       viewAs,
       startViewAs,
       stopViewAs,
+      effectiveRole,
     ],
   );
 
