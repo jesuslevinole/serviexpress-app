@@ -118,8 +118,6 @@
   background: var(--primary-bg);
 }
 
-
-
 @media (max-width: 760px) {
   .login {
     flex-direction: column;
@@ -129,4 +127,41 @@
     clip-path: polygon(0 6%, 100% 0, 100% 100%, 0 100%);
     flex: 1.4;
   }
+}
+
+.login-recover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-recover p {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.55;
+  background: var(--primary-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+
+.login-recover label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.login-recover input {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.login-recover input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
 }

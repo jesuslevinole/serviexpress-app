@@ -67,6 +67,31 @@ export async function createUserWithProfile(params: NewUserParams): Promise<stri
   }
 }
 
+/** Resultado de verificar un correo antes de enviar la recuperación. */
+export type EmailCheck = 'active' | 'inactive' | 'not-found' | 'unknown';
+
+/**
+ * ¿El correo pertenece a un usuario del app? Se consulta la colección de
+ * usuarios sin distinguir mayúsculas. Si no se puede leer (reglas de
+ * Firestore), devuelve 'unknown' para no bloquear al usuario.
+ */
+export async function checkEmailRegistered(email: string): Promise<EmailCheck> {
+  const target = email.trim().toLowerCase();
+  if (target === '') return 'not-found';
+  try {
+    const { fetchCollection } = await import('./firestoreService');
+    const users = await fetchCollection(COLLECTIONS.users);
+    const found = users.find(
+      (user) => String(user.email ?? '').trim().toLowerCase() === target,
+    );
+    if (!found) return 'not-found';
+    const status = String(found.status ?? 'ACTIVO').toUpperCase();
+    return status === 'INACTIVO' || status === 'FALSE' ? 'inactive' : 'active';
+  } catch {
+    return 'unknown';
+  }
+}
+
 /** Envía (o reenvía) la invitación para establecer/restablecer contraseña. */
 export async function sendSetPasswordEmail(email: string): Promise<void> {
   const { auth } = await import('../firebase/config');

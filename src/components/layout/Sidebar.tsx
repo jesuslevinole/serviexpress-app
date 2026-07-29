@@ -26,7 +26,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { CRUD_MODULES } from '../../config/modules';
-import logoUrl from '../../assets/logo.svg';
+import { BrandLogo } from '../ui/BrandLogo';
 import './Sidebar.css';
 
 const ICONS: Record<string, LucideIcon> = {
@@ -86,7 +86,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {open ? <div className="sidebar-backdrop" onClick={onClose} /> : null}
       <aside className={`sidebar ${open ? 'is-open' : ''}`}>
         <div className="sidebar-brand">
-          <img src={logoUrl} alt="ServiExpress" width={34} height={34} />
+          <BrandLogo size={34} />
           <div>
             <strong>ServiExpress</strong>
             <span>Fleet control</span>

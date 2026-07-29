@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { sendSetPasswordEmail } from '../services/userService';
+import { checkEmailRegistered, sendSetPasswordEmail } from '../services/userService';
+import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
-import logoUrl from '../assets/logo.svg';
+import { BrandLogo } from '../components/ui/BrandLogo';
 import './LoginPage.css';
 
 export function LoginPage() {
@@ -13,6 +14,11 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recoverOpen, setRecoverOpen] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverBusy, setRecoverBusy] = useState(false);
+  const [recoverError, setRecoverError] = useState<string | null>(null);
+  const [recoverDone, setRecoverDone] = useState<string | null>(null);
 
   if (loading) return <Spinner label="Checking session…" />;
   if (firebaseUser) return <Navigate to="/" replace />;
@@ -34,25 +40,41 @@ export function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    setError(null);
-    setInfo(null);
-    if (!email.trim()) {
-      setError('Type your email above and click again');
+  /** Envía el enlace solo si el correo pertenece a un usuario del app. */
+  const handleRecover = async () => {
+    const target = recoverEmail.trim();
+    if (target === '') {
+      setRecoverError('Type the email where you want to receive the link');
+      return;
+    }
+    setRecoverBusy(true);
+    setRecoverError(null);
+    setRecoverDone(null);
+    const status = await checkEmailRegistered(target);
+    if (status === 'not-found') {
+      setRecoverError('This email is not registered in the app. Ask an administrator.');
+      setRecoverBusy(false);
+      return;
+    }
+    if (status === 'inactive') {
+      setRecoverError('This user is inactive. Ask an administrator to reactivate it.');
+      setRecoverBusy(false);
       return;
     }
     try {
-      await sendSetPasswordEmail(email.trim());
-      setInfo('We sent you an email with the link to set your password');
+      await sendSetPasswordEmail(target);
+      setRecoverDone(`We sent a link to ${target} to set a new password.`);
     } catch {
-      setError('Could not send the email. Check the address and try again');
+      setRecoverError('The email could not be sent. Check the address and try again.');
+    } finally {
+      setRecoverBusy(false);
     }
   };
 
   return (
     <div className="login">
       <div className="login-panel login-brand">
-        <img src={logoUrl} alt="ServiExpress" width={110} height={110} />
+        <BrandLogo size={110} />
         <h1>ServiExpress</h1>
         <p>Fleet control · maintenance, shop, drivers and units</p>
       </div>
@@ -84,7 +106,12 @@ export function LoginPage() {
           <button
             type="button"
             className="login-forgot"
-            onClick={() => void handleForgotPassword()}
+            onClick={() => {
+              setRecoverEmail(email.trim());
+              setRecoverError(null);
+              setRecoverDone(null);
+              setRecoverOpen(true);
+            }}
             disabled={busy}
           >
             Forgot your password?
@@ -96,6 +123,56 @@ export function LoginPage() {
           </button>
         </form>
       </div>
+
+      {recoverOpen ? (
+        <Modal
+          open
+          title="Recover your password"
+          onClose={() => setRecoverOpen(false)}
+          size="sm"
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setRecoverOpen(false)}
+                disabled={recoverBusy}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleRecover()}
+                disabled={recoverBusy}
+              >
+                {recoverBusy ? 'Checking…' : 'Send link'}
+              </button>
+            </>
+          }
+        >
+          <div className="login-recover">
+            <p>
+              Type the email of your account. We check that it belongs to a user of the app before
+              sending the link to set a new password.
+            </p>
+            <label htmlFor="recover-email">Email</label>
+            <input
+              id="recover-email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@email.com"
+              value={recoverEmail}
+              onChange={(e) => {
+                setRecoverEmail(e.target.value);
+                setRecoverError(null);
+              }}
+            />
+            {recoverError ? <p className="login-error">{recoverError}</p> : null}
+            {recoverDone ? <p className="login-info">{recoverDone}</p> : null}
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
