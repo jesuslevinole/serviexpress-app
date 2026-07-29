@@ -14,6 +14,7 @@ export const COLLECTIONS = {
   routes: 'routes',
   team: 'team',
   sizes: 'sizes',
+  uniformEntries: 'uniformEntries',
   trucks: 'trucks',
   drivers: 'drivers',
   assets: 'assets',

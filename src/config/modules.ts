@@ -831,6 +831,12 @@ export const requirementsModule: ModuleConfig = {
     title: 'Requested uniforms',
     /** La subtabla solo se habilita en solicitudes de uniformes. */
     enabledWhen: { field: 'idRequest', refNameIn: ['Uniforms', 'Uniform', 'Uniformes'] },
+    /** Cada salida descuenta del inventario de uniformes. */
+    stockControl: {
+      entriesCollection: COLLECTIONS.uniformEntries,
+      matchKeys: ['idUniformItem', 'idSize'],
+      quantityKey: 'quantity',
+    },
     fields: [
       { key: 'registerDate', label: 'Register date', type: 'date' },
       {
@@ -889,6 +895,57 @@ const teamFields: FieldConfig[] = [
   { key: 'phone', label: 'Phone', type: 'text' },
 ];
 
+
+/** Entradas de uniformes al inventario (los ingresos que luego se dan de baja). */
+export const uniformEntriesModule: ModuleConfig = {
+  id: 'uniformInventory',
+  collection: COLLECTIONS.uniformEntries,
+  title: 'Uniform entries',
+  icon: 'Shirt',
+  autoUserField: 'idUsers',
+  fields: [
+    { key: 'date', label: 'Entry date', type: 'date', required: true },
+    {
+      key: 'idUniformItem',
+      label: 'Uniform',
+      type: 'ref',
+      refCollection: COLLECTIONS.uniformItems,
+      required: true,
+    },
+    {
+      key: 'idSize',
+      label: 'Size',
+      type: 'ref',
+      refCollection: COLLECTIONS.sizes,
+      required: true,
+      refFilterFromRefField: {
+        field: 'idUniformItem',
+        sourceField: 'typeSize',
+        targetField: 'typeSize',
+      },
+    },
+    { key: 'quantity', label: 'Quantity', type: 'number', required: true, defaultValue: 1 },
+    {
+      key: 'idEntity',
+      label: 'Entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      defaultFromUserScope: 'entity',
+      table: false,
+    },
+    {
+      key: 'idStation',
+      label: 'Station',
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      defaultFromUserScope: 'station',
+      table: false,
+    },
+    { key: 'observation', label: 'Observation', type: 'textarea', table: false },
+    capturedByField,
+  ],
+};
+
 export const catalogModules: ModuleConfig[] = [
   { id: 'team', collection: COLLECTIONS.team, title: 'Team', icon: 'UsersRound', fields: teamFields },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
@@ -923,6 +980,7 @@ export const CRUD_MODULES: ModuleConfig[] = [
 export const PERMISSION_MODULES: { id: string; title: string }[] = [
   { id: 'dashboard', title: 'Dashboard' },
   ...CRUD_MODULES.map((m) => ({ id: m.id, title: m.title })),
+  { id: 'uniformInventory', title: 'Uniform inventory' },
   { id: 'catalogs', title: 'Catalogs' },
   { id: 'users', title: 'Users' },
   { id: 'roles', title: 'Roles' },

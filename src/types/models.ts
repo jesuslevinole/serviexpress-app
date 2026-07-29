@@ -143,6 +143,18 @@ export interface DetailConfig {
    */
   enabledWhen?: { field: string; refNameIn: string[] };
   /**
+   * Descuenta de un inventario: antes de guardar valida que haya existencia
+   * suficiente (entradas menos salidas ya registradas).
+   */
+  stockControl?: {
+    /** Colección de entradas al inventario. */
+    entriesCollection: string;
+    /** Claves que identifican el artículo (deben existir en ambas colecciones). */
+    matchKeys: string[];
+    /** Clave de la cantidad. */
+    quantityKey: string;
+  };
+  /**
    * Copia cada renglón a otra colección (p. ej. los renglones del BC Report
    * también viven en Maintenance, marcados con su origen).
    */

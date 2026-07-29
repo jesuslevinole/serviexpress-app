@@ -6,6 +6,7 @@ import type { RefMaps } from '../../hooks/useRefMaps';
 import {
   createDocument,
   deleteDocument,
+  fetchCollection,
   setDocument,
   updateDocument,
 } from '../../services/firestoreService';
@@ -89,10 +90,51 @@ export function DetailModal({
     [detailFields, refMaps],
   );
 
+  /**
+   * Existencia disponible de un artículo: entradas menos salidas ya registradas
+   * (sin contar el renglón que se está editando).
+   */
+  const checkStock = async (
+    values: Record<string, FieldValue>,
+    editingId: string | null,
+  ): Promise<string | null> => {
+    const control = detail.stockControl;
+    if (!control) return null;
+    const requested = Number(values[control.quantityKey] ?? 0);
+    if (!Number.isFinite(requested) || requested <= 0) return null;
+
+    const sameItem = (row: EntityData): boolean =>
+      control.matchKeys.every((key) => String(row[key] ?? '') === String(values[key] ?? ''));
+    const sumOf = (rows: EntityData[]): number =>
+      rows.reduce((total, row) => {
+        const quantity = row[control.quantityKey];
+        return total + (typeof quantity === 'number' ? quantity : 0);
+      }, 0);
+
+    const [entries, exits] = await Promise.all([
+      fetchCollection(control.entriesCollection),
+      fetchCollection(detail.collection),
+    ]);
+    const totalIn = sumOf(entries.filter(sameItem));
+    const totalOut = sumOf(exits.filter((row) => sameItem(row) && row.id !== editingId));
+    const available = totalIn - totalOut;
+
+    if (requested > available) {
+      return `Not enough stock: ${available} available (${totalIn} in, ${totalOut} already delivered). Add an entry in Uniform inventory first.`;
+    }
+    return null;
+  };
+
   const handleSubmit = async (values: Record<string, FieldValue>, keepOpen: boolean) => {
     setBusy(true);
     setFormError(null);
     try {
+      const stockError = await checkStock(values, editing?.id ?? null);
+      if (stockError) {
+        setFormError(stockError);
+        setBusy(false);
+        return;
+      }
       const payload = { ...values, [detail.parentKey]: parent.id };
       if (editing) {
         await updateDocument(detail.collection, editing.id, payload);

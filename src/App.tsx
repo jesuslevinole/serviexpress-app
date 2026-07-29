@@ -7,6 +7,7 @@ import { CrudModule } from './components/crud/CrudModule';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CatalogosPage } from './pages/CatalogosPage';
+import { UniformInventoryPage } from './pages/UniformInventoryPage';
 import { UsuariosPage } from './pages/UsuariosPage';
 import { RolesPage } from './pages/RolesPage';
 import type { ReactNode } from 'react';
@@ -52,6 +53,14 @@ export default function App() {
             }
           />
         ))}
+        <Route
+          path="/uniform-inventory"
+          element={
+            <Protected moduleId="uniformInventory">
+              <UniformInventoryPage />
+            </Protected>
+          }
+        />
         <Route
           path="/catalogs"
           element={

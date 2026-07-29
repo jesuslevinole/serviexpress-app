@@ -8,6 +8,7 @@ import './AppLayout.css';
 
 const STATIC_TITLES: Record<string, string> = {
   '/': 'Dashboard',
+  '/uniform-inventory': 'Uniform inventory',
   '/catalogs': 'Catalogs',
   '/users': 'Users',
   '/roles': 'Roles',

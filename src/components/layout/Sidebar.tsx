@@ -15,6 +15,7 @@ import {
   Route,
   ScanLine,
   ShieldCheck,
+  Shirt,
   Truck,
   UserCog,
   Users,
@@ -159,6 +160,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               </div>
             );
           })}
+
+          {can('uniformInventory', 'ver') ? (
+            <NavLink to="/uniform-inventory" className={linkClass}>
+              <Shirt size={17} />
+              Uniform inventory
+            </NavLink>
+          ) : null}
 
           {can('catalogs', 'ver') ? (
             <NavLink to="/catalogs" className={linkClass}>

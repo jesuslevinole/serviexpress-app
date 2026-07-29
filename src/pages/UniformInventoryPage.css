@@ -1,0 +1,143 @@
+.uinv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.uinv-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.uinv-stock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 13px;
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.uinv-stock.is-low {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.uinv-stock.is-empty {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.uinv-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.uinv-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.uinv-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.uinv-summary span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.uinv-summary strong {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.uinv-summary .is-available {
+  background: var(--primary-bg);
+  border-color: var(--primary-light);
+}
+
+.uinv-moves {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.uinv-moves li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.uinv-move-icon {
+  display: inline-flex;
+}
+
+.uinv-moves li.is-in .uinv-move-icon {
+  color: var(--success);
+}
+
+.uinv-moves li.is-out .uinv-move-icon {
+  color: var(--danger);
+}
+
+.uinv-move-date {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+  min-width: 88px;
+}
+
+.uinv-move-ref {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uinv-move-qty {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.uinv-moves li.is-in .uinv-move-qty {
+  color: var(--success);
+}
+
+.uinv-moves li.is-out .uinv-move-qty {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .uinv-summary {
+    grid-template-columns: 1fr;
+  }
+}
