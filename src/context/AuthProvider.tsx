@@ -130,10 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    // La cuenta de inactividad arranca de cero con cada inicio de sesión.
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
     await signInWithEmailAndPassword(auth, email, password);
   }, []);
 
   const logout = useCallback(async () => {
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
     setFirebaseUser(null);
     setProfile(null);
     setRole(null);
@@ -154,11 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return stored > 0 && Date.now() - stored > IDLE_LIMIT_MS;
     };
 
-    if (isExpired()) {
+    // Sin marca previa (sesión nueva o recién restaurada) se inicia la cuenta.
+    if (localStorage.getItem(LAST_ACTIVITY_KEY) === null) {
+      touch();
+    } else if (isExpired()) {
       void logout();
       return;
     }
-    touch();
 
     const events: (keyof WindowEventMap)[] = [
       'mousedown',
