@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { subscribeToCollection } from '../services/firestoreService';
-import { buildRefLabel } from '../config/collections';
+import { REF_LABEL_DEPENDENCIES, buildRefLabel } from '../config/collections';
 import type { EntityData, FieldConfig } from '../types/models';
 
 export interface RefData {
@@ -22,6 +22,10 @@ export function useRefMaps(fields: FieldConfig[]): RefMaps {
     fields.forEach((f) => {
       if (f.type === 'ref' && f.refCollection) set.add(f.refCollection);
     });
+    // Colecciones auxiliares necesarias para armar etiquetas (driver -> team).
+    Array.from(set).forEach((name) => {
+      (REF_LABEL_DEPENDENCIES[name] ?? []).forEach((dep) => set.add(dep));
+    });
     return Array.from(set).sort();
   }, [fields]);
 
@@ -33,13 +37,34 @@ export function useRefMaps(fields: FieldConfig[]): RefMaps {
       setMaps({});
       return;
     }
+    /** Filas vivas de cada colección, para resolver etiquetas compuestas. */
+    const rowsByCollection = new Map<string, EntityData[]>();
+    const resolve = (collectionName: string, id: string): string | undefined => {
+      const row = rowsByCollection.get(collectionName)?.find((r) => r.id === id);
+      if (!row) return undefined;
+      const name = row.name;
+      return typeof name === 'string' && name !== '' ? name : undefined;
+    };
+
     const unsubscribers = collections.map((collectionName) =>
       subscribeToCollection(
         collectionName,
         (rows) => {
+          rowsByCollection.set(collectionName, rows);
           const labels = new Map<string, string>();
-          rows.forEach((row) => labels.set(row.id, buildRefLabel(collectionName, row)));
+          rows.forEach((row) => labels.set(row.id, buildRefLabel(collectionName, row, resolve)));
           setMaps((prev) => ({ ...prev, [collectionName]: { labels, rows } }));
+          // Al llegar una colección auxiliar, se recalculan las que dependen de ella.
+          Object.entries(REF_LABEL_DEPENDENCIES).forEach(([target, deps]) => {
+            if (!deps.includes(collectionName)) return;
+            const targetRows = rowsByCollection.get(target);
+            if (!targetRows) return;
+            const targetLabels = new Map<string, string>();
+            targetRows.forEach((row) =>
+              targetLabels.set(row.id, buildRefLabel(target, row, resolve)),
+            );
+            setMaps((prev) => ({ ...prev, [target]: { labels: targetLabels, rows: targetRows } }));
+          });
         },
         () => {
           setMaps((prev) => ({ ...prev, [collectionName]: { labels: new Map(), rows: [] } }));

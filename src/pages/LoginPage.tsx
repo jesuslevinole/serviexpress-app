@@ -7,7 +7,7 @@ import logoUrl from '../assets/logo.svg';
 import './LoginPage.css';
 
 export function LoginPage() {
-  const { firebaseUser, loading, login, bypassEnabled, bypassLogin } = useAuth();
+  const { firebaseUser, loading, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -94,16 +94,6 @@ export function LoginPage() {
           <button type="submit" className="btn btn-primary login-submit" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
-          {bypassEnabled ? (
-            <button
-              type="button"
-              className="btn login-bypass"
-              onClick={bypassLogin}
-              disabled={busy}
-            >
-              Enter in dev mode (no account)
-            </button>
-          ) : null}
         </form>
       </div>
     </div>

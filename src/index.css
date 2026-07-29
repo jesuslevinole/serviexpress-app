@@ -322,8 +322,7 @@ textarea {
     border-radius: 13px;
   }
 
-  .login-submit,
-  .login-bypass {
+  .login-submit {
     min-height: 54px;
     border-radius: 13px;
   }

@@ -9,10 +9,6 @@ export interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** TEMPORAL: true si el bypass de desarrollo está habilitado en el .env. */
-  bypassEnabled: boolean;
-  /** TEMPORAL: entra sin credenciales (solo si bypassEnabled). */
-  bypassLogin: () => void;
   can: (moduleId: string, action: PermissionAction) => boolean;
   /** True cuando el rol REAL del usuario es admin. */
   isAdmin: boolean;

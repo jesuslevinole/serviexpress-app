@@ -118,19 +118,7 @@
   background: var(--primary-bg);
 }
 
-.login-bypass {
-  margin-top: 12px;
-  justify-content: center;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.55);
-  color: #dcebff;
-  padding: 11px;
-  font-size: 13px;
-}
 
-.login-bypass:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
 
 @media (max-width: 760px) {
   .login {

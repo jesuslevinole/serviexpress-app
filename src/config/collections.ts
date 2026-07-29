@@ -36,7 +36,30 @@ export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
  * Cómo se construye la etiqueta visible de cada registro referenciado.
  * Regla del proyecto: nunca se muestran IDs, siempre nombres.
  */
-export const REF_LABEL_BUILDERS: Record<string, (d: EntityData) => string> = {
+/**
+ * Colecciones que necesitan OTRA colección para armar su etiqueta.
+ * (Un driver toma su nombre del catálogo Team.)
+ */
+export const REF_LABEL_DEPENDENCIES: Record<string, string[]> = {
+  [COLLECTIONS.drivers]: [COLLECTIONS.team],
+};
+
+/** resolve(colección, id) -> nombre, disponible para etiquetas compuestas. */
+export type RefResolver = (collection: string, id: string) => string | undefined;
+
+export const REF_LABEL_BUILDERS: Record<
+  string,
+  (d: EntityData, resolve?: RefResolver) => string
+> = {
+  [COLLECTIONS.drivers]: (d, resolve) => {
+    // El nombre vive en Team; en registros migrados el id quedó en "name".
+    const link = [d.idTeam, d.name].find((v) => typeof v === 'string' && v !== '');
+    if (typeof link === 'string') {
+      const fromTeam = resolve?.(COLLECTIONS.team, link);
+      if (fromTeam && fromTeam !== '') return fromTeam;
+    }
+    return typeof d.name === 'string' && d.name !== '' ? d.name : '(sin nombre)';
+  },
   [COLLECTIONS.trucks]: (d) =>
     [d.unitN, d.lPlate].filter((v) => typeof v === 'string' && v !== '').join(' · ') || 'Camión',
   [COLLECTIONS.bcReports]: (d) => {
@@ -49,9 +72,13 @@ export const REF_LABEL_BUILDERS: Record<string, (d: EntityData) => string> = {
       .join(' · ') || 'Asset',
 };
 
-export function buildRefLabel(collection: string, data: EntityData): string {
+export function buildRefLabel(
+  collection: string,
+  data: EntityData,
+  resolve?: RefResolver,
+): string {
   const builder = REF_LABEL_BUILDERS[collection];
-  if (builder) return builder(data);
+  if (builder) return builder(data, resolve);
   const name = data.name;
   return typeof name === 'string' && name !== '' ? name : '(sin nombre)';
 }

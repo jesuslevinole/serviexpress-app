@@ -1,6 +1,6 @@
 import { fetchCollection } from './firestoreService';
 import { exportWorkbook, type ExcelSheet } from './excelExport';
-import { buildRefLabel } from '../config/collections';
+import { REF_LABEL_DEPENDENCIES, buildRefLabel } from '../config/collections';
 import { displayCell } from '../components/crud/displayValue';
 import type { EntityData, ModuleConfig } from '../types/models';
 
@@ -35,15 +35,30 @@ export async function exportReportsWorkbook(
     });
   });
 
-  const refLabelMaps: Record<string, Map<string, string>> = {};
+  // Colecciones auxiliares para etiquetas compuestas (driver -> team).
+  [...refCollections].forEach((name) => {
+    (REF_LABEL_DEPENDENCIES[name] ?? []).forEach((dep) => refCollections.add(dep));
+  });
+
+  const rowsByCollection: Record<string, EntityData[]> = {};
   await Promise.all(
     [...refCollections].map(async (collectionName) => {
-      const rows = await fetchCollection(collectionName);
-      const map = new Map<string, string>();
-      rows.forEach((row) => map.set(row.id, buildRefLabel(collectionName, row)));
-      refLabelMaps[collectionName] = map;
+      rowsByCollection[collectionName] = await fetchCollection(collectionName);
     }),
   );
+
+  const resolve = (collectionName: string, id: string): string | undefined => {
+    const row = rowsByCollection[collectionName]?.find((r) => r.id === id);
+    const name = row?.name;
+    return typeof name === 'string' && name !== '' ? name : undefined;
+  };
+
+  const refLabelMaps: Record<string, Map<string, string>> = {};
+  Object.entries(rowsByCollection).forEach(([collectionName, rows]) => {
+    const map = new Map<string, string>();
+    rows.forEach((row) => map.set(row.id, buildRefLabel(collectionName, row, resolve)));
+    refLabelMaps[collectionName] = map;
+  });
 
   const refLabel = (collectionName: string, id: string): string =>
     refLabelMaps[collectionName]?.get(id) ?? '—';

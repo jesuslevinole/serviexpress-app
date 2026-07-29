@@ -30,29 +30,9 @@ const FULL_PERMISSIONS: Record<string, ModulePermissions> = Object.fromEntries(
   ]),
 );
 
-/**
- * ⚠️ BYPASS TEMPORAL DE DESARROLLO.
- * Con VITE_AUTH_BYPASS=true en el .env se entra sin login, con un usuario
- * ficticio y permisos de admin. QUITAR antes de pasar a producción:
- * basta con borrar la variable del .env (o ponerla en false).
- */
-const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === 'true';
-
-const BYPASS_USER = { uid: 'dev-bypass' } as unknown as User;
-
-const BYPASS_PROFILE: UserProfile = {
-  id: 'dev-bypass',
-  name: 'Dev (bypass)',
-  email: 'dev@local',
-  roleId: 'admin',
-  status: 'ACTIVO',
-};
-
-const BYPASS_ROLE: Role = {
-  id: 'admin',
-  name: 'Administrador',
-  permissions: FULL_PERMISSIONS,
-};
+/** Una hora sin actividad cierra la sesión. */
+const IDLE_LIMIT_MS = 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'se-last-activity';
 
 async function loadProfile(uid: string): Promise<UserProfile | null> {
   const snapshot = await getDoc(doc(db, COLLECTIONS.users, uid));
@@ -160,14 +140,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth);
   }, []);
 
-  /** TEMPORAL: entra con usuario ficticio y permisos completos. */
-  const bypassLogin = useCallback(() => {
-    if (!AUTH_BYPASS) return;
-    setFirebaseUser(BYPASS_USER);
-    setProfile(BYPASS_PROFILE);
-    setRole(BYPASS_ROLE);
-    setLoading(false);
-  }, []);
+  /**
+   * Cierre de sesión por inactividad: tras una hora sin usar el app se
+   * cierra la sesión. La marca de tiempo vive en localStorage para que
+   * también aplique si la pestaña estuvo cerrada.
+   */
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    const touch = () => localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+    const isExpired = () => {
+      const stored = Number(localStorage.getItem(LAST_ACTIVITY_KEY) ?? 0);
+      return stored > 0 && Date.now() - stored > IDLE_LIMIT_MS;
+    };
+
+    if (isExpired()) {
+      void logout();
+      return;
+    }
+    touch();
+
+    const events: (keyof WindowEventMap)[] = [
+      'mousedown',
+      'keydown',
+      'wheel',
+      'touchstart',
+      'focus',
+    ];
+    events.forEach((event) => window.addEventListener(event, touch, { passive: true }));
+
+    const interval = window.setInterval(() => {
+      if (isExpired()) void logout();
+    }, 60_000);
+
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, touch));
+      window.clearInterval(interval);
+    };
+  }, [firebaseUser, logout]);
 
   /** Con "View as" activo, los permisos efectivos son los del usuario simulado. */
   const can = useCallback(
@@ -179,7 +189,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [role, viewAs, viewRole],
   );
 
-  const isAdmin = role?.id === 'admin';
+  /**
+   * Es administrador si su rol es el de sistema o si se llama "admin"
+   * (Administrador, Administrator...). Así funciona con roles creados a mano.
+   */
+  const isAdmin = useMemo(() => {
+    if (!role) return false;
+    if (role.id === 'admin') return true;
+    const name = role.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+    return ['admin', 'administrador', 'administrator', 'administradora'].includes(name);
+  }, [role]);
   const effectiveRole = viewAs ? viewRole : role;
 
   const startViewAs = useCallback(async (profile: UserProfile) => {
@@ -202,8 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       can,
-      bypassEnabled: AUTH_BYPASS,
-      bypassLogin,
       isAdmin,
       viewAs,
       startViewAs,
@@ -218,7 +239,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       can,
-      bypassLogin,
       isAdmin,
       viewAs,
       startViewAs,
