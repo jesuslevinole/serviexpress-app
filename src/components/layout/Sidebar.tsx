@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  ChevronsLeft,
+  ChevronsRight,
   Building2,
   Check,
   ClipboardCheck,
@@ -44,10 +46,13 @@ const ICONS: Record<string, LucideIcon> = {
 
 interface SidebarProps {
   open: boolean;
+  /** Menú contraído en escritorio: solo iconos. */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onClose: () => void;
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: SidebarProps) {
   const { can, isAdmin } = useAuth();
   const { editMode, moduleTitle, sortModules, saveModuleOverride, saveMenuOrder } = useUiConfig();
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -84,7 +89,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   return (
     <>
       {open ? <div className="sidebar-backdrop" onClick={onClose} /> : null}
-      <aside className={`sidebar ${open ? 'is-open' : ''}`}>
+      <aside className={`sidebar ${open ? 'is-open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
         <div className="sidebar-brand">
           <BrandLogo size={34} />
           <div>
@@ -98,9 +103,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         <nav className="sidebar-nav" onClick={editing ? undefined : onClose}>
           {can('dashboard', 'ver') ? (
-            <NavLink to="/" end className={linkClass}>
+            <NavLink to="/" end className={linkClass} title="Dashboard">
               <LayoutDashboard size={17} />
-              Dashboard
+              <span className="sidebar-link-text">Dashboard</span>
             </NavLink>
           ) : null}
 
@@ -125,7 +130,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             }
             return (
               <div key={module.id} className={editing ? 'sidebar-edit-wrap' : undefined}>
-                <NavLink to={`/${module.id}`} className={linkClass}>
+                <NavLink to={`/${module.id}`} className={linkClass} title={title}>
                   <Icon size={17} />
                   <span className="sidebar-link-text">{title}</span>
                   {editing ? (
@@ -162,34 +167,49 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           })}
 
           {can('uniformInventory', 'ver') ? (
-            <NavLink to="/uniform-inventory" className={linkClass}>
+            <NavLink to="/uniform-inventory" className={linkClass} title="Uniform inventory">
               <Shirt size={17} />
-              Uniform inventory
+              <span className="sidebar-link-text">Uniform inventory</span>
             </NavLink>
           ) : null}
 
           {can('catalogs', 'ver') ? (
-            <NavLink to="/catalogs" className={linkClass}>
+            <NavLink to="/catalogs" className={linkClass} title="Catalogs">
               <FolderCog size={17} />
-              Catalogs
+              <span className="sidebar-link-text">Catalogs</span>
             </NavLink>
           ) : null}
 
           <div className="sidebar-section">Administration</div>
 
           {can('users', 'ver') ? (
-            <NavLink to="/users" className={linkClass}>
+            <NavLink to="/users" className={linkClass} title="Users">
               <UserCog size={17} />
-              Users
+              <span className="sidebar-link-text">Users</span>
             </NavLink>
           ) : null}
           {can('roles', 'ver') ? (
-            <NavLink to="/roles" className={linkClass}>
+            <NavLink to="/roles" className={linkClass} title="Roles">
               <ShieldCheck size={17} />
-              Roles
+              <span className="sidebar-link-text">Roles</span>
             </NavLink>
           ) : null}
         </nav>
+
+        {onToggleCollapse ? (
+          <footer className="sidebar-foot">
+            <button
+              type="button"
+              className="sidebar-collapse"
+              onClick={onToggleCollapse}
+              title={collapsed ? 'Expand menu' : 'Collapse menu'}
+              aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+            >
+              {collapsed ? <ChevronsRight size={17} /> : <ChevronsLeft size={17} />}
+              <span className="sidebar-link-text">Collapse menu</span>
+            </button>
+          </footer>
+        ) : null}
       </aside>
     </>
   );

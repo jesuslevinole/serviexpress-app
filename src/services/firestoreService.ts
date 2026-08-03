@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getCountFromServer,
   getDocs,
   onSnapshot,
   query,
@@ -57,26 +58,105 @@ export interface CollectionFilter {
 }
 
 /** Suscripción en tiempo real a una colección, con filtro opcional. */
+/**
+ * Registro de suscripciones compartidas. Varios componentes que piden la
+ * misma consulta reutilizan UN solo listener, y al desmontarse todos se
+ * conserva unos segundos (y con sus datos en memoria) para que navegar de
+ * ida y vuelta no vuelva a leer de Firestore.
+ */
+interface SharedSubscription {
+  rows: EntityData[] | null;
+  listeners: Set<(rows: EntityData[]) => void>;
+  errorListeners: Set<(error: Error) => void>;
+  unsubscribe: Unsubscribe | null;
+  closeTimer: number | null;
+}
+
+const shared = new Map<string, SharedSubscription>();
+
+/** Segundos que un listener sigue vivo sin componentes escuchándolo. */
+const KEEP_ALIVE_MS = 5 * 60 * 1000;
+
+function subscriptionKey(collectionName: string, filter?: CollectionFilter): string {
+  return filter ? `${collectionName}|${filter.field}|${String(filter.value)}` : collectionName;
+}
+
 export function subscribeToCollection(
   collectionName: string,
   onData: (rows: EntityData[]) => void,
   onError: (error: Error) => void,
   filter?: CollectionFilter,
 ): Unsubscribe {
+  const key = subscriptionKey(collectionName, filter);
+  let entry = shared.get(key);
+
+  if (!entry) {
+    entry = {
+      rows: null,
+      listeners: new Set(),
+      errorListeners: new Set(),
+      unsubscribe: null,
+      closeTimer: null,
+    };
+    shared.set(key, entry);
+  }
+
+  const current = entry;
+  current.listeners.add(onData);
+  current.errorListeners.add(onError);
+
+  // Cancelar el cierre programado: alguien volvió a necesitar estos datos.
+  if (current.closeTimer !== null) {
+    window.clearTimeout(current.closeTimer);
+    current.closeTimer = null;
+  }
+
+  // Datos ya en memoria: se entregan de inmediato, sin leer nada.
+  if (current.rows) onData(current.rows);
+
+  if (!current.unsubscribe) {
+    const constraints: QueryConstraint[] = [];
+    if (filter) {
+      constraints.push(where(filter.field, '==', filter.value));
+    }
+    const q = query(collection(db, collectionName), ...constraints);
+    current.unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const rows = snapshot.docs.map((d) => toEntity(d.id, d.data()));
+        rows.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+        current.rows = rows;
+        current.listeners.forEach((listener) => listener(rows));
+      },
+      (error) => current.errorListeners.forEach((listener) => listener(error)),
+    );
+  }
+
+  return () => {
+    current.listeners.delete(onData);
+    current.errorListeners.delete(onError);
+    if (current.listeners.size > 0 || current.closeTimer !== null) return;
+    // Sin oyentes: se cierra tras un rato, conservando los datos mientras tanto.
+    current.closeTimer = window.setTimeout(() => {
+      current.unsubscribe?.();
+      shared.delete(key);
+    }, KEEP_ALIVE_MS);
+  };
+}
+
+/** Conteo de documentos sin traerlos: 1 lectura en vez de N. */
+export async function countDocuments(
+  collectionName: string,
+  filter?: CollectionFilter,
+): Promise<number> {
   const constraints: QueryConstraint[] = [];
   if (filter) {
     constraints.push(where(filter.field, '==', filter.value));
   }
-  const q = query(collection(db, collectionName), ...constraints);
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const rows = snapshot.docs.map((d) => toEntity(d.id, d.data()));
-      rows.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
-      onData(rows);
-    },
-    onError,
+  const snapshot = await getCountFromServer(
+    query(collection(db, collectionName), ...constraints),
   );
+  return snapshot.data().count;
 }
 
 /** Crea un documento. Devuelve el id generado. */

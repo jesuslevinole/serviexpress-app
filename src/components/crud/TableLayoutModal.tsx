@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, RotateCcw } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, RotateCcw } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import type { FieldOverride } from '../../context/uiConfigContext';
@@ -9,6 +9,8 @@ import './TableLayoutModal.css';
 interface TableLayoutModalProps {
   /** Configuración BASE del módulo (sin overrides). */
   base: ModuleConfig;
+  /** Editar el layout del DETALLE en vez del módulo. */
+  target?: 'module' | 'detail';
   onClose: () => void;
 }
 
@@ -17,6 +19,8 @@ interface EditableField {
   baseLabel: string;
   label: string;
   required: boolean;
+  /** false = la columna se oculta en la tabla. */
+  visible: boolean;
   /** Los calculados no pueden ser obligatorios (nadie los captura). */
   computed: boolean;
 }
@@ -25,29 +29,35 @@ interface EditableField {
  * Admin editor: rename the module title and every column header, and
  * reorder the columns. Changes persist for everyone.
  */
-export function TableLayoutModal({ base, onClose }: TableLayoutModalProps) {
-  const { overrides, saveModuleOverride } = useUiConfig();
-  const current = overrides.modules[base.id];
+export function TableLayoutModal({ base, target = 'module', onClose }: TableLayoutModalProps) {
+  const { overrides, saveModuleOverride, saveError } = useUiConfig();
+  const isDetail = target === 'detail' && base.detail !== undefined;
+  const overrideId = isDetail ? `${base.id}__detail` : base.id;
+  const baseTitle = isDetail ? base.detail!.title : base.title;
+  const baseFields = isDetail ? base.detail!.fields : base.fields;
+  const current = overrides.modules[overrideId];
 
-  const initialFields: EditableField[] = base.fields
+  const initialFields: EditableField[] = baseFields
     .map((field, index) => ({
       key: field.key,
       baseLabel: field.label,
       label: current?.fields?.[field.key]?.label ?? field.label,
       required: current?.fields?.[field.key]?.required ?? field.required === true,
+      visible: current?.fields?.[field.key]?.table ?? field.table !== false,
       computed: field.compute !== undefined || field.form === false,
       order: current?.fields?.[field.key]?.order ?? index,
     }))
     .sort((a, b) => a.order - b.order)
-    .map(({ key, baseLabel, label, required, computed }) => ({
+    .map(({ key, baseLabel, label, required, visible, computed }) => ({
       key,
       baseLabel,
       label,
       required,
+      visible,
       computed,
     }));
 
-  const [title, setTitle] = useState(current?.title ?? base.title);
+  const [title, setTitle] = useState(current?.title ?? baseTitle);
   const [rows, setRows] = useState<EditableField[]>(initialFields);
   const [busy, setBusy] = useState(false);
 
@@ -71,43 +81,63 @@ export function TableLayoutModal({ base, onClose }: TableLayoutModalProps) {
     );
   };
 
+  const toggleVisible = (index: number) => {
+    setRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, visible: !row.visible } : row)),
+    );
+  };
+
   const handleReset = () => {
-    setTitle(base.title);
+    setTitle(baseTitle);
     setRows(
-      base.fields.map((f) => ({
+      baseFields.map((f) => ({
         key: f.key,
         baseLabel: f.label,
         label: f.label,
         required: f.required === true,
+        visible: f.table !== false,
         computed: f.compute !== undefined || f.form === false,
       })),
     );
   };
 
+  const [failed, setFailed] = useState<string | null>(null);
+
   const handleSave = async () => {
     setBusy(true);
+    setFailed(null);
     const fields: Record<string, FieldOverride> = {};
     rows.forEach((row, index) => {
       fields[row.key] = {
         order: index,
         required: row.required,
+        table: row.visible,
         ...(row.label.trim() !== '' && row.label !== row.baseLabel
           ? { label: row.label.trim() }
           : {}),
       };
     });
-    await saveModuleOverride(base.id, {
-      title: title.trim() !== '' && title !== base.title ? title.trim() : base.title,
-      fields,
-    });
-    setBusy(false);
-    onClose();
+    try {
+      await saveModuleOverride(overrideId, {
+        title: title.trim() !== '' && title !== baseTitle ? title.trim() : baseTitle,
+        fields,
+      });
+      onClose();
+    } catch (error) {
+      setFailed(
+        error instanceof Error
+          ? `It could not be saved: ${error.message}`
+          : 'It could not be saved. Check your connection and try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Modal
       open
-      title={`Edit layout · ${base.title}`}
+      title={`Edit layout · ${baseTitle}`}
       onClose={onClose}
       size="md"
       footer={
@@ -131,19 +161,37 @@ export function TableLayoutModal({ base, onClose }: TableLayoutModalProps) {
       }
     >
       <div className="tlayout">
+        {failed ?? saveError ? (
+          <p className="tlayout-error">{failed ?? saveError}</p>
+        ) : null}
         <div className="tlayout-title">
           <label>Module title</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <p className="tlayout-hint">
-          Rename headers, reorder columns and mark which fields are required. Everything applies
-          to the table, the form, the Excel export and the template.
+          Rename headers, reorder them, choose which columns are visible in the table and mark
+          which fields are required. Everything applies to the table, the form, the Excel export
+          and the template.
         </p>
+        <div className="tlayout-legend">
+          <span>Order</span>
+          <span className="tlayout-legend-grow">Header</span>
+          <span>Show</span>
+          <span>Req</span>
+        </div>
         <ul className="tlayout-list">
           {rows.map((row, index) => (
             <li key={row.key}>
               <span className="tlayout-pos">{index + 1}</span>
               <input value={row.label} onChange={(e) => rename(index, e.target.value)} />
+              <label className="tlayout-required" title="Visible as a table column">
+                <input
+                  type="checkbox"
+                  checked={row.visible}
+                  onChange={() => toggleVisible(index)}
+                />
+                <Eye size={13} />
+              </label>
               <label
                 className={`tlayout-required ${row.computed ? 'is-disabled' : ''}`}
                 title={row.computed ? 'System field' : 'Required in the form'}

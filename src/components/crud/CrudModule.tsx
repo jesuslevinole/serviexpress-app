@@ -32,6 +32,7 @@ import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
 import { TableLayoutModal } from './TableLayoutModal';
 import { RelatedRecordsModal } from './RelatedRecordsModal';
+import { DetailSummary } from './DetailSummary';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { useScopeFilter } from '../../hooks/useScope';
 import { COLLECTIONS } from '../../config/collections';
@@ -133,13 +134,32 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     [config.fields, profile],
   );
   const { rows: allRows, loading, error } = useCollection(config.collection);
+  const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
   const scopeFilter = useScopeFilter();
   /** Filas dentro del alcance (entidades/estaciones asignadas al usuario). */
-  const rows = useMemo(
-    () => allRows.filter((row) => scopeFilter(config, row)),
-    [allRows, scopeFilter, config],
-  );
+  const rows = useMemo(() => {
+    const inScope = allRows.filter((row) => scopeFilter(config, row));
+    const tab = config.viewTabs?.find((item) => item.id === activeTab);
+    return tab?.match ? inScope.filter(tab.match) : inScope;
+  }, [allRows, scopeFilter, config, activeTab]);
+
+  /** Conteo por pestaña, calculado sobre lo que el usuario puede ver. */
+  const tabCounts = useMemo(() => {
+    if (!config.viewTabs) return {};
+    const inScope = allRows.filter((row) => scopeFilter(config, row));
+    return Object.fromEntries(
+      config.viewTabs.map((tab) => [tab.id, tab.match ? inScope.filter(tab.match).length : inScope.length]),
+    );
+  }, [allRows, scopeFilter, config]);
   const refMaps = useRefMaps(config.fields);
+
+  const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
+  const detailRefLabel = (collection: string, id: string): string =>
+    detailRefMaps[collection]?.labels.get(id) ?? refLabel(collection, id);
+  const rowsOfParent = (parentId: string): EntityData[] =>
+    config.detail
+      ? detailRowsAll.rows.filter((row) => row[config.detail!.parentKey] === parentId)
+      : [];
 
   /** Alcance por usuario (para rellenar Entity/Station al elegir capturista). */
   const userScopes = useMemo(() => {
@@ -154,14 +174,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     return map;
   }, [refMaps]);
 
-  const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
-
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<EntityData | null>(null);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+
+  /**
+   * Renglones del detalle: se leen SOLO cuando hay un registro abierto en el
+   * visor o en edición, y filtrados a ese registro. Así el listado del módulo
+   * no arrastra la colección de detalle completa.
+   */
+  const openParentId = viewing?.id ?? editing?.id ?? null;
+  const detailRowsAll = useCollection(
+    config.detail && openParentId ? config.detail.collection : '',
+    config.detail && openParentId
+      ? { field: config.detail.parentKey, value: openParentId }
+      : undefined,
+  );
   const [historyFor, setHistoryFor] = useState<EntityData | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   /** Encabezados creados durante la importación masiva (clave de grupo -> id). */
@@ -294,7 +325,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         render: (row) => {
           const text = displayCell(field, row as EntityData, refLabel);
           if ((STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—') {
-            return <Badge value={text} />;
+            return <Badge value={text} tone={field.badgeTones?.[text]} />;
           }
           return text;
         },
@@ -481,6 +512,29 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
   return (
     <section className="crud">
+      {config.viewTabs ? (
+        <div className="crud-tabs" role="tablist">
+          {config.viewTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={tab.id === activeTab}
+              className={`crud-tab tone-${tab.tone ?? 'plain'} ${
+                tab.id === activeTab ? 'is-active' : ''
+              }`}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setPage(1);
+              }}
+            >
+              {tab.label}
+              <span className="crud-tab-count">{tabCounts[tab.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="crud-toolbar">
         <div className="crud-search">
           <Search size={16} />
@@ -669,6 +723,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           fields={config.fields}
           record={viewing}
           refLabels={refLabel}
+          extra={
+            config.detail && detailEnabled(viewing) ? (
+              <DetailSummary
+                detail={config.detail}
+                rows={rowsOfParent(viewing.id)}
+                refLabels={detailRefLabel}
+                manageLabel={`Add ${config.detail.title.toLowerCase()}`}
+                onManage={
+                  canCreate
+                    ? () => {
+                        const row = viewing;
+                        setViewing(null);
+                        setDetailParent(row);
+                      }
+                    : undefined
+                }
+              />
+            ) : undefined
+          }
           onEdit={
             canEdit
               ? () => {
@@ -705,6 +778,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         error={formError}
         resetSignal={resetSignal}
         onConfigure={canCustomize ? () => setLayoutOpen(true) : undefined}
+        extraSection={
+          editing && config.detail && detailEnabled(editing) ? (
+            <DetailSummary
+              detail={config.detail}
+              rows={rowsOfParent(editing.id)}
+              refLabels={detailRefLabel}
+              manageLabel={`Add ${config.detail.title.toLowerCase()}`}
+              onManage={
+                canCreate
+                  ? () => {
+                      const row = editing;
+                      setFormOpen(false);
+                      setDetailParent(row);
+                    }
+                  : undefined
+              }
+            />
+          ) : undefined
+        }
         editableCapturedByKey={canEditCapturedBy ? config.autoUserField : undefined}
         currentUid={firebaseUser?.uid ?? null}
         presetValues={scopePresets}

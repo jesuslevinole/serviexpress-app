@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -14,8 +14,18 @@ const STATIC_TITLES: Record<string, string> = {
   '/roles': 'Roles',
 };
 
+const COLLAPSED_KEY = 'se-sidebar-collapsed';
+
 export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Menú contraído en escritorio (se recuerda entre sesiones). */
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(COLLAPSED_KEY) === 'true',
+  );
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSED_KEY, String(collapsed));
+  }, [collapsed]);
   const location = useLocation();
   const { moduleTitle } = useUiConfig();
 
@@ -26,8 +36,13 @@ export function AppLayout() {
   };
 
   return (
-    <div className="layout">
-      <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
+    <div className={`layout ${collapsed ? 'is-collapsed' : ''}`}>
+      <Sidebar
+        open={menuOpen}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((value) => !value)}
+        onClose={() => setMenuOpen(false)}
+      />
       <div className="layout-main">
         <Topbar title={resolveTitle(location.pathname)} onMenu={() => setMenuOpen(true)} />
         <main className="layout-content">

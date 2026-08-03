@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   ClipboardCheck,
   ClipboardList,
@@ -12,24 +12,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useCollection } from '../hooks/useCollection';
-import { useScopeFilter } from '../hooks/useScope';
 import { useUiConfig } from '../hooks/useUiConfig';
 import { COLLECTIONS } from '../config/collections';
-import {
-  CRUD_MODULES,
-  assetsModule,
-  bcReportsModule,
-  driversModule,
-  fleetModule,
-  maintenanceModule,
-  rentalsModule,
-  requirementsModule,
-  shopModule,
-  trucksModule,
-} from '../config/modules';
+import { CRUD_MODULES } from '../config/modules';
+import { countDocuments, type CollectionFilter } from '../services/firestoreService';
 import { exportReportsWorkbook } from '../services/reportsExport';
 import { Spinner } from '../components/ui/Spinner';
-import type { EntityData, ModuleConfig } from '../types/models';
 import './DashboardPage.css';
 
 /** Geometría de la dona de mantenimiento. */
@@ -46,73 +34,126 @@ interface StatCard {
 }
 
 export function DashboardPage() {
-  const { can } = useAuth();
+  const { can, profile, viewAs, isAdmin, effectiveRole } = useAuth();
   const { moduleTitle } = useUiConfig();
-  const scopeFilter = useScopeFilter();
 
-  const trucks = useCollection(COLLECTIONS.trucks);
-  const drivers = useCollection(COLLECTIONS.drivers);
-  const assets = useCollection(COLLECTIONS.assets);
-  const fleet = useCollection(COLLECTIONS.fleet);
-  const shop = useCollection(COLLECTIONS.shopOrders);
-  const maintenance = useCollection(COLLECTIONS.maintenance);
-  const bcReports = useCollection(COLLECTIONS.bcReports);
-  const rentals = useCollection(COLLECTIONS.rentals);
-  const requirements = useCollection(COLLECTIONS.requirements);
+  /**
+   * Los KPIs se calculan con conteos agregados (getCountFromServer): cada
+   * número cuesta UNA lectura en vez de traer la colección completa. El
+   * desglose por tipo de requerimiento usa el catálogo, que es pequeño.
+   */
   const requestTypes = useCollection(COLLECTIONS.requestTypes);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [countError, setCountError] = useState<string | null>(null);
 
-  const loading =
-    trucks.loading || drivers.loading || maintenance.loading || requirements.loading;
+  /** Con alcance restringido no se pueden usar agregados: se avisa y no se cuenta. */
+  const effectiveUser = viewAs ?? profile;
+  const restricted =
+    !isAdmin &&
+    effectiveUser?.isOffice !== true &&
+    Object.values(effectiveRole?.permissions ?? {}).some(
+      (permission) => permission.alcance && permission.alcance !== 'all',
+    );
 
-  /** Aplica el alcance del rol a cada colección antes de contar. */
-  const scoped = (rows: EntityData[], config: ModuleConfig): EntityData[] =>
-    rows.filter((row) => scopeFilter(config, row));
+  useEffect(() => {
+    let cancelled = false;
 
-  const trucksRows = scoped(trucks.rows, trucksModule);
-  const driversRows = scoped(drivers.rows, driversModule);
-  const assetsRows = scoped(assets.rows, assetsModule);
-  const fleetRows = scoped(fleet.rows, fleetModule);
-  const shopRows = scoped(shop.rows, shopModule);
-  const maintenanceRows = scoped(maintenance.rows, maintenanceModule);
-  const bcRows = scoped(bcReports.rows, bcReportsModule);
-  const rentalsRows = scoped(rentals.rows, rentalsModule);
-  const requirementsRows = scoped(requirements.rows, requirementsModule);
+    const load = async () => {
+      setLoading(true);
+      setCountError(null);
+      try {
+        const targets: [string, string, CollectionFilter?][] = [
+          ['bcReports', COLLECTIONS.bcReports],
+          ['trucks', COLLECTIONS.trucks],
+          ['drivers', COLLECTIONS.drivers],
+          ['assets', COLLECTIONS.assets],
+          ['fleet', COLLECTIONS.fleet],
+          ['shop', COLLECTIONS.shopOrders],
+          ['rentals', COLLECTIONS.rentals],
+          ['requirements', COLLECTIONS.requirements],
+          ['corrective', COLLECTIONS.maintenance, { field: 'type', value: 'Corrective' }],
+          ['preventive', COLLECTIONS.maintenance, { field: 'type', value: 'Preventive' }],
+        ];
+        const visible = targets.filter(
+          ([id]) =>
+            can(id, 'ver') || id === 'corrective' || id === 'preventive'
+              ? can(id === 'corrective' || id === 'preventive' ? 'maintenance' : id, 'ver')
+              : false,
+        );
+        const results = await Promise.all(
+          visible.map(async ([id, collectionName, filter]) => {
+            const value = await countDocuments(collectionName, filter);
+            return [id, value] as const;
+          }),
+        );
+        if (cancelled) return;
+        setCounts(Object.fromEntries(results));
+      } catch (error) {
+        if (!cancelled) {
+          setCountError(error instanceof Error ? error.message : 'Counters unavailable');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
 
-  const corrective = maintenanceRows.filter((r) => r.type === 'Corrective').length;
-  const preventive = maintenanceRows.filter((r) => r.type === 'Preventive').length;
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [can]);
+
+  const corrective = counts.corrective ?? 0;
+  const preventive = counts.preventive ?? 0;
   const maintenanceTotal = corrective + preventive;
   const correctivePct = maintenanceTotal === 0 ? 0 : Math.round((corrective / maintenanceTotal) * 100);
   const preventivePct = maintenanceTotal === 0 ? 0 : 100 - correctivePct;
   const correctiveArc = maintenanceTotal === 0 ? 0 : DONUT_C * (corrective / maintenanceTotal);
   const preventiveArc = maintenanceTotal === 0 ? 0 : DONUT_C * (preventive / maintenanceTotal);
 
-  /** Requerimientos agrupados por tipo de solicitud, de mayor a menor. */
-  const requirementsByType = useMemo(() => {
-    const names = new Map(requestTypes.rows.map((r) => [r.id, String(r.name ?? r.id)]));
-    const counts = new Map<string, number>();
-    requirementsRows.forEach((row) => {
-      const id = typeof row.idRequest === 'string' ? row.idRequest : '';
-      const label = names.get(id) ?? 'Not specified';
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    });
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [requirementsRows, requestTypes.rows]);
+  /** Requerimientos por tipo: un conteo agregado por cada tipo del catálogo. */
+  const [byType, setByType] = useState<[string, number][]>([]);
 
-  /** Base de la barra más larga del desglose. */
+  useEffect(() => {
+    if (!can('requirements', 'ver') || requestTypes.rows.length === 0) return;
+    let cancelled = false;
+
+    const load = async () => {
+      const results = await Promise.all(
+        requestTypes.rows.map(async (type) => {
+          const value = await countDocuments(COLLECTIONS.requirements, {
+            field: 'idRequest',
+            value: type.id,
+          });
+          return [String(type.name ?? type.id), value] as [string, number];
+        }),
+      );
+      if (cancelled) return;
+      setByType(results.filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]));
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [can, requestTypes.rows]);
+
+  const requirementsByType = byType;
   const maxRequirement = Math.max(1, ...requirementsByType.map(([, count]) => count));
 
   const allCards: StatCard[] = [
-    { id: 'bcReports', label: 'BC Reports', value: bcRows.length, icon: ClipboardCheck, tone: 'blue' },
-    { id: 'trucks', label: 'Trucks', value: trucksRows.length, icon: Truck, tone: 'blue' },
-    { id: 'drivers', label: 'Drivers', value: driversRows.length, icon: Users, tone: 'teal' },
-    { id: 'assets', label: 'Assets', value: assetsRows.length, icon: ScanLine, tone: 'violet' },
-    { id: 'fleet', label: 'Fleet', value: fleetRows.length, icon: Route, tone: 'green' },
-    { id: 'shop', label: 'Shop orders', value: shopRows.length, icon: Wrench, tone: 'amber' },
-    { id: 'rentals', label: 'Rentals', value: rentalsRows.length, icon: KeySquare, tone: 'violet' },
+    { id: 'bcReports', label: 'BC Reports', value: counts.bcReports ?? 0, icon: ClipboardCheck, tone: 'blue' },
+    { id: 'trucks', label: 'Trucks', value: counts.trucks ?? 0, icon: Truck, tone: 'blue' },
+    { id: 'drivers', label: 'Drivers', value: counts.drivers ?? 0, icon: Users, tone: 'teal' },
+    { id: 'assets', label: 'Assets', value: counts.assets ?? 0, icon: ScanLine, tone: 'violet' },
+    { id: 'fleet', label: 'Fleet', value: counts.fleet ?? 0, icon: Route, tone: 'green' },
+    { id: 'shop', label: 'Shop orders', value: counts.shop ?? 0, icon: Wrench, tone: 'amber' },
+    { id: 'rentals', label: 'Rentals', value: counts.rentals ?? 0, icon: KeySquare, tone: 'violet' },
     {
       id: 'requirements',
       label: 'Requirements',
-      value: requirementsRows.length,
+      value: counts.requirements ?? 0,
       icon: ClipboardList,
       tone: 'teal',
     },
@@ -166,6 +207,14 @@ export function DashboardPage() {
         </div>
         <span className="dash-head-date">Updated {generatedAt}</span>
       </header>
+
+      {restricted || countError ? (
+        <p className="dash-note">
+          {countError
+            ? `Counters unavailable: ${countError}`
+            : 'These counters show the totals of the whole fleet; each module still shows only the records your role allows.'}
+        </p>
+      ) : null}
 
       <section className="dash-cards">
         {cards.map((card) => {
@@ -242,7 +291,7 @@ export function DashboardPage() {
           <section className="dash-panel">
             <header className="dash-panel-head">
               <h2>Requirements by type</h2>
-              <span>{requirementsRows.length.toLocaleString('en-US')} total</span>
+              <span>{(counts.requirements ?? 0).toLocaleString('en-US')} total</span>
             </header>
             {requirementsByType.length === 0 ? (
               <p className="dash-empty">No requirements captured yet.</p>

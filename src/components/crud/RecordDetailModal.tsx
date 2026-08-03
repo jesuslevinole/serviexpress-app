@@ -82,7 +82,7 @@ export function RecordDetailModal({
             >
               <span className="rdetail-label">{field.label}</span>
               <span className={`rdetail-value ${text === '—' ? 'is-empty' : ''}`}>
-                {isStatus ? <Badge value={text} /> : text}
+                {isStatus ? <Badge value={text} tone={field.badgeTones?.[text]} /> : text}
               </span>
             </div>
           );

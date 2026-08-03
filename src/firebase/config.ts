@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,4 +21,13 @@ export const auth = getAuth(app);
 // Los correos que envía Firebase (restablecer contraseña, etc.) salen en español.
 auth.languageCode = 'es';
 
-export const db = getFirestore(app);
+/**
+ * Caché local persistente (IndexedDB): los datos ya vistos se sirven del
+ * disco del navegador en vez de volver a leerse de Firestore. Reduce
+ * drásticamente el consumo de lecturas al navegar y al recargar, y permite
+ * trabajar sin conexión. `persistentMultipleTabManager` comparte ese caché
+ * entre pestañas para no duplicar listeners.
+ */
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});

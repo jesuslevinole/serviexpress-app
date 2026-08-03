@@ -78,7 +78,7 @@ export const trucksModule: ModuleConfig = {
   icon: 'Truck',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Register date', type: 'date', required: true, table: false },
+    { key: 'date', label: 'Register date', type: 'date', defaultToday: true, required: true, table: false },
     {
       key: 'idStationReg',
       label: 'Register station',
@@ -158,7 +158,7 @@ export const trucksModule: ModuleConfig = {
       filter: { field: 'type', value: 'Corrective' },
       emptyMessage: 'This truck has no corrective maintenance yet',
       fields: [
-        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'date', label: 'Date', type: 'date', defaultToday: true },
         {
           key: 'idStation',
           label: 'Station',
@@ -190,7 +190,7 @@ export const trucksModule: ModuleConfig = {
       filter: { field: 'type', value: 'Preventive' },
       emptyMessage: 'This truck has no preventive maintenance yet',
       fields: [
-        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'date', label: 'Date', type: 'date', defaultToday: true },
         { key: 'mileage', label: 'Actual Mileage', type: 'number' },
         { key: 'nextMant', label: 'Next mant', type: 'number' },
         {
@@ -216,7 +216,7 @@ export const trucksModule: ModuleConfig = {
       foreignKey: 'idTruck',
       emptyMessage: 'This truck has not changed entity or station yet',
       fields: [
-        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'date', label: 'Date', type: 'date', defaultToday: true },
         { key: 'fieldLabel', label: 'Field', type: 'text' },
         { key: 'fromLabel', label: 'From', type: 'text' },
         { key: 'toLabel', label: 'To', type: 'text' },
@@ -253,7 +253,7 @@ export const driversModule: ModuleConfig = {
       fallbackField: 'name',
     },
     { key: 'name', label: 'Name (from Team)', type: 'text', form: false, table: false },
-    { key: 'date', label: 'Register date', type: 'date', table: false },
+    { key: 'date', label: 'Register date', type: 'date', defaultToday: true, table: false },
     ...contextFields(true, true, false),
     {
       key: 'idCategoryDriver',
@@ -291,7 +291,7 @@ export const assetsModule: ModuleConfig = {
     { key: 'mark', label: 'Make', type: 'text' },
     { key: 'model', label: 'Model', type: 'text' },
     { key: 'serialNumber', label: 'Serial number', type: 'text' },
-    { key: 'date', label: 'Register date', type: 'date', table: false },
+    { key: 'date', label: 'Register date', type: 'date', defaultToday: true, table: false },
     { key: 'status', label: 'Status', type: 'text' },
     {
       key: 'idDriver',
@@ -472,7 +472,7 @@ export const bcReportsModule: ModuleConfig = {
   icon: 'ClipboardCheck',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Date', type: 'date', required: true },
+    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
     ...contextFields(),
     { ...capturedByField, label: 'BC (captured by)' },
   ],
@@ -553,6 +553,29 @@ export const maintenanceModule: ModuleConfig = {
   title: 'Maintenance',
   icon: 'Wrench',
   autoUserField: 'idUsers',
+  viewTabs: [
+    { id: 'all', label: 'All' },
+    {
+      id: 'preventive',
+      label: 'Preventive',
+      tone: 'warning',
+      match: (row) =>
+        row.type === 'Preventive' &&
+        !(typeof row.idBcReport === 'string' && row.idBcReport.trim() !== ''),
+    },
+    {
+      id: 'corrective',
+      label: 'Corrective',
+      tone: 'negative',
+      match: (row) => row.type === 'Corrective',
+    },
+    {
+      id: 'fromBc',
+      label: 'From BC Report',
+      tone: 'info',
+      match: (row) => typeof row.idBcReport === 'string' && row.idBcReport.trim() !== '',
+    },
+  ],
   fields: [
     {
       key: 'type',
@@ -561,8 +584,11 @@ export const maintenanceModule: ModuleConfig = {
       enumValues: ['Preventive', 'Corrective'],
       required: true,
       defaultValue: 'Preventive',
+      badge: true,
+      // Preventivo ámbar, correctivo rojo.
+      badgeTones: { Preventive: 'warning', Corrective: 'negative' },
     },
-    { key: 'date', label: 'Date', type: 'date', required: true },
+    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
     {
       key: 'idEntity',
       label: 'Entity',
@@ -739,6 +765,8 @@ export const maintenanceModule: ModuleConfig = {
         if (typeof link === 'string' && link.trim() !== '') return 'BC Report';
         return typeof row.origin === 'string' && row.origin !== '' ? row.origin : 'Direct';
       },
+      // Lo capturado desde un BC Report se distingue en azul.
+      badgeTones: { 'BC Report': 'info', Direct: 'neutral' },
     },
     {
       key: 'idBcReport',
@@ -763,7 +791,7 @@ export const accidentsModule: ModuleConfig = {
   icon: 'AlertTriangle',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Accident Date', type: 'date', required: true },
+    { key: 'date', label: 'Accident Date', type: 'date', defaultToday: true, required: true },
     {
       key: 'idDriver',
       label: 'Driver',
@@ -799,7 +827,7 @@ export const requirementsModule: ModuleConfig = {
   icon: 'ClipboardList',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Date', type: 'date', required: true },
+    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
     {
       key: 'idRequest',
       label: 'Request type',
@@ -838,7 +866,7 @@ export const requirementsModule: ModuleConfig = {
       quantityKey: 'quantity',
     },
     fields: [
-      { key: 'registerDate', label: 'Register date', type: 'date' },
+      { key: 'registerDate', label: 'Register date', type: 'date', defaultToday: true },
       {
         key: 'idUniformItem',
         label: 'Uniform',
@@ -861,6 +889,18 @@ export const requirementsModule: ModuleConfig = {
       },
       { key: 'quantity', label: 'Quantity', type: 'number', required: true, defaultValue: 1 },
       { key: 'receivingDate', label: 'Receiving date', type: 'date' },
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'text',
+        form: false,
+        badge: true,
+        // Entregado cuando ya tiene fecha de recepción.
+        compute: (row) =>
+          typeof row.receivingDate === 'string' && row.receivingDate.trim() !== ''
+            ? 'Done'
+            : 'Pending',
+      },
     ],
   },
 };
@@ -904,7 +944,7 @@ export const uniformEntriesModule: ModuleConfig = {
   icon: 'Shirt',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Entry date', type: 'date', required: true },
+    { key: 'date', label: 'Entry date', type: 'date', defaultToday: true, required: true },
     {
       key: 'idUniformItem',
       label: 'Uniform',
@@ -925,22 +965,6 @@ export const uniformEntriesModule: ModuleConfig = {
       },
     },
     { key: 'quantity', label: 'Quantity', type: 'number', required: true, defaultValue: 1 },
-    {
-      key: 'idEntity',
-      label: 'Entity',
-      type: 'ref',
-      refCollection: COLLECTIONS.entities,
-      defaultFromUserScope: 'entity',
-      table: false,
-    },
-    {
-      key: 'idStation',
-      label: 'Station',
-      type: 'ref',
-      refCollection: COLLECTIONS.stations,
-      defaultFromUserScope: 'station',
-      table: false,
-    },
     { key: 'observation', label: 'Observation', type: 'textarea', table: false },
     capturedByField,
   ],
@@ -988,3 +1012,10 @@ export const PERMISSION_MODULES: { id: string; title: string }[] = [
   { id: 'capturedBy', title: 'Captured by (edit the capturing user)' },
   { id: 'entityStation', title: 'Entity & Station fields (edit in forms)' },
 ];
+
+/** Configuración de un módulo a partir de su colección (búsqueda diferida). */
+export function moduleByCollection(collection: string): ModuleConfig | undefined {
+  return [...CRUD_MODULES, uniformEntriesModule, ...catalogModules].find(
+    (module) => module.collection === collection,
+  );
+}

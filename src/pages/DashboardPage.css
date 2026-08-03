@@ -475,3 +475,11 @@
     transition: none;
   }
 }
+
+.dash-note {
+  font-size: 12px;
+  color: var(--text-soft);
+  background: var(--primary-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+}

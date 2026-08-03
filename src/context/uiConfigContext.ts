@@ -6,6 +6,8 @@ export interface FieldOverride {
   order?: number;
   /** Obligatorio configurado por el admin (sobrescribe el del código). */
   required?: boolean;
+  /** false = la columna no se muestra en la tabla. */
+  table?: boolean;
 }
 
 export interface ModuleOverride {
@@ -33,6 +35,8 @@ export interface UiConfigContextValue {
   saveModuleOverride: (moduleId: string, override: ModuleOverride) => Promise<void>;
   /** Persists the menu order for the given ids (position = order). */
   saveMenuOrder: (idsInOrder: string[]) => Promise<void>;
+  /** Mensaje cuando la configuración compartida no se pudo leer o guardar. */
+  saveError: string | null;
 }
 
 export const UiConfigContext = createContext<UiConfigContextValue | null>(null);

@@ -21,6 +21,13 @@ export function useCollection(
   const filterValue = filter?.value ?? null;
 
   useEffect(() => {
+    // Nombre vacío: el módulo no tiene esa colección (p. ej. sin detalle).
+    if (collectionName === '') {
+      setRows([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     setLoading(true);
     const activeFilter =
       filterField !== null ? { field: filterField, value: filterValue } : undefined;

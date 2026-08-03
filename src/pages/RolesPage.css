@@ -118,3 +118,37 @@
   font-style: normal;
   color: var(--primary-dark);
 }
+
+/* ---- Registros visibles por módulo: grupo de botones ---- */
+.roles-scope {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.roles-scope-btn {
+  border: none;
+  border-right: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-soft);
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.roles-scope-btn:last-child {
+  border-right: none;
+}
+
+.roles-scope-btn:hover {
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+}
+
+.roles-scope-btn.is-active {
+  background: var(--primary);
+  color: #fff;
+}

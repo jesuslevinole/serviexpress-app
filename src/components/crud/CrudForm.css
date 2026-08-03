@@ -64,3 +64,13 @@
   color: var(--text-muted);
   background: var(--surface-soft);
 }
+
+.crudform-extra {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.crudform-banner {
+  margin-top: 16px;
+}

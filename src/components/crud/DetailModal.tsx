@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileUp, Plus } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, Pencil, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import type { RefMaps } from '../../hooks/useRefMaps';
@@ -13,6 +13,10 @@ import {
 import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport';
 import { buildTemplateFields } from './templateFields';
 import { ImportCsvModal } from './ImportCsvModal';
+import { CRUD_MODULES, moduleByCollection } from '../../config/modules';
+import { TableLayoutModal } from './TableLayoutModal';
+import { useUiConfig } from '../../hooks/useUiConfig';
+import { PackagePlus } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { DataTable, type TableColumn } from '../ui/DataTable';
@@ -45,7 +49,11 @@ export function DetailModal({
   refMaps,
   onClose,
 }: DetailModalProps) {
-  const { can } = useAuth();
+  const { can, firebaseUser, isAdmin } = useAuth();
+  const { editMode } = useUiConfig();
+  const [layoutOpen, setLayoutOpen] = useState(false);
+  /** Puede reordenar y ocultar columnas: admin o permiso Customization. */
+  const canCustomize = isAdmin || can('customize', 'editar');
   const filter = useMemo(
     () => ({ field: detail.parentKey, value: parent.id }),
     [detail.parentKey, parent.id],
@@ -57,6 +65,59 @@ export function DetailModal({
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryBusy, setEntryBusy] = useState(false);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  /** Valores del renglón en captura, para precargar el alta de existencia. */
+  const [pendingValues, setPendingValues] = useState<Record<string, FieldValue>>({});
+
+  /** Entradas al inventario (solo si el detalle descuenta existencias). */
+  const stockEntries = useCollection(detail.stockControl?.entriesCollection ?? '');
+  /** Módulo dueño de este detalle (para editar el layout de sus renglones). */
+  const parentModule = CRUD_MODULES.find((module) => module.id === moduleId);
+  const entryModule = detail.stockControl
+    ? moduleByCollection(detail.stockControl.entriesCollection)
+    : undefined;
+
+  /** Existencia disponible del artículo elegido en el formulario. */
+  const availableFor = (values: Record<string, FieldValue>): number | null => {
+    const control = detail.stockControl;
+    if (!control) return null;
+    const chosen = control.matchKeys.every(
+      (key) => typeof values[key] === 'string' && values[key] !== '',
+    );
+    if (!chosen) return null;
+    const sameItem = (row: EntityData): boolean =>
+      control.matchKeys.every((key) => String(row[key] ?? '') === String(values[key] ?? ''));
+    const sum = (list: EntityData[]): number =>
+      list.reduce((total, row) => {
+        const quantity = row[control.quantityKey];
+        return total + (typeof quantity === 'number' ? quantity : 0);
+      }, 0);
+    const totalIn = sum(stockEntries.rows.filter(sameItem));
+    const totalOut = sum(rows.filter((row) => sameItem(row) && row.id !== editing?.id));
+    return totalIn - totalOut;
+  };
+
+  /** Alta rápida de existencia sin salir del formulario. */
+  const handleEntrySubmit = async (values: Record<string, FieldValue>) => {
+    const control = detail.stockControl;
+    if (!control) return;
+    setEntryBusy(true);
+    setEntryError(null);
+    try {
+      const payload = { ...values };
+      if (entryModule?.autoUserField && firebaseUser) {
+        payload[entryModule.autoUserField] = firebaseUser.uid;
+      }
+      await createDocument(control.entriesCollection, payload);
+      setEntryOpen(false);
+    } catch (err) {
+      setEntryError(err instanceof Error ? err.message : 'Could not save the entry');
+    } finally {
+      setEntryBusy(false);
+    }
+  };
 
   const detailFields = detail.fields;
   const [busy, setBusy] = useState(false);
@@ -223,6 +284,17 @@ export function DetailModal({
   return (
     <Modal open title={detail.title} onClose={onClose} size="lg">
       <div className="detail-toolbar">
+        {editMode && canCustomize && parentModule ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            title="Rename, reorder and show/hide columns"
+            onClick={() => setLayoutOpen(true)}
+          >
+            <Pencil size={15} />
+            Edit table
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn btn-outline"
@@ -250,16 +322,15 @@ export function DetailModal({
         {canCreate ? (
           <button
             type="button"
-            className="btn-add"
-            title="Add row"
-            aria-label="Add row"
+            className="btn btn-primary"
             onClick={() => {
               setEditing(null);
               setFormError(null);
               setFormOpen(true);
             }}
           >
-            <Plus size={22} strokeWidth={2.6} />
+            <Plus size={16} />
+            Add
           </button>
         ) : null}
       </div>
@@ -325,9 +396,65 @@ export function DetailModal({
         busy={busy}
         error={formError}
         resetSignal={resetSignal}
+        renderBanner={
+          detail.stockControl
+            ? (values) => {
+                const available = availableFor(values);
+                return (
+                  <div className={`dstock ${available !== null && available <= 0 ? 'is-empty' : ''}`}>
+                    <span className="dstock-label">
+                      {available === null
+                        ? 'Pick a uniform and size to see the stock on hand'
+                        : `Stock on hand: ${available}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-outline dstock-add"
+                      onClick={() => {
+                        setPendingValues(values);
+                        setEntryError(null);
+                        setEntryOpen(true);
+                      }}
+                    >
+                      <PackagePlus size={16} />
+                      Add stock
+                    </button>
+                  </div>
+                );
+              }
+            : undefined
+        }
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
       />
+
+      {layoutOpen && parentModule ? (
+        <TableLayoutModal base={parentModule} target="detail" onClose={() => setLayoutOpen(false)} />
+      ) : null}
+
+      {entryOpen && entryModule && detail.stockControl ? (
+        <CrudForm
+          open
+          title={`Add stock · ${entryModule.title}`}
+          fields={entryModule.fields}
+          initial={
+            {
+              ...Object.fromEntries(
+                detail.stockControl.matchKeys
+                  .filter((key) => typeof pendingValues[key] === 'string' && pendingValues[key] !== '')
+                  .map((key) => [key, pendingValues[key]]),
+              ),
+              id: '',
+            } as EntityData
+          }
+          refMaps={refMaps}
+          busy={entryBusy}
+          error={entryError}
+          resetSignal={0}
+          onClose={() => setEntryOpen(false)}
+          onSubmit={handleEntrySubmit}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleting !== null}

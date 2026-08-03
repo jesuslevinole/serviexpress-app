@@ -90,8 +90,12 @@ export interface FieldConfig {
   compute?: (row: EntityData) => FieldValue;
   /** Renderizar el valor como badge de color en tablas y detalle. */
   badge?: boolean;
+  /** Tono del badge según el valor mostrado (Preventive ámbar, Corrective rojo…). */
+  badgeTones?: Record<string, 'positive' | 'negative' | 'neutral' | 'info' | 'warning'>;
   /** El campo solo aparece en el formulario cuando otro campo tiene cierto valor. */
   visibleWhen?: { field: string; value: FieldValue };
+  /** Al capturar un registro nuevo, la fecha arranca en el día de hoy. */
+  defaultToday?: boolean;
   /** Valor inicial tomado de las asignaciones del usuario (primera de su alcance). */
   defaultFromUserScope?: 'entity' | 'station';
   /**
@@ -204,6 +208,17 @@ export interface ModuleConfig {
   autoUserField?: string;
   /** Módulo de detalle (maestro–detalle), p. ej. renglones del reporte BC. */
   detail?: DetailConfig;
+  /**
+   * Pestañas que separan los registros del módulo (p. ej. mantenimiento
+   * preventivo, correctivo y el que viene del BC Report).
+   */
+  viewTabs?: {
+    id: string;
+    label: string;
+    tone?: 'positive' | 'negative' | 'neutral' | 'info' | 'warning';
+    /** Filas que muestra la pestaña; sin filtro = todas. */
+    match?: (row: EntityData) => boolean;
+  }[];
   /** Listas de solo lectura que se abren desde cada renglón. */
   relatedViews?: RelatedView[];
   /** Registra automáticamente los cambios de los campos vigilados. */

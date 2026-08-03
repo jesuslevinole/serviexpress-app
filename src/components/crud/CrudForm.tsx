@@ -1,5 +1,5 @@
 import { Settings2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import { SaveSummary } from './SaveSummary';
@@ -27,6 +27,10 @@ interface CrudFormProps {
   currentUid?: string | null;
   /** Valores iniciales extra en altas (p. ej. entidad/estación del usuario). */
   presetValues?: Record<string, FieldValue>;
+  /** Contenido extra bajo el formulario (p. ej. los uniformes ya cargados). */
+  extraSection?: ReactNode;
+  /** Aviso en vivo que depende de lo capturado (p. ej. existencia disponible). */
+  renderBanner?: (values: Record<string, FieldValue>) => ReactNode;
   /** Alcance (entidad/estación) por usuario, para rellenar al elegir capturista. */
   userScopes?: Record<string, { entity: string | null; station: string | null }>;
   /** Si el rol NO puede editar Entity/Station, esos campos se muestran bloqueados. */
@@ -75,6 +79,8 @@ export function CrudForm({
   currentUid,
   presetValues,
   userScopes,
+  extraSection,
+  renderBanner,
   contextEditable = true,
   onClose,
   onSubmit,
@@ -97,6 +103,18 @@ export function CrudForm({
   useEffect(() => {
     if (open) {
       const base = buildInitialValues(formFields, initial);
+      // Alta: las fechas de registro arrancan en el día de hoy.
+      if (!initial) {
+        const today = new Date();
+        const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+          today.getDate(),
+        ).padStart(2, '0')}`;
+        formFields.forEach((field) => {
+          if (field.defaultToday && (base[field.key] === null || base[field.key] === '')) {
+            base[field.key] = iso;
+          }
+        });
+      }
       // Alta: el capturista arranca con los datos del usuario actual.
       if (!initial && editableCapturedByKey && currentUid) {
         base[editableCapturedByKey] = currentUid;
@@ -279,6 +297,10 @@ export function CrudForm({
         </div>
         <SaveSummary fields={visibleFields} values={values} refLabels={refLabel} />
       </div>
+
+      {renderBanner ? <div className="crudform-banner">{renderBanner(values)}</div> : null}
+
+      {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
     </Modal>
   );
 }

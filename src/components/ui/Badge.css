@@ -21,3 +21,13 @@
   background: var(--warning-bg);
   color: var(--warning);
 }
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}

@@ -37,11 +37,15 @@ import './RolesPage.css';
 const ACTIONS: PermissionAction[] = ['ver', 'crear', 'editar', 'eliminar'];
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
-const VIEW_SCOPES: { value: ViewScope; label: string }[] = [
-  { value: 'all', label: 'All records' },
-  { value: 'own', label: 'Own records only' },
-  { value: 'station', label: 'By station' },
-  { value: 'entity_station', label: 'By station & entity' },
+const VIEW_SCOPES: { value: ViewScope; label: string; title: string }[] = [
+  { value: 'all', label: 'All', title: 'Sees every record of the module' },
+  { value: 'own', label: 'Own', title: 'Sees only the records they captured' },
+  { value: 'station', label: 'Station', title: 'Sees the records of their assigned stations' },
+  {
+    value: 'entity_station',
+    label: 'St+Ent',
+    title: 'Records matching both their station and entity',
+  },
 ];
 
 /** Campos que muestra el sumario lateral del modal de roles. */
@@ -474,7 +478,7 @@ export function RolesPage() {
                   <th key={action}>{action}</th>
                 ))}
                 <th>All</th>
-                  <th>Visibility</th>
+                  <th>Visible records</th>
               </tr>
             </thead>
             <tbody>
@@ -503,18 +507,23 @@ export function RolesPage() {
                       </button>
                     </td>
                     <td>
-                      <select
-                        className="roles-scope-select"
-                        value={matrix[module.id]?.alcance ?? 'all'}
-                        onChange={(e) => setScope(module.id, e.target.value as ViewScope)}
-                        title="Which records this role can see in the module"
-                      >
-                        {VIEW_SCOPES.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="roles-scope" role="group" aria-label="Visible records">
+                        {VIEW_SCOPES.map((option) => {
+                          const active = (matrix[module.id]?.alcance ?? 'all') === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`roles-scope-btn ${active ? 'is-active' : ''}`}
+                              title={option.title}
+                              aria-pressed={active}
+                              onClick={() => setScope(module.id, option.value)}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </td>
                   </tr>
                 );
