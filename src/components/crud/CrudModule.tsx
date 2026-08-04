@@ -15,6 +15,7 @@ import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
   createDocument,
+  fetchCollection,
   setDocument,
   deleteDocument,
   updateDocument,
@@ -525,7 +526,57 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     );
   };
 
+  /**
+   * Exportación de renglones (p. ej. los mantenimientos de cada BC Report):
+   * parte de los encabezados que el ROL permite ver, así que un usuario con
+   * visibilidad "Own" solo obtiene sus propios registros.
+   */
+  const exportLinkedRows = async (dateField: string, from: string, to: string) => {
+    const spec = config.exportRows;
+    if (!spec) return;
+
+    const parents = rows.filter((row) => {
+      const raw = row[dateField];
+      const value = typeof raw === 'string' ? raw.slice(0, 10) : '';
+      if (from && (value === '' || value < from)) return false;
+      if (to && (value === '' || value > to)) return false;
+      return true;
+    });
+    const parentById = new Map(parents.map((parent) => [parent.id, parent]));
+
+    const allRowsOfCollection = await fetchCollection(spec.collection);
+    const linked = allRowsOfCollection
+      .filter((row) => {
+        const parentId = row[spec.parentKey];
+        return typeof parentId === 'string' && parentById.has(parentId);
+      })
+      .sort((a, b) => {
+        const parentA = parentById.get(String(a[spec.parentKey] ?? ''));
+        const parentB = parentById.get(String(b[spec.parentKey] ?? ''));
+        const dateA = typeof parentA?.date === 'string' ? parentA.date : '';
+        const dateB = typeof parentB?.date === 'string' ? parentB.date : '';
+        return dateB.localeCompare(dateA);
+      });
+
+    const rangeSuffix = from || to ? ` (${from || 'start'} to ${to || 'today'})` : '';
+    await exportToExcel(
+      `${config.title}${rangeSuffix}`,
+      spec.columns.map((column) => ({
+        header: column.label,
+        values: linked.map((row) => {
+          const source =
+            column.from === 'parent' ? parentById.get(String(row[spec.parentKey] ?? '')) : row;
+          return source ? displayCell(column.field, source, refLabel) : '';
+        }),
+      })),
+    );
+  };
+
   const handleExport = async (dateField: string, from: string, to: string) => {
+    if (config.exportRows) {
+      await exportLinkedRows(dateField, from, to);
+      return;
+    }
     const rowsForExport = rows.filter((row) => {
       const raw = row[dateField];
       const value = typeof raw === 'string' ? raw.slice(0, 10) : '';

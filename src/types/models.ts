@@ -230,6 +230,21 @@ export interface ModuleConfig {
     /** Filas que muestra la pestaña; sin filtro = todas. */
     match?: (row: EntityData) => boolean;
   }[];
+  /**
+   * Exportación a Excel de los renglones ligados al módulo, combinando datos
+   * del encabezado y del renglón (p. ej. los mantenimientos de un BC Report).
+   */
+  exportRows?: {
+    collection: string;
+    /** Campo del renglón que apunta al encabezado. */
+    parentKey: string;
+    columns: {
+      label: string;
+      /** De dónde sale el valor: del encabezado o del propio renglón. */
+      from: 'parent' | 'row';
+      field: FieldConfig;
+    }[];
+  };
   /** Listas de solo lectura que se abren desde cada renglón. */
   relatedViews?: RelatedView[];
   /** Registra automáticamente los cambios de los campos vigilados. */

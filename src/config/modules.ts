@@ -504,6 +504,99 @@ export const bcReportsModule: ModuleConfig = {
     ...contextFields(),
     { ...capturedByField, label: 'BC (captured by)' },
   ],
+  /** Reporte de mantenimiento del BC: encabezado + renglón en una sola fila. */
+  exportRows: {
+    collection: COLLECTIONS.maintenance,
+    parentKey: 'idBcReport',
+    columns: [
+      { label: 'Date', from: 'parent', field: { key: 'date', label: 'Date', type: 'date' } },
+      {
+        label: 'Entity',
+        from: 'parent',
+        field: {
+          key: 'idEntity',
+          label: 'Entity',
+          type: 'ref',
+          refCollection: COLLECTIONS.entities,
+        },
+      },
+      {
+        label: 'Station',
+        from: 'parent',
+        field: {
+          key: 'idStation',
+          label: 'Station',
+          type: 'ref',
+          refCollection: COLLECTIONS.stations,
+        },
+      },
+      {
+        label: 'Responsable',
+        from: 'parent',
+        field: {
+          key: 'idUsers',
+          label: 'Responsable',
+          type: 'ref',
+          refCollection: COLLECTIONS.users,
+        },
+      },
+      {
+        label: 'Observation',
+        from: 'row',
+        field: { key: 'observation', label: 'Observation', type: 'text' },
+      },
+      {
+        label: 'Route',
+        from: 'row',
+        field: { key: 'idRoute', label: 'Route', type: 'ref', refCollection: COLLECTIONS.routes },
+      },
+      {
+        label: 'Truck',
+        from: 'row',
+        field: { key: 'idTruck', label: 'Truck', type: 'ref', refCollection: COLLECTIONS.trucks },
+      },
+      { label: 'Next mant', from: 'row', field: { key: 'nextMant', label: 'Next mant', type: 'number' } },
+      { label: 'Mileage', from: 'row', field: { key: 'mileage', label: 'Mileage', type: 'number' } },
+      {
+        label: 'Diff Mileage',
+        from: 'row',
+        field: {
+          key: 'diffMileage',
+          label: 'Diff Mileage',
+          type: 'number',
+          compute: (row) => {
+            const next = typeof row.nextMant === 'number' ? row.nextMant : null;
+            const mileage = typeof row.mileage === 'number' ? row.mileage : null;
+            return next === null || mileage === null ? null : next - mileage;
+          },
+        },
+      },
+      { label: 'L/Driver', from: 'row', field: { key: 'frontLDriver', label: 'L/Driver', type: 'number' } },
+      { label: 'R/Pass', from: 'row', field: { key: 'frontRPass', label: 'R/Pass', type: 'number' } },
+      { label: 'Outside', from: 'row', field: { key: 'backLDriverOut', label: 'Outside', type: 'number' } },
+      { label: 'Inside', from: 'row', field: { key: 'backLDriverIn', label: 'Inside', type: 'number' } },
+      { label: 'Outside', from: 'row', field: { key: 'backRPassOut', label: 'Outside', type: 'number' } },
+      { label: 'Inside', from: 'row', field: { key: 'backRPassIn', label: 'Inside', type: 'number' } },
+      { label: 'Vedr', from: 'row', field: { key: 'vedr', label: 'Vedr', type: 'bool' } },
+      { label: 'Fuses', from: 'row', field: { key: 'fuses', label: 'Fuses', type: 'bool' } },
+      { label: 'Pouch', from: 'row', field: { key: 'pouch', label: 'Pouch', type: 'bool' } },
+      { label: 'Fire ext', from: 'row', field: { key: 'fireExt', label: 'Fire ext', type: 'bool' } },
+      { label: 'Triangle', from: 'row', field: { key: 'triangle', label: 'Triangle', type: 'bool' } },
+      { label: 'Inspection', from: 'row', field: { key: 'inspection', label: 'Inspection', type: 'bool' } },
+      { label: 'Dolly', from: 'row', field: { key: 'dolly', label: 'Dolly', type: 'number' } },
+      {
+        label: 'Scanner',
+        from: 'row',
+        field: {
+          key: 'idScanner',
+          label: 'Scanner',
+          type: 'ref',
+          refCollection: COLLECTIONS.assets,
+        },
+      },
+      { label: 'Bateries', from: 'row', field: { key: 'batteries', label: 'Bateries', type: 'number' } },
+    ],
+  },
   relatedViews: [
     {
       id: 'maintenance',
@@ -512,29 +605,51 @@ export const bcReportsModule: ModuleConfig = {
       foreignKey: 'idBcReport',
       emptyMessage: 'No maintenance linked to this report yet',
       fields: [
-        { key: 'date', label: 'Date', type: 'date' },
         {
           key: 'idTruck',
           label: 'Truck',
           type: 'ref',
           refCollection: COLLECTIONS.trucks,
         },
-        { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+        {
+          key: 'idRoute',
+          label: 'Route',
+          type: 'ref',
+          refCollection: COLLECTIONS.routes,
+        },
         { key: 'nextMant', label: 'Next mant', type: 'number' },
+        { key: 'mileage', label: 'Mileage', type: 'number' },
         {
-          key: 'type',
-          label: 'Type',
-          type: 'text',
-          badge: true,
-          badgeTones: { Preventive: 'warning', Corrective: 'negative' },
+          key: 'diffMileage',
+          label: 'Diff Mileage',
+          type: 'number',
+          compute: (row) => {
+            const next = typeof row.nextMant === 'number' ? row.nextMant : null;
+            const mileage = typeof row.mileage === 'number' ? row.mileage : null;
+            return next === null || mileage === null ? null : next - mileage;
+          },
         },
+        { key: 'frontLDriver', label: 'L/Driver', type: 'number' },
+        { key: 'frontRPass', label: 'R/Pass', type: 'number' },
+        { key: 'backLDriverOut', label: 'Outside', type: 'number' },
+        { key: 'backLDriverIn', label: 'Inside', type: 'number' },
+        { key: 'backRPassOut', label: 'Outside', type: 'number' },
+        { key: 'backRPassIn', label: 'Inside', type: 'number' },
+        { key: 'vedr', label: 'Vedr', type: 'bool' },
+        { key: 'fuses', label: 'Fuses', type: 'bool' },
+        { key: 'pouch', label: 'Pouch', type: 'bool' },
+        { key: 'fireExt', label: 'Fire ext', type: 'bool' },
+        { key: 'triangle', label: 'Triangle', type: 'bool' },
+        { key: 'inspection', label: 'Inspection', type: 'bool' },
+        { key: 'dolly', label: 'Dolly', type: 'number' },
         {
-          key: 'status',
-          label: 'Status',
-          type: 'enum',
-          enumValues: MAINTENANCE_STATUS,
-          badge: true,
+          key: 'idScanner',
+          label: 'Scanner',
+          type: 'ref',
+          refCollection: COLLECTIONS.assets,
         },
+        { key: 'batteries', label: 'Bateries', type: 'number' },
+        { key: 'observation', label: 'Observation', type: 'text' },
       ],
     },
   ],
