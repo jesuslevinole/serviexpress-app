@@ -20,7 +20,7 @@ interface RelatedRecordsModalProps {
 }
 
 /** Una pestaña: se suscribe a su colección y muestra los registros ligados. */
-function RelatedList({ view, recordId }: { view: RelatedView; recordId: string }) {
+export function RelatedList({ view, recordId }: { view: RelatedView; recordId: string }) {
   const { rows, loading, error } = useCollection(view.collection);
   const refMaps = useRefMaps(view.fields);
 

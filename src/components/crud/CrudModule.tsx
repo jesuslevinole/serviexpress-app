@@ -31,7 +31,7 @@ import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
 import { TableLayoutModal } from './TableLayoutModal';
-import { RelatedRecordsModal } from './RelatedRecordsModal';
+import { RelatedList, RelatedRecordsModal } from './RelatedRecordsModal';
 import { DetailSummary } from './DetailSummary';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { useScopeFilter } from '../../hooks/useScope';
@@ -258,8 +258,24 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setPage(1);
   };
 
+  /** Campo de fecha principal del módulo (para el orden por defecto). */
+  const primaryDateKey = useMemo(() => {
+    const named = config.fields.find((f) => f.type === 'date' && f.key === 'date');
+    return named?.key ?? config.fields.find((f) => f.type === 'date')?.key ?? null;
+  }, [config.fields]);
+
   const sortedRows = useMemo(() => {
-    if (!sortKey || !sortDir) return filteredRows;
+    // Sin orden elegido: de la fecha más reciente a la más antigua.
+    if (!sortKey || !sortDir) {
+      if (!primaryDateKey) return filteredRows;
+      return [...filteredRows].sort((a, b) => {
+        const dateA = typeof a[primaryDateKey] === 'string' ? (a[primaryDateKey] as string) : '';
+        const dateB = typeof b[primaryDateKey] === 'string' ? (b[primaryDateKey] as string) : '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        // Empate: la captura más reciente primero.
+        return String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''));
+      });
+    }
     const field = config.fields.find((f) => f.key === sortKey);
     if (!field) return filteredRows;
     const direction = sortDir === 'asc' ? 1 : -1;
@@ -279,7 +295,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       return textA.localeCompare(textB, undefined, { numeric: true }) * direction;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredRows, sortKey, sortDir, config.fields, refMaps]);
+  }, [filteredRows, sortKey, sortDir, config.fields, refMaps, primaryDateKey]);
 
   /** Página visible (máx 50 filas). */
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
@@ -741,23 +757,31 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           record={viewing}
           refLabels={refLabel}
           extra={
-            config.detail && detailEnabled(viewing) ? (
-              <DetailSummary
+            <>
+              {config.relatedViews?.map((view) => (
+                <section key={view.id} className="crud-related">
+                  <h3>{view.title}</h3>
+                  <RelatedList view={view} recordId={viewing.id} />
+                </section>
+              ))}
+              {config.detail && detailEnabled(viewing) ? (
+                <DetailSummary
                 detail={config.detail}
                 rows={rowsOfParent(viewing.id)}
                 refLabels={detailRefLabel}
                 manageLabel={`Add ${config.detail.title.toLowerCase()}`}
-                onManage={
-                  canCreate
-                    ? () => {
-                        const row = viewing;
-                        setViewing(null);
-                        setDetailParent(row);
-                      }
-                    : undefined
-                }
-              />
-            ) : undefined
+                  onManage={
+                    canCreate
+                      ? () => {
+                          const row = viewing;
+                          setViewing(null);
+                          setDetailParent(row);
+                        }
+                      : undefined
+                  }
+                />
+              ) : null}
+            </>
           }
           onEdit={
             canEdit

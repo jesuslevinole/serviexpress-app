@@ -504,6 +504,40 @@ export const bcReportsModule: ModuleConfig = {
     ...contextFields(),
     { ...capturedByField, label: 'BC (captured by)' },
   ],
+  relatedViews: [
+    {
+      id: 'maintenance',
+      title: 'Maintenance of this report',
+      collection: COLLECTIONS.maintenance,
+      foreignKey: 'idBcReport',
+      emptyMessage: 'No maintenance linked to this report yet',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date' },
+        {
+          key: 'idTruck',
+          label: 'Truck',
+          type: 'ref',
+          refCollection: COLLECTIONS.trucks,
+        },
+        { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+        { key: 'nextMant', label: 'Next mant', type: 'number' },
+        {
+          key: 'type',
+          label: 'Type',
+          type: 'text',
+          badge: true,
+          badgeTones: { Preventive: 'warning', Corrective: 'negative' },
+        },
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'enum',
+          enumValues: MAINTENANCE_STATUS,
+          badge: true,
+        },
+      ],
+    },
+  ],
   bulkDetailImport: {
     buttonLabel: 'Bulk import',
     title: 'Bulk import · Preventive maintenance',

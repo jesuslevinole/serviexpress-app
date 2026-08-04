@@ -95,3 +95,88 @@
   color: var(--danger);
   border-color: var(--danger);
 }
+
+/* ---- Pestañas de vista (preventivo / correctivo / BC) ---- */
+.crud-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.crud-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-soft);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.crud-tab:hover {
+  border-color: var(--tab-color, var(--primary-light));
+  color: var(--tab-color, var(--primary-dark));
+}
+
+.crud-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 20px;
+  background: var(--border);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.crud-tab.is-active {
+  background: var(--tab-bg, var(--primary-bg));
+  border-color: var(--tab-color, var(--primary));
+  color: var(--tab-color, var(--primary-dark));
+}
+
+.crud-tab.is-active .crud-tab-count {
+  background: var(--tab-color, var(--primary));
+  color: #fff;
+}
+
+.crud-tab.tone-warning {
+  --tab-color: var(--warning);
+  --tab-bg: var(--warning-bg);
+}
+
+.crud-tab.tone-negative {
+  --tab-color: var(--danger);
+  --tab-bg: var(--danger-bg);
+}
+
+.crud-tab.tone-info {
+  --tab-color: var(--info);
+  --tab-bg: var(--info-bg);
+}
+
+.crud-tab.tone-positive {
+  --tab-color: var(--success);
+  --tab-bg: var(--success-bg);
+}
+
+/* ---- Registros relacionados dentro del visor de detalle ---- */
+.crud-related {
+  margin-bottom: 18px;
+}
+
+.crud-related h3 {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
