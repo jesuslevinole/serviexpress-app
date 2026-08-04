@@ -15,6 +15,7 @@ import { buildTemplateFields } from './templateFields';
 import { ImportCsvModal } from './ImportCsvModal';
 import { CRUD_MODULES, moduleByCollection } from '../../config/modules';
 import { TableLayoutModal } from './TableLayoutModal';
+import { RelatedList } from './RelatedRecordsModal';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { PackagePlus } from 'lucide-react';
 import { Badge } from '../ui/Badge';
@@ -382,6 +383,13 @@ export function DetailModal({
           onClose={() => setImportOpen(false)}
         />
       ) : null}
+
+      {parentModule?.relatedViews?.map((view) => (
+        <section key={view.id} className="detail-related">
+          <h3>{view.title}</h3>
+          <RelatedList view={view} recordId={parent.id} />
+        </section>
+      ))}
 
       {viewing ? (
         <RecordDetailModal

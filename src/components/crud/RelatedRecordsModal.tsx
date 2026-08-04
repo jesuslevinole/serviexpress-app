@@ -21,7 +21,12 @@ interface RelatedRecordsModalProps {
 
 /** Una pestaña: se suscribe a su colección y muestra los registros ligados. */
 export function RelatedList({ view, recordId }: { view: RelatedView; recordId: string }) {
-  const { rows, loading, error } = useCollection(view.collection);
+  // El filtro se hace en el SERVIDOR: solo llegan los registros de este
+  // documento, en vez de leer la colección completa y filtrarla aquí.
+  const { rows, loading, error } = useCollection(view.collection, {
+    field: view.foreignKey,
+    value: recordId,
+  });
   const refMaps = useRefMaps(view.fields);
 
   const refLabel = (collection: string, id: string): string =>
@@ -30,10 +35,14 @@ export function RelatedList({ view, recordId }: { view: RelatedView; recordId: s
   const filtered = useMemo(
     () =>
       rows
-        .filter((row) => row[view.foreignKey] === recordId)
         .filter((row) => !view.filter || row[view.filter.field] === view.filter.value)
-        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''))),
-    [rows, recordId, view],
+        .sort((a, b) => {
+          const dateA = typeof a.date === 'string' ? a.date : '';
+          const dateB = typeof b.date === 'string' ? b.date : '';
+          if (dateA !== dateB) return dateB.localeCompare(dateA);
+          return String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? ''));
+        }),
+    [rows, view],
   );
 
   const columns: TableColumn[] = view.fields.map((field) => ({
