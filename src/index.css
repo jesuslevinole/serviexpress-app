@@ -99,6 +99,44 @@ textarea {
   color: var(--danger);
 }
 
+/* ============================================================
+   Barras de desplazamiento: delgadas y en la paleta del app.
+   Se aplican a los contenedores que desplazan contenido propio
+   (paneles, modales, listas), no a la ventana completa.
+   ============================================================ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 20px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background 0.15s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* El menú tiene su propia paleta (fondo navy): definida en Sidebar.css. */
+
 /* Botón de alta: un + grande e inconfundible. */
 .btn-add {
   display: inline-flex;

@@ -8,7 +8,7 @@
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -51,6 +51,38 @@
   padding: 12px 10px;
   gap: 3px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  /* Barra de desplazamiento discreta, en la paleta del menú (Firefox). */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Barra de desplazamiento del menú (Chrome, Edge, Safari): delgada,
+   translúcida sobre el navy y visible solo cuando hace falta. */
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 20px;
+  transition: background 0.15s ease;
+}
+
+.sidebar-nav:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover,
+.sidebar-nav::-webkit-scrollbar-thumb:active {
+  background: var(--primary);
 }
 
 .sidebar-link {
