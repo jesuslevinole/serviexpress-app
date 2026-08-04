@@ -103,6 +103,13 @@ export const trucksModule: ModuleConfig = {
     { key: 'vYear', label: 'V/Year', type: 'number', table: false },
     { key: 'lPlate', label: 'License plate', type: 'text', required: true },
     { key: 'nextMant', label: 'Next maintenance', type: 'number' },
+    {
+      key: 'mileage',
+      label: 'Actual mileage',
+      type: 'number',
+      form: false,
+      importable: true,
+    },
     { key: 'vinNumber', label: 'VIN number', type: 'text', table: false },
     { key: 'ezTagNumber', label: 'EZ Tag number', type: 'text', table: false },
     { key: 'schB', label: 'Sch/B', type: 'text', table: false },
@@ -420,8 +427,29 @@ const bcDetailFields: FieldConfig[] = [
     required: true,
     refFilterFromField: { field: 'unitType', targetField: 'type', map: BC_TYPE_TO_UNIT },
   },
-  { key: 'mileage', label: 'Actual Mileage', type: 'number' },
-  { key: 'nextMant', label: 'Next mant', type: 'number' },
+  {
+    key: 'mileage',
+    label: 'Actual Mileage',
+    type: 'number',
+    syncToRefField: { field: 'idTruck', targetField: 'mileage' },
+  },
+  {
+    key: 'nextMant',
+    label: 'Next mant (from truck)',
+    type: 'number',
+    copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
+  },
+  {
+    key: 'diffMileage',
+    label: 'Difference mileage',
+    type: 'number',
+    form: false,
+    compute: (row) => {
+      const next = typeof row.nextMant === 'number' ? row.nextMant : null;
+      const mileage = typeof row.mileage === 'number' ? row.mileage : null;
+      return next === null || mileage === null ? null : next - mileage;
+    },
+  },
   { key: 'frontLDriver', label: 'Front L/Driver', type: 'number', table: false },
   { key: 'frontRPass', label: 'Front R/Pass', type: 'number', table: false },
   { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', table: false },
@@ -656,14 +684,22 @@ export const maintenanceModule: ModuleConfig = {
       type: 'number',
       table: false,
       visibleWhen: whenPreventive,
+      // El millaje capturado pasa a ser el millaje actual del camión.
+      syncToRefField: {
+        field: 'idTruck',
+        targetField: 'mileage',
+        onlyWhen: (row) => row.type === 'Preventive',
+      },
     },
     {
       key: 'nextMant',
-      label: 'Next mant',
+      label: 'Next mant (from truck)',
       importAliases: ['NEXT mant'],
       type: 'number',
       table: false,
       visibleWhen: whenPreventive,
+      // Se toma del camión elegido; el operador captura el millaje actual.
+      copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
     },
     {
       key: 'frontLDriver',
@@ -732,6 +768,7 @@ export const maintenanceModule: ModuleConfig = {
       label: 'Difference mileage',
       type: 'number',
       form: false,
+      badge: false,
       compute: (row) => {
         if (row.type === 'Preventive') {
           const next = typeof row.nextMant === 'number' ? row.nextMant : null;

@@ -180,6 +180,16 @@ export function CrudForm({
     return map;
   }, [formFields, fields, refMaps, values]);
 
+  /** Diferencia de millaje en vivo: Next mant − Actual Mileage. */
+  const mileageDiff = useMemo(() => {
+    const hasBoth = 'nextMant' in values && 'mileage' in values;
+    if (!hasBoth) return null;
+    const next = values.nextMant;
+    const current = values.mileage;
+    if (typeof next !== 'number' || typeof current !== 'number') return null;
+    return next - current;
+  }, [values]);
+
   /** Campos visibles según las condiciones (p. ej. tipo Preventive/Corrective). */
   const visibleFields = useMemo(
     () =>
@@ -197,6 +207,23 @@ export function CrudForm({
   const handleChange = (key: string, value: FieldValue) => {
     setValues((prev) => {
       const next = { ...prev, [key]: value };
+      // Al elegir una referencia, se copian los datos que dependen de ella
+      // (p. ej. el Next mant del camión seleccionado).
+      if (typeof value === 'string' && value !== '') {
+        const sourceField = fields.find((f) => f.key === key);
+        const sourceRows = sourceField?.refCollection
+          ? refMaps[sourceField.refCollection]?.rows
+          : undefined;
+        const sourceRow = sourceRows?.find((r) => r.id === value);
+        if (sourceRow) {
+          fields.forEach((target) => {
+            if (target.copyFromRefField?.field !== key) return;
+            const copied = sourceRow[target.copyFromRefField.sourceField];
+            next[target.key] =
+              typeof copied === 'number' || typeof copied === 'string' ? copied : null;
+          });
+        }
+      }
       // Al cambiar el capturista, Entity/Station se rellenan con SU asignación.
       if (key === editableCapturedByKey && typeof value === 'string' && userScopes) {
         const scope = userScopes[value];
@@ -297,6 +324,18 @@ export function CrudForm({
         </div>
         <SaveSummary fields={visibleFields} values={values} refLabels={refLabel} />
       </div>
+
+      {mileageDiff !== null ? (
+        <div className={`crudform-diff ${mileageDiff < 0 ? 'is-over' : ''}`}>
+          <span>Difference mileage</span>
+          <strong>{mileageDiff.toLocaleString('en-US')}</strong>
+          <small>
+            {mileageDiff < 0
+              ? 'The truck is past its next maintenance'
+              : 'Miles left before the next maintenance'}
+          </small>
+        </div>
+      ) : null}
 
       {renderBanner ? <div className="crudform-banner">{renderBanner(values)}</div> : null}
 

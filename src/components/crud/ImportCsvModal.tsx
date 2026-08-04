@@ -128,6 +128,8 @@ export function ImportCsvModal({
   const [imported, setImported] = useState(0);
   const [failures, setFailures] = useState<{ index: number; message: string }[]>([]);
   const [hasIdColumn, setHasIdColumn] = useState(false);
+  /** true = actualiza solo las columnas del archivo y conserva el resto. */
+  const [partialUpdate, setPartialUpdate] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refIndexes = useMemo(() => buildRefIndexes(refMaps), [refMaps]);
@@ -243,9 +245,9 @@ export function ImportCsvModal({
     });
     const idColumnIndex = normalizedHeaders.findIndex((h) => h === 'id');
 
-    const missing = fields
-      .filter((f) => f.required && !columnByField.has(f.key))
-      .map((f) => f.label);
+    const missing = partialUpdate
+      ? []
+      : fields.filter((f) => f.required && !columnByField.has(f.key)).map((f) => f.label);
     setMissingColumns(missing);
     if (missing.length > 0) {
       setFileError(null);
@@ -295,6 +297,7 @@ export function ImportCsvModal({
 
       fields.forEach((field) => {
         const columnIndex = columnByField.get(field.key);
+        if (columnIndex === undefined && partialUpdate) return;
         const raw = columnIndex === undefined ? '' : (row[columnIndex] ?? '');
         const { value, error, warning } = convertCell(
           field,
@@ -372,7 +375,7 @@ export function ImportCsvModal({
         if (writeRow) {
           await writeRow(row.docId, payload);
         } else if (row.docId) {
-          await setDocument(collection, row.docId, payload);
+          await setDocument(collection, row.docId, payload, partialUpdate);
         } else {
           await createDocument(collection, payload);
         }
@@ -401,6 +404,7 @@ export function ImportCsvModal({
           <>
             <span className="imp-footer-info">
               {validRows.length} rows ready · {errorRows.length} with errors
+          {partialUpdate ? ' · partial update' : ''}
             </span>
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancel
@@ -429,6 +433,20 @@ export function ImportCsvModal({
             <strong>Select the CSV file</strong>
             <span>Exported from Google Sheets: File → Download → CSV</span>
             {headerExtra ? <div className="imp-drop-extra">{headerExtra}</div> : null}
+            <label className="imp-partial" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={partialUpdate}
+                onChange={(e) => setPartialUpdate(e.target.checked)}
+              />
+              <span>
+                <strong>Update only the columns in this file</strong>
+                <small>
+                  Rows are matched by their ID and the fields you don&apos;t include keep their
+                  current value. Ideal to update just one column.
+                </small>
+              </span>
+            </label>
             {fileName ? <em>{fileName}</em> : null}
           </button>
           <input

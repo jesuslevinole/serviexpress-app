@@ -74,3 +74,43 @@
 .crudform-banner {
   margin-top: 16px;
 }
+
+.crudform-diff {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-bg);
+}
+
+.crudform-diff span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.crudform-diff strong {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--primary-dark);
+}
+
+.crudform-diff small {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  margin-left: auto;
+}
+
+.crudform-diff.is-over {
+  background: var(--danger-bg);
+}
+
+.crudform-diff.is-over strong {
+  color: var(--danger);
+}

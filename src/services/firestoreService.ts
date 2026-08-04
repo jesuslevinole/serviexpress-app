@@ -183,12 +183,13 @@ export async function setDocument(
   collectionName: string,
   id: string,
   data: Record<string, FieldValue | string[] | Record<string, unknown>>,
+  /** true = conserva los campos que no vienen en `data` (actualización parcial). */
+  merge = false,
 ): Promise<void> {
-  await setDoc(doc(db, collectionName, id), {
-    ...data,
-    createdAt: new Date().toISOString(),
-    updatedAt: serverTimestamp(),
-  });
+  const payload = merge
+    ? { ...data, updatedAt: serverTimestamp() }
+    : { ...data, createdAt: new Date().toISOString(), updatedAt: serverTimestamp() };
+  await setDoc(doc(db, collectionName, id), payload, { merge });
 }
 
 /** Actualiza campos de un documento existente. */

@@ -346,6 +346,22 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setFormOpen(true);
   };
 
+
+  /** Escribe en el registro referenciado los datos marcados con syncToRefField. */
+  const syncToReferences = async (values: Record<string, FieldValue>) => {
+    for (const field of config.fields) {
+      const spec = field.syncToRefField;
+      if (!spec) continue;
+      if (spec.onlyWhen && !spec.onlyWhen({ id: '', ...values })) continue;
+      const targetId = values[spec.field];
+      const value = values[field.key];
+      const sourceField = config.fields.find((f) => f.key === spec.field);
+      if (typeof targetId !== 'string' || targetId === '' || !sourceField?.refCollection) continue;
+      if (value === null || value === undefined || value === '') continue;
+      await setDocument(sourceField.refCollection, targetId, { [spec.targetField]: value }, true);
+    }
+  };
+
   const handleSubmit = async (values: Record<string, FieldValue>, keepOpen: boolean) => {
     setBusy(true);
     setFormError(null);
@@ -394,6 +410,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       } else {
         await createDocument(config.collection, payload);
       }
+      await syncToReferences(payload);
       if (keepOpen && !editing) {
         setResetSignal((n) => n + 1);
       } else {

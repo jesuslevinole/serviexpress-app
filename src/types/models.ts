@@ -96,6 +96,17 @@ export interface FieldConfig {
   visibleWhen?: { field: string; value: FieldValue };
   /** Al capturar un registro nuevo, la fecha arranca en el día de hoy. */
   defaultToday?: boolean;
+  /**
+   * Copia un dato del registro referenciado por otro campo del formulario
+   * (p. ej. el Next mant del camión elegido).
+   */
+  copyFromRefField?: { field: string; sourceField: string };
+  /**
+   * Al guardar, escribe este valor en el registro referenciado por otro campo
+   * (p. ej. el millaje capturado actualiza el camión). Evita tener que
+   * recalcularlo leyendo todos los mantenimientos.
+   */
+  syncToRefField?: { field: string; targetField: string; onlyWhen?: (row: EntityData) => boolean };
   /** Valor inicial tomado de las asignaciones del usuario (primera de su alcance). */
   defaultFromUserScope?: 'entity' | 'station';
   /**
