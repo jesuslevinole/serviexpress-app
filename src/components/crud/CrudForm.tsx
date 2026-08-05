@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import { SaveSummary } from './SaveSummary';
-import { scalar } from './displayValue';
+import { displayCell, scalar } from './displayValue';
 import type { SelectOption } from '../ui/SearchableSelect';
 import type { RefMaps } from '../../hooks/useRefMaps';
 import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
@@ -200,7 +200,10 @@ export function CrudForm({
   );
 
   const missing = useMemo(
-    () => visibleFields.filter((f) => f.required && isEmpty(values[f.key])).map((f) => f.key),
+    () =>
+      visibleFields
+        .filter((f) => f.required && !f.readOnly && isEmpty(values[f.key]))
+        .map((f) => f.key),
     [visibleFields, values],
   );
 
@@ -241,7 +244,13 @@ export function CrudForm({
   const handleSubmit = (keepOpen: boolean) => {
     setTouchedSubmit(true);
     if (missing.length > 0) return;
-    onSubmit(values, keepOpen);
+    // Los campos de solo lectura los mantiene el sistema: no se reenvían para
+    // no pisar un valor que pudo cambiar mientras el formulario estaba abierto.
+    const payload = { ...values };
+    fields.forEach((field) => {
+      if (field.readOnly) delete payload[field.key];
+    });
+    onSubmit(payload, keepOpen);
   };
 
   const refLabel = (collection: string, id: string): string =>
@@ -295,6 +304,21 @@ export function CrudForm({
       <div className="crudform-layout">
         <div className="crudform-grid">
           {visibleFields.map((field) => {
+            // Dato que mantiene el sistema (p. ej. el millaje actual del
+            // camión): se muestra, pero no se captura.
+            if (field.readOnly) {
+              return (
+                <div key={field.key} className="crudform-locked">
+                  <span className="crudform-locked-label">{field.label}</span>
+                  <span
+                    className="crudform-locked-value"
+                    title="Kept up to date by the system"
+                  >
+                    {displayCell(field, { id: '', ...values }, refLabel)}
+                  </span>
+                </div>
+              );
+            }
             if (field.defaultFromUserScope !== undefined && !contextEditable) {
               const options = refOptionsByField[field.key] ?? [];
               const current = values[field.key];

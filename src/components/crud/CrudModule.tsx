@@ -36,7 +36,7 @@ import { RelatedList, RelatedRecordsModal } from './RelatedRecordsModal';
 import { DetailSummary } from './DetailSummary';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { useScopeFilter } from '../../hooks/useScope';
-import { COLLECTIONS } from '../../config/collections';
+import { COLLECTIONS, REF_LABEL_DEPENDENCIES, buildRefLabel } from '../../config/collections';
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
 import { displayCell, displayValue, effectiveValue, scalar } from './displayValue';
@@ -544,6 +544,52 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     });
     const parentById = new Map(parents.map((parent) => [parent.id, parent]));
 
+    // Los catálogos de las columnas del renglón (camiones, rutas, scanners)
+    // NO están en los refMaps del encabezado, que solo cubren las referencias
+    // del maestro. Se leen TODOS aquí, al exportar: así el archivo no depende
+    // de qué listeners alcanzó a abrir el módulo ni de si ya terminaron de
+    // cargar, y ninguna columna de referencia sale como "—".
+    const neededCollections = new Set<string>();
+    spec.columns.forEach((column) => {
+      if (column.field.type === 'ref' && column.field.refCollection) {
+        neededCollections.add(column.field.refCollection);
+      }
+    });
+    // Colecciones auxiliares de las etiquetas compuestas (driver -> team).
+    [...neededCollections].forEach((name) => {
+      (REF_LABEL_DEPENDENCIES[name] ?? []).forEach((dep) => neededCollections.add(dep));
+    });
+
+    const catalogsById: Record<string, EntityData[]> = {};
+    await Promise.all(
+      [...neededCollections].map(async (collectionName) => {
+        catalogsById[collectionName] = await fetchCollection(collectionName);
+      }),
+    );
+
+    /** resolve(colección, id) -> nombre, para las etiquetas compuestas. */
+    const resolveName = (collectionName: string, id: string): string | undefined => {
+      const row = catalogsById[collectionName]?.find((r) => r.id === id);
+      const name = row?.name;
+      return typeof name === 'string' && name !== '' ? name : undefined;
+    };
+
+    const exportLabels: Record<string, Map<string, string>> = {};
+    Object.entries(catalogsById).forEach(([collectionName, catalogRows]) => {
+      const labels = new Map<string, string>();
+      catalogRows.forEach((row) =>
+        labels.set(row.id, buildRefLabel(collectionName, row, resolveName)),
+      );
+      exportLabels[collectionName] = labels;
+    });
+
+    /** Nombre de una referencia: el catálogo recién leído y, si falta, el del módulo. */
+    const exportLabel = (collectionName: string, id: string): string => {
+      const fresh = exportLabels[collectionName]?.get(id);
+      if (fresh !== undefined && fresh !== '—') return fresh;
+      return refMaps[collectionName]?.labels.get(id) ?? '—';
+    };
+
     const allRowsOfCollection = await fetchCollection(spec.collection);
     const linked = allRowsOfCollection
       .filter((row) => {
@@ -566,9 +612,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         values: linked.map((row) => {
           const source =
             column.from === 'parent' ? parentById.get(String(row[spec.parentKey] ?? '')) : row;
-          return source ? displayCell(column.field, source, refLabel) : '';
+          return source ? displayCell(column.field, source, exportLabel) : '';
         }),
       })),
+      {
+        generatedBy: profile?.name ?? undefined,
+        alertWhenNotPositive: ['Diff Mileage', 'Difference mileage'],
+      },
     );
   };
 

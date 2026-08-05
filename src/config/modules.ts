@@ -105,9 +105,12 @@ export const trucksModule: ModuleConfig = {
     { key: 'nextMant', label: 'Next maintenance', type: 'number' },
     {
       key: 'mileage',
-      label: 'Actual mileage',
+      label: 'Actual Mileage',
       type: 'number',
-      form: false,
+      // Lo mantiene el sistema: cada mantenimiento preventivo (y cada renglón
+      // de BC Report) escribe aquí el millaje capturado. Se muestra bloqueado
+      // en el formulario del camión para poder consultarlo sin editarlo.
+      readOnly: true,
       importable: true,
     },
     { key: 'vinNumber', label: 'VIN number', type: 'text', table: false },

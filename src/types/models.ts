@@ -107,6 +107,14 @@ export interface FieldConfig {
    * recalcularlo leyendo todos los mantenimientos.
    */
   syncToRefField?: { field: string; targetField: string; onlyWhen?: (row: EntityData) => boolean };
+  /**
+   * Campo visible en el formulario pero NO capturable: su valor lo mantiene
+   * el sistema (p. ej. el millaje actual del camión, que escribe cada
+   * mantenimiento preventivo). Se muestra bloqueado y no se reenvía al
+   * guardar, para no pisar un valor que pudo cambiar mientras el
+   * formulario estaba abierto.
+   */
+  readOnly?: boolean;
   /** Valor inicial tomado de las asignaciones del usuario (primera de su alcance). */
   defaultFromUserScope?: 'entity' | 'station';
   /**
