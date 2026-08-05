@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
-import { Pencil } from 'lucide-react';
+import { ExternalLink, Pencil } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { displayCell } from './displayValue';
+import { displayCell, effectiveValue } from './displayValue';
+import { MODULE_BY_COLLECTION } from '../../config/modules';
+import { useAuth } from '../../hooks/useAuth';
 import type { EntityData, FieldConfig } from '../../types/models';
 import './RecordDetailModal.css';
 
@@ -19,6 +22,13 @@ interface RecordDetailModalProps {
 }
 
 const STATUS_KEYS = new Set(['status', 'dlStatus', 'dotStatus', 'qcStatus']);
+
+/** Los datos destacados son millajes: se leen mejor con separador de miles. */
+function highlightText(field: FieldConfig, record: EntityData, fallback: string): string {
+  const value = effectiveValue(field, record);
+  if (typeof value !== 'number') return fallback;
+  return value.toLocaleString('en-US');
+}
 
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -47,6 +57,27 @@ export function RecordDetailModal({
   onClose,
 }: RecordDetailModalProps) {
   const createdAt = typeof record.createdAt === 'string' ? record.createdAt : '';
+  const navigate = useNavigate();
+  const { can } = useAuth();
+
+  /**
+   * Ruta al detalle del registro referenciado (p. ej. del camión de un
+   * mantenimiento). Null cuando no hay módulo para esa colección o cuando el
+   * rol no puede verlo: en ese caso el dato se muestra como texto plano.
+   */
+  const linkFor = (field: FieldConfig): string | null => {
+    if (field.type !== 'ref' || !field.refCollection) return null;
+    const raw = record[field.key];
+    if (typeof raw !== 'string' || raw === '') return null;
+    const moduleId = MODULE_BY_COLLECTION[field.refCollection];
+    if (!moduleId || !can(moduleId, 'ver')) return null;
+    return `/${moduleId}?record=${encodeURIComponent(raw)}`;
+  };
+
+  const openLink = (to: string) => {
+    onClose();
+    navigate(to);
+  };
 
   return (
     <Modal
@@ -75,14 +106,45 @@ export function RecordDetailModal({
         {fields.map((field) => {
           const text = displayCell(field, record, refLabels);
           const isStatus = (STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—';
+          const isHighlight = field.highlight !== undefined && text !== '—';
+          const value = effectiveValue(field, record);
+          const isAlert =
+            isHighlight &&
+            field.highlight === 'balance' &&
+            typeof value === 'number' &&
+            value <= 0;
+          const to = text === '—' ? null : linkFor(field);
           return (
             <div
               key={field.key}
-              className={`rdetail-item ${field.type === 'textarea' ? 'is-full' : ''}`}
+              className={[
+                'rdetail-item',
+                field.type === 'textarea' ? 'is-full' : '',
+                isHighlight ? 'is-highlight' : '',
+                isAlert ? 'is-alert' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               <span className="rdetail-label">{field.label}</span>
               <span className={`rdetail-value ${text === '—' ? 'is-empty' : ''}`}>
-                {isStatus ? <Badge value={text} tone={field.badgeTones?.[text]} /> : text}
+                {isStatus ? (
+                  <Badge value={text} tone={field.badgeTones?.[text]} />
+                ) : to ? (
+                  <button
+                    type="button"
+                    className="rdetail-link"
+                    title={`Open the detail of this ${field.label.toLowerCase()}`}
+                    onClick={() => openLink(to)}
+                  >
+                    {text}
+                    <ExternalLink size={13} />
+                  </button>
+                ) : isHighlight ? (
+                  highlightText(field, record, text)
+                ) : (
+                  text
+                )}
               </span>
             </div>
           );

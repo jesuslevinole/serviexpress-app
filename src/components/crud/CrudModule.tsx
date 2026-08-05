@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode, useRef } from 'react';
+import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   FileDown,
   FileSpreadsheet,
@@ -181,6 +182,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+
+  /**
+   * Enlace profundo `?record=<id>`: al llegar desde el detalle de otro módulo
+   * (p. ej. el camión de un mantenimiento) se abre ese registro en el visor y
+   * se limpia el parámetro para no reabrirlo al navegar hacia atrás.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRecordId = searchParams.get('record');
+
+  useEffect(() => {
+    if (!requestedRecordId) return;
+    const target = rows.find((row) => row.id === requestedRecordId);
+    // Todavía cargando: se vuelve a intentar cuando lleguen las filas.
+    if (!target) return;
+    setViewing(target);
+    const next = new URLSearchParams(searchParams);
+    next.delete('record');
+    setSearchParams(next, { replace: true });
+  }, [requestedRecordId, rows, searchParams, setSearchParams]);
 
   /**
    * Renglones del detalle: se leen SOLO cuando hay un registro abierto en el

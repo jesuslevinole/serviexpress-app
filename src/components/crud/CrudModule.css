@@ -32,6 +32,13 @@
   font-size: 13.5px;
   width: 100%;
   background: transparent;
+  /* El contenedor va en --text-muted por el icono; lo que escribe el
+     usuario debe ir en el color de texto normal para que se lea. */
+  color: var(--text);
+}
+
+.crud-search input::placeholder {
+  color: var(--text-muted);
 }
 
 .crud-search input:focus {

@@ -102,11 +102,12 @@ export const trucksModule: ModuleConfig = {
     { key: 'type', label: 'Unit type', type: 'enum', enumValues: ['TRUCK', 'SCANNER'], required: true },
     { key: 'vYear', label: 'V/Year', type: 'number', table: false },
     { key: 'lPlate', label: 'License plate', type: 'text', required: true },
-    { key: 'nextMant', label: 'Next maintenance', type: 'number' },
+    { key: 'nextMant', label: 'Next maintenance', type: 'number', highlight: 'value' },
     {
       key: 'mileage',
       label: 'Actual Mileage',
       type: 'number',
+      highlight: 'value',
       // Lo mantiene el sistema: cada mantenimiento preventivo (y cada renglón
       // de BC Report) escribe aquí el millaje capturado. Se muestra bloqueado
       // en el formulario del camión para poder consultarlo sin editarlo.
@@ -434,12 +435,14 @@ const bcDetailFields: FieldConfig[] = [
     key: 'mileage',
     label: 'Actual Mileage',
     type: 'number',
+    highlight: 'value',
     syncToRefField: { field: 'idTruck', targetField: 'mileage' },
   },
   {
     key: 'nextMant',
     label: 'Next mant (from truck)',
     type: 'number',
+    highlight: 'value',
     copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
   },
   {
@@ -447,6 +450,7 @@ const bcDetailFields: FieldConfig[] = [
     label: 'Difference mileage',
     type: 'number',
     form: false,
+    highlight: 'balance',
     compute: (row) => {
       const next = typeof row.nextMant === 'number' ? row.nextMant : null;
       const mileage = typeof row.mileage === 'number' ? row.mileage : null;
@@ -835,6 +839,7 @@ export const maintenanceModule: ModuleConfig = {
       importAliases: ['Mileage'],
       type: 'number',
       table: false,
+      highlight: 'value',
       visibleWhen: whenPreventive,
       // El millaje capturado pasa a ser el millaje actual del camión.
       syncToRefField: {
@@ -849,6 +854,7 @@ export const maintenanceModule: ModuleConfig = {
       importAliases: ['NEXT mant'],
       type: 'number',
       table: false,
+      highlight: 'value',
       visibleWhen: whenPreventive,
       // Se toma del camión elegido; el operador captura el millaje actual.
       copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
@@ -921,6 +927,7 @@ export const maintenanceModule: ModuleConfig = {
       type: 'number',
       form: false,
       badge: false,
+      highlight: 'balance',
       compute: (row) => {
         if (row.type === 'Preventive') {
           const next = typeof row.nextMant === 'number' ? row.nextMant : null;
@@ -1185,6 +1192,15 @@ export const CRUD_MODULES: ModuleConfig[] = [
   rentalsModule,
   requirementsModule,
 ];
+
+/**
+ * Módulo (y por lo tanto ruta) que administra cada colección. Permite abrir
+ * el detalle de un registro referenciado desde otro módulo, p. ej. el camión
+ * de un mantenimiento.
+ */
+export const MODULE_BY_COLLECTION: Record<string, string> = Object.fromEntries(
+  CRUD_MODULES.map((module) => [module.collection, module.id]),
+);
 
 /**
  * Módulos que participan en el sistema de permisos

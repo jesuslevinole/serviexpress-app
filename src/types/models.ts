@@ -108,6 +108,13 @@ export interface FieldConfig {
    */
   syncToRefField?: { field: string; targetField: string; onlyWhen?: (row: EntityData) => boolean };
   /**
+   * Destaca el dato en el visor de detalle (número grande y recuadro con
+   * acento). 'value' es un dato clave (el millaje actual); 'balance' es un
+   * saldo que además se pinta en rojo cuando llega a cero o menos (la
+   * diferencia de millaje de un camión pasado de mantenimiento).
+   */
+  highlight?: 'value' | 'balance';
+  /**
    * Campo visible en el formulario pero NO capturable: su valor lo mantiene
    * el sistema (p. ej. el millaje actual del camión, que escribe cada
    * mantenimiento preventivo). Se muestra bloqueado y no se reenvía al

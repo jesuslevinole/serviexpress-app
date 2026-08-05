@@ -38,6 +38,61 @@
   font-weight: 400;
 }
 
+/* Dato destacado (millajes): recuadro con acento y número grande. */
+.rdetail-item.is-highlight {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+}
+
+.rdetail-item.is-highlight .rdetail-label {
+  color: var(--primary-dark);
+}
+
+.rdetail-item.is-highlight .rdetail-value {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--primary-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Saldo agotado: el camión ya pasó su próximo mantenimiento. */
+.rdetail-item.is-highlight.is-alert {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+
+.rdetail-item.is-highlight.is-alert .rdetail-label,
+.rdetail-item.is-highlight.is-alert .rdetail-value {
+  color: var(--danger);
+}
+
+/* Referencia navegable: abre el detalle del registro relacionado. */
+.rdetail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--primary);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.rdetail-link:hover {
+  color: var(--primary-dark);
+}
+
+.rdetail-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .rdetail-meta {
   margin-right: auto;
   font-size: 12px;
