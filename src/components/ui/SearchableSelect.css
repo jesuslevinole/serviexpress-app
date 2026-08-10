@@ -82,11 +82,20 @@
   border-bottom: 1px solid var(--border);
   padding: 10px 12px;
   font-size: 13px;
+  /* Sin color propio heredaba el gris tenue del contenedor y lo escrito
+     apenas se leía: el texto va en el color normal sobre la superficie. */
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sselect-search::placeholder {
+  color: var(--text-muted);
 }
 
 .sselect-search:focus {
   outline: none;
   background: var(--primary-bg);
+  color: var(--text);
 }
 
 .sselect-menu ul {

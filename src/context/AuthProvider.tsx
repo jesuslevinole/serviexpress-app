@@ -195,6 +195,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * Igual que `can`, pero si el rol no define la acción hereda la de
+   * `fallback`. Los roles guardados antes de que existieran las acciones de
+   * barra (plantilla, importar, exportar, filtrar) no las traen: sin esta
+   * herencia perderían los botones al publicar.
+   */
+  const canOr = useCallback(
+    (moduleId: string, action: PermissionAction, fallback: PermissionAction): boolean => {
+      const effective = viewAs ? viewRole : role;
+      if (!effective) return false;
+      const perms = effective.permissions[moduleId];
+      if (!perms) return false;
+      if (perms[action] !== undefined) return perms[action] === true;
+      return perms[fallback] === true;
+    },
+    [role, viewAs, viewRole],
+  );
+
+  /**
    * Es administrador si su rol es el de sistema o si se llama "admin"
    * (Administrador, Administrator...). Así funciona con roles creados a mano.
    */
@@ -230,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       can,
+      canOr,
       isAdmin,
       viewAs,
       startViewAs,
@@ -244,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       can,
+      canOr,
       isAdmin,
       viewAs,
       startViewAs,

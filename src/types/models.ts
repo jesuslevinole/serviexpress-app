@@ -10,8 +10,19 @@ export interface EntityData {
   [key: string]: FieldValue | string[];
 }
 
-/** Acciones disponibles por módulo. */
-export type PermissionAction = 'ver' | 'crear' | 'editar' | 'eliminar';
+/**
+ * Acciones disponibles por módulo. Las cuatro primeras son sobre los registros;
+ * las cuatro últimas gobiernan los botones de la barra superior de la tabla.
+ */
+export type PermissionAction =
+  | 'ver'
+  | 'crear'
+  | 'editar'
+  | 'eliminar'
+  | 'plantilla'
+  | 'importar'
+  | 'exportar'
+  | 'filtrar';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';

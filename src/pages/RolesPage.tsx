@@ -34,7 +34,28 @@ import type {
 } from '../types/models';
 import './RolesPage.css';
 
-const ACTIONS: PermissionAction[] = ['ver', 'crear', 'editar', 'eliminar'];
+const ACTIONS: PermissionAction[] = [
+  'ver',
+  'crear',
+  'editar',
+  'eliminar',
+  'plantilla',
+  'importar',
+  'exportar',
+  'filtrar',
+];
+
+/** Encabezado legible de cada acción en la matriz. */
+const ACTION_LABEL: Record<PermissionAction, string> = {
+  ver: 'View',
+  crear: 'Create',
+  editar: 'Edit',
+  eliminar: 'Delete',
+  plantilla: 'Template',
+  importar: 'Import CSV',
+  exportar: 'Export Excel',
+  filtrar: 'Filters',
+};
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
 const VIEW_SCOPES: { value: ViewScope; label: string; title: string }[] = [
@@ -232,9 +253,10 @@ export function RolesPage() {
     setMatrix((prev) => {
       const current = prev[moduleId] ?? {};
       const allOn = ACTIONS.every((a) => current[a] === true);
-      const next: ModulePermissions = allOn
-        ? { ver: false, crear: false, editar: false, eliminar: false }
-        : { ver: true, crear: true, editar: true, eliminar: true };
+      const next: ModulePermissions = ACTIONS.reduce<ModulePermissions>(
+        (acc, action) => ({ ...acc, [action]: !allOn }),
+        {},
+      );
       return { ...prev, [moduleId]: next };
     });
   };
@@ -475,7 +497,7 @@ export function RolesPage() {
               <tr>
                 <th>Module</th>
                 {ACTIONS.map((action) => (
-                  <th key={action}>{action}</th>
+                  <th key={action}>{ACTION_LABEL[action]}</th>
                 ))}
                 <th>All</th>
                   <th>Visible records</th>
@@ -493,7 +515,7 @@ export function RolesPage() {
                           type="checkbox"
                           checked={perms[action] === true}
                           onChange={() => toggle(module.id, action)}
-                          aria-label={`${module.title}: ${action}`}
+                          aria-label={`${module.title}: ${ACTION_LABEL[action]}`}
                         />
                       </td>
                     ))}

@@ -92,7 +92,7 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  * y exportación a Excel. TODOS los módulos del app usan este componente.
  */
 export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
-  const { can, firebaseUser, isAdmin, profile } = useAuth();
+  const { can, canOr, firebaseUser, isAdmin, profile } = useAuth();
   const { editMode, applyToModule } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
   const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
@@ -232,6 +232,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canCreate = can(config.id, 'crear');
   const canEdit = can(config.id, 'editar');
   const canDelete = can(config.id, 'eliminar');
+  /**
+   * Botones de la barra superior. Cada uno tiene su propio permiso; los roles
+   * que aún no lo definen heredan el permiso equivalente sobre los registros,
+   * de modo que nadie pierde un botón que hoy usa.
+   */
+  const canTemplate = canOr(config.id, 'plantilla', 'crear');
+  const canImport = canOr(config.id, 'importar', 'crear');
+  const canExport = canOr(config.id, 'exportar', 'ver');
+  const canFilter = canOr(config.id, 'filtrar', 'ver');
 
   const refLabel = (collection: string, id: string): string =>
     refMaps[collection]?.labels.get(id) ?? '—';
@@ -703,16 +712,18 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         </div>
         <div className="crud-toolbar-actions">
           {headerExtra}
-          <button
-            type="button"
-            className="btn btn-outline"
-            title="Download the Excel template to fill (import is done with CSV)"
-            onClick={() => void handleTemplate()}
-          >
-            <FileDown size={16} />
-            <span className="crud-btn-text">Template</span>
-          </button>
-          {canCreate ? (
+          {canTemplate ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Download the Excel template to fill (import is done with CSV)"
+              onClick={() => void handleTemplate()}
+            >
+              <FileDown size={16} />
+              <span className="crud-btn-text">Template</span>
+            </button>
+          ) : null}
+          {canImport ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -734,17 +745,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Edit table</span>
             </button>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => setFilterOpen(true)}
-          >
-            <Filter size={16} />
-            <span className="crud-btn-text">Filters</span>
-            {Object.keys(filters).length > 0 ? (
-              <span className="crud-filter-count">{Object.keys(filters).length}</span>
-            ) : null}
-          </button>
+          {canFilter ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Filter size={16} />
+              <span className="crud-btn-text">Filters</span>
+              {Object.keys(filters).length > 0 ? (
+                <span className="crud-filter-count">{Object.keys(filters).length}</span>
+              ) : null}
+            </button>
+          ) : null}
           {config.bulkDetailImport && config.detail && canCreate ? (
             <button
               type="button"
@@ -759,10 +772,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">{config.bulkDetailImport.buttonLabel}</span>
             </button>
           ) : null}
-          <button type="button" className="btn btn-outline" onClick={() => setExportOpen(true)}>
-            <FileSpreadsheet size={16} />
-            <span className="crud-btn-text">Export Excel</span>
-          </button>
+          {canExport ? (
+            <button type="button" className="btn btn-outline" onClick={() => setExportOpen(true)}>
+              <FileSpreadsheet size={16} />
+              <span className="crud-btn-text">Export Excel</span>
+            </button>
+          ) : null}
           {canCreate ? (
             <button type="button" className="btn btn-primary" onClick={openCreate}>
               <Plus size={16} />

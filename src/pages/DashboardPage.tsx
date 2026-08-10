@@ -3,6 +3,8 @@ import {
   ClipboardCheck,
   ClipboardList,
   Download,
+  Filter,
+  X,
   KeySquare,
   Route,
   ScanLine,
@@ -167,6 +169,8 @@ export function DashboardPage() {
   const [selected, setSelected] = useState<string[]>(exportableModules.map((m) => m.id));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Cajón lateral con los filtros del reporte. */
+  const [reportsOpen, setReportsOpen] = useState(false);
 
   const toggleModule = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
@@ -205,7 +209,20 @@ export function DashboardPage() {
           <span className="dash-head-eyebrow">Fleet overview</span>
           <h1>ServiExpress control panel</h1>
         </div>
-        <span className="dash-head-date">Updated {generatedAt}</span>
+        <div className="dash-head-actions">
+          <span className="dash-head-date">Updated {generatedAt}</span>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setReportsOpen(true)}
+          >
+            <Filter size={16} />
+            Reports
+            {selected.length > 0 ? (
+              <span className="dash-head-count">{selected.length}</span>
+            ) : null}
+          </button>
+        </div>
       </header>
 
       {restricted || countError ? (
@@ -318,11 +335,33 @@ export function DashboardPage() {
 
       </div>
 
-      <section className="dash-panel dash-reports">
-          <header className="dash-panel-head">
-            <h2>Reports</h2>
-            <span>One Excel file, one sheet per module</span>
-          </header>
+      {reportsOpen ? (
+        <button
+          type="button"
+          className="dash-drawer-backdrop"
+          aria-label="Close reports"
+          onClick={() => setReportsOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={`dash-drawer ${reportsOpen ? 'is-open' : ''}`}
+        aria-hidden={!reportsOpen}
+      >
+        <header className="dash-drawer-head">
+          <strong>Reports</strong>
+          <button
+            type="button"
+            className="dash-drawer-close"
+            aria-label="Close"
+            onClick={() => setReportsOpen(false)}
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="dash-drawer-body">
+          <p className="dash-drawer-hint">One Excel file, one sheet per module.</p>
+
           <div className="dash-report-dates">
             <label>
               From
@@ -332,6 +371,26 @@ export function DashboardPage() {
               To
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
+          </div>
+          <p className="dash-report-hint">
+            Empty dates export everything. The range uses each module&apos;s own date.
+          </p>
+
+          <div className="dash-drawer-section">
+            <span className="dash-drawer-label">Modules</span>
+            <button
+              type="button"
+              className="dash-drawer-toggle"
+              onClick={() =>
+                setSelected(
+                  selected.length === exportableModules.length
+                    ? []
+                    : exportableModules.map((m) => m.id),
+                )
+              }
+            >
+              {selected.length === exportableModules.length ? 'Clear all' : 'Select all'}
+            </button>
           </div>
           <div className="dash-report-modules">
             {exportableModules.map((module) => (
@@ -345,22 +404,21 @@ export function DashboardPage() {
               </label>
             ))}
           </div>
-          <div className="dash-report-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void handleGenerate()}
-              disabled={busy}
-            >
-              <Download size={16} />
-              {busy ? 'Generating…' : 'Generate Excel'}
-            </button>
-            <span className="dash-report-hint">
-              Empty dates export everything. The range uses each module&apos;s own date.
-            </span>
-          </div>
+
           {notice ? <p className="dash-report-notice">{notice}</p> : null}
-        </section>
+        </div>
+        <footer className="dash-drawer-foot">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void handleGenerate()}
+            disabled={busy}
+          >
+            <Download size={16} />
+            {busy ? 'Generating…' : 'Generate Excel'}
+          </button>
+        </footer>
+      </aside>
     </div>
   );
 }
