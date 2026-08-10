@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from './SearchableSelect';
 import type { FieldConfig, FieldValue } from '../../types/models';
 import './FormField.css';
@@ -7,6 +8,11 @@ interface FormFieldProps {
   value: FieldValue;
   invalid: boolean;
   refOptions: SelectOption[];
+  /**
+   * Si se define, el campo de referencia muestra un botón "+" para dar de alta
+   * el registro del catálogo sin salir del formulario.
+   */
+  onQuickAdd?: () => void;
   onChange: (key: string, value: FieldValue) => void;
 }
 
@@ -14,7 +20,14 @@ interface FormFieldProps {
  * Renderiza el control correcto según el tipo del campo.
  * Un solo componente para todos los formularios del app.
  */
-export function FormField({ field, value, invalid, refOptions, onChange }: FormFieldProps) {
+export function FormField({
+  field,
+  value,
+  invalid,
+  refOptions,
+  onQuickAdd,
+  onChange,
+}: FormFieldProps) {
   const inputClass = `field-input ${invalid ? 'field-invalid' : ''}`;
 
   const renderControl = () => {
@@ -80,6 +93,27 @@ export function FormField({ field, value, invalid, refOptions, onChange }: FormF
           />
         );
       case 'ref':
+        if (onQuickAdd) {
+          return (
+            <div className="field-with-add">
+              <SearchableSelect
+                value={typeof value === 'string' ? value : ''}
+                invalid={invalid}
+                options={refOptions}
+                onChange={(v) => onChange(field.key, v)}
+              />
+              <button
+                type="button"
+                className="field-add"
+                title={`Add a new ${field.label.toLowerCase()} without leaving this form`}
+                aria-label={`Add ${field.label}`}
+                onClick={onQuickAdd}
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          );
+        }
         return (
           <SearchableSelect
             value={typeof value === 'string' ? value : ''}

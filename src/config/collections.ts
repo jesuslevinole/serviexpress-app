@@ -25,6 +25,8 @@ export const COLLECTIONS = {
   rentals: 'rentals',
   maintenance: 'maintenance',
   accidents: 'accidents',
+  accidentPhotos: 'accidentPhotos',
+  incidentTypes: 'incidentTypes',
   truckHistory: 'truck_history',
   requirements: 'requirements',
   uniforms: 'uniforms',

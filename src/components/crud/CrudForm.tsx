@@ -2,6 +2,9 @@ import { Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
+import { QuickAddRefModal } from '../ui/QuickAddRefModal';
+import { catalogModules } from '../../config/modules';
+import { useAuth } from '../../hooks/useAuth';
 import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
 import type { SelectOption } from '../ui/SearchableSelect';
@@ -241,6 +244,24 @@ export function CrudForm({
     });
   };
 
+  /**
+   * Alta rápida: un campo de referencia muestra "+" cuando apunta a un
+   * catálogo y el rol puede crear en él. Al guardar, el nuevo registro llega
+   * solo a las opciones (los catálogos van suscritos en vivo) y se selecciona.
+   */
+  const { can, isAdmin } = useAuth();
+  const [quickAdd, setQuickAdd] = useState<FieldConfig | null>(null);
+
+  const catalogFor = (field: FieldConfig) => {
+    if (field.type !== 'ref' || !field.refCollection) return null;
+    const catalog = catalogModules.find((module) => module.collection === field.refCollection);
+    if (!catalog) return null;
+    // Todos los catálogos se gobiernan con el permiso 'catalogs': es el id con
+    // el que CatalogosPage monta el motor, y el único que existe en la matriz.
+    if (!isAdmin && !can('catalogs', 'crear')) return null;
+    return catalog;
+  };
+
   const handleSubmit = (keepOpen: boolean) => {
     setTouchedSubmit(true);
     if (missing.length > 0) return;
@@ -341,6 +362,7 @@ export function CrudForm({
               value={values[field.key] ?? null}
               invalid={touchedSubmit && missing.includes(field.key)}
               refOptions={refOptionsByField[field.key] ?? []}
+              onQuickAdd={catalogFor(field) ? () => setQuickAdd(field) : undefined}
               onChange={handleChange}
             />
             );
@@ -364,6 +386,25 @@ export function CrudForm({
       {renderBanner ? <div className="crudform-banner">{renderBanner(values)}</div> : null}
 
       {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
+
+      {quickAdd
+        ? (() => {
+            const catalog = catalogFor(quickAdd);
+            if (!catalog) return null;
+            return (
+              <QuickAddRefModal
+                collection={catalog.collection}
+                title={catalog.title}
+                fields={catalog.fields}
+                onCreated={(id) => {
+                  handleChange(quickAdd.key, id);
+                  setQuickAdd(null);
+                }}
+                onClose={() => setQuickAdd(null)}
+              />
+            );
+          })()
+        : null}
     </Modal>
   );
 }

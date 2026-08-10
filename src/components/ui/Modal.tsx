@@ -9,9 +9,19 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  /** 'top' lo dibuja por encima de otro modal abierto (alta rápida de catálogo). */
+  layer?: 'base' | 'top';
 }
 
-export function Modal({ open, title, onClose, children, footer, size = 'md' }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+  size = 'md',
+  layer = 'base',
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -28,7 +38,10 @@ export function Modal({ open, title, onClose, children, footer, size = 'md' }: M
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
+    <div
+      className={`modal-overlay ${layer === 'top' ? 'is-top' : ''}`}
+      onMouseDown={onClose}
+    >
       <div
         className={`modal-card modal-${size}`}
         role="dialog"

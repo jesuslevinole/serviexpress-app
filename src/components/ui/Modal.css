@@ -13,6 +13,11 @@ body.modal-open {
   z-index: 100;
 }
 
+/* Diálogo anidado (alta rápida de catálogo) sobre el formulario abierto. */
+.modal-overlay.is-top {
+  z-index: 110;
+}
+
 .modal-card {
   background: var(--surface);
   border-radius: var(--radius);

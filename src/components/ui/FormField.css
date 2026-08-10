@@ -65,3 +65,36 @@
   height: 16px;
   accent-color: var(--primary);
 }
+/* Campo de catálogo con alta rápida: el selector manda, el "+" acompaña. */
+.field-with-add {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.field-with-add > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--primary);
+}
+
+.field-add:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+}
+
+.field-add:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}

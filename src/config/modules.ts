@@ -1008,27 +1008,25 @@ export const accidentsModule: ModuleConfig = {
       // Momento de captura en el sistema: equivale al Timestamp del formulario.
       compute: (row) => (typeof row.createdAt === 'string' ? row.createdAt.slice(0, 10) : ''),
     },
-    // 2
+    // 2 — la columna "Company and Station number" del formulario, separada en
+    // sus dos catálogos: así el alcance por entidad/estación vuelve a filtrar.
     {
-      key: 'companyStation',
-      label: '1. Company and Station number',
-      type: 'enum',
+      key: 'idEntity',
+      label: '1. Company',
+      importAliases: ['1. Company and Station number', 'Company', 'Entity'],
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      defaultFromUserScope: 'entity',
       required: true,
-      enumValues: [
-        'RED 706',
-        'RED 770',
-        'RED 771',
-        'RED 776',
-        'RED 782',
-        'RED 786',
-        'RED 795',
-        'SR 706',
-        'SR 770',
-        'SR 771',
-        'SR 772',
-        'SR 776',
-        'PKT 771',
-      ],
+    },
+    {
+      key: 'idStation',
+      label: '1. Station number',
+      importAliases: ['Station', 'Station number'],
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      defaultFromUserScope: 'station',
+      required: true,
     },
     // 3
     {
@@ -1176,7 +1174,14 @@ export const accidentsModule: ModuleConfig = {
       enumValues: YES_NO,
     },
     // ---- 24 y 25: otro tipo de incidente ----
-    { key: 'otherIncidentType', label: 'Incident Type', type: 'text', table: false },
+    {
+      key: 'idIncidentType',
+      label: 'Incident Type',
+      importAliases: ['Incident Type'],
+      type: 'ref',
+      refCollection: COLLECTIONS.incidentTypes,
+      table: false,
+    },
     {
       key: 'reportedToFedexOther',
       label: 'Reported To FedEx? 3',
@@ -1186,13 +1191,6 @@ export const accidentsModule: ModuleConfig = {
     },
     // ---- 26 a 31: relato, evidencia y estado de la unidad ----
     { key: 'description', label: 'Description of What Happened', type: 'textarea', table: false },
-    { key: 'scenePhotos', label: 'Upload Scene Photos', type: 'textarea', table: false },
-    {
-      key: 'additionalPhotos',
-      label: 'Upload Additional Photos Videos (If Available)',
-      type: 'textarea',
-      table: false,
-    },
     {
       key: 'canContinueRoute',
       label: 'Can the vehicle continue the route?',
@@ -1251,9 +1249,28 @@ export const accidentsModule: ModuleConfig = {
       enumValues: YES_NO,
     },
     { key: 'update', label: 'Emiro Update:', type: 'textarea', table: false },
-    // Interno: no sale en el Excel para respetar las 37 columnas del formulario.
+    // Interno: no sale en el Excel del módulo.
     { ...capturedByField, exportable: false },
   ],
+  /** Subformulario: la evidencia fotográfica se carga renglón por renglón. */
+  detail: {
+    collection: COLLECTIONS.accidentPhotos,
+    parentKey: 'idAccident',
+    title: 'Photos and videos',
+    fields: [
+      {
+        key: 'kind',
+        label: 'Type',
+        type: 'enum',
+        required: true,
+        badge: true,
+        badgeTones: { 'Scene photo': 'info', 'Additional photo or video': 'neutral' },
+        enumValues: ['Scene photo', 'Additional photo or video'],
+      },
+      { key: 'url', label: 'Link', type: 'text', required: true },
+      { key: 'note', label: 'Note', type: 'text' },
+    ],
+  },
 };
 
 /** Módulo BD_REQUERIMENTS + BD_UNIFORM — maestro-detalle. */
@@ -1418,6 +1435,7 @@ export const catalogModules: ModuleConfig[] = [
   { id: 'uniformItems', collection: COLLECTIONS.uniformItems, title: 'Uniform items', icon: 'Shirt', fields: uniformItemFields },
   { id: 'sizes', collection: COLLECTIONS.sizes, title: 'Sizes', icon: 'Ruler', fields: sizeFields },
   { id: 'routes', collection: COLLECTIONS.routes, title: 'Routes', icon: 'Signpost', fields: catalogFields },
+  { id: 'incidentTypes', collection: COLLECTIONS.incidentTypes, title: 'Incident types', icon: 'AlertTriangle', fields: catalogFields },
 ];
 
 /** Módulos CRUD principales que aparecen en el menú. */
