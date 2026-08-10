@@ -666,10 +666,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const rangeSuffix = from || to ? ` (${from || 'start'} to ${to || 'today'})` : '';
     await exportToExcel(
       `${config.title}${rangeSuffix}`,
-      config.fields.map((field) => ({
-        header: field.label,
-        values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
-      })),
+      // Los campos marcados exportable:false quedan fuera, para que el archivo
+      // salga con las columnas exactas que espera quien lo recibe.
+      config.fields
+        .filter((field) => field.exportable !== false)
+        .map((field) => ({
+          header: field.label,
+          values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
+        })),
+      { generatedBy: profile?.name ?? undefined },
     );
   };
 

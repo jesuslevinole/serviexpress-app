@@ -50,6 +50,15 @@ export function FormField({ field, value, invalid, refOptions, onChange }: FormF
             onChange={(e) => onChange(field.key, e.target.value)}
           />
         );
+      case 'time':
+        return (
+          <input
+            className={inputClass}
+            type="time"
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          />
+        );
       case 'bool':
         return (
           <label className="field-check">

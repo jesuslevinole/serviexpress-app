@@ -60,6 +60,8 @@ export type FieldType =
   | 'number'
   | 'currency'
   | 'date'
+  /** Hora del día (HH:MM), p. ej. la hora del incidente. */
+  | 'time'
   | 'textarea'
   | 'bool'
   | 'enum'
@@ -77,6 +79,12 @@ export interface FieldConfig {
   label: string;
   type: FieldType;
   required?: boolean;
+  /**
+   * El campo NO sale en el Excel del botón Exportar. Sirve para los datos que
+   * el sistema agrega por su cuenta (quién capturó) cuando el archivo debe
+   * salir con unas columnas exactas y ninguna de más.
+   */
+  exportable?: boolean;
   /** Valores permitidos cuando type === 'enum'. */
   enumValues?: readonly string[];
   /** Colección referenciada cuando type === 'ref' (se muestra el nombre, nunca el id). */

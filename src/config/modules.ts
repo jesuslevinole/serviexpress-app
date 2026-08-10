@@ -980,6 +980,17 @@ export const maintenanceModule: ModuleConfig = {
 
 
 /** Módulo BD_ACCIDENT — Accidentes. Todos los campos también son columnas. */
+/** Sí/No tal como los devuelve el formulario de incidentes. */
+const YES_NO = ['Yes', 'No'] as const;
+
+/** Solo se pregunta cuando el incidente fue una lesión. */
+const whenInjury = { field: 'incidentType', value: 'Injury' } as const;
+
+/**
+ * Módulo BD_ACCIDENTS — replica la estructura del formulario "Incident Report"
+ * de Google Forms: mismas columnas, mismo orden y mismas etiquetas, para que
+ * el Excel que exporta sea idéntico al de las respuestas del formulario.
+ */
 export const accidentsModule: ModuleConfig = {
   id: 'accidents',
   collection: COLLECTIONS.accidents,
@@ -987,31 +998,261 @@ export const accidentsModule: ModuleConfig = {
   icon: 'AlertTriangle',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Accident Date', type: 'date', defaultToday: true, required: true },
+    // 1
+    {
+      key: 'timestamp',
+      label: 'Timestamp',
+      type: 'date',
+      form: false,
+      table: false,
+      // Momento de captura en el sistema: equivale al Timestamp del formulario.
+      compute: (row) => (typeof row.createdAt === 'string' ? row.createdAt.slice(0, 10) : ''),
+    },
+    // 2
+    {
+      key: 'companyStation',
+      label: '1. Company and Station number',
+      type: 'enum',
+      required: true,
+      enumValues: [
+        'RED 706',
+        'RED 770',
+        'RED 771',
+        'RED 776',
+        'RED 782',
+        'RED 786',
+        'RED 795',
+        'SR 706',
+        'SR 770',
+        'SR 771',
+        'SR 772',
+        'SR 776',
+        'PKT 771',
+      ],
+    },
+    // 3
     {
       key: 'idDriver',
-      label: 'Driver',
+      label: '2. Driver Name ',
       type: 'ref',
       refCollection: COLLECTIONS.drivers,
       required: true,
     },
+    // 4
     {
-      key: 'idStation',
-      label: 'Station',
+      key: 'idTruck',
+      label: 'WA/ Truck #',
       type: 'ref',
-      refCollection: COLLECTIONS.stations,
-      defaultFromUserScope: 'station',
+      refCollection: COLLECTIONS.trucks,
+    },
+    // 5 — la clave se llama `date` para que sirva de fecha del módulo
+    {
+      key: 'date',
+      label: '4. Date of incident',
+      type: 'date',
+      defaultToday: true,
+      required: true,
+    },
+    // 6
+    { key: 'incidentTime', label: '5. Time of Incident', type: 'time' },
+    // 7
+    { key: 'address', label: '6. Address of incident ', type: 'text', table: false },
+    // 8
+    {
+      key: 'incidentType',
+      label: '7. Type of Incident',
+      type: 'enum',
+      required: true,
+      badge: true,
+      badgeTones: {
+        Injury: 'negative',
+        'Vehicle Accident': 'warning',
+        'Property Damage (mailbox, Grass, Fence, etc.)': 'info',
+        Other: 'neutral',
+      },
+      enumValues: [
+        'Injury',
+        'Vehicle Accident',
+        'Property Damage (mailbox, Grass, Fence, etc.)',
+        'Other',
+      ],
+    },
+    // ---- 9 a 14: solo cuando el incidente fue una lesión ----
+    {
+      key: 'whoInjured',
+      label: 'Who is injured?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenInjury,
+      enumValues: ['Driver', 'Helper', 'Third Party', 'Other'],
     },
     {
-      key: 'idEntity',
-      label: 'Entity',
-      type: 'ref',
-      refCollection: COLLECTIONS.entities,
-      defaultFromUserScope: 'entity',
+      key: 'bodyPart',
+      label: 'Body Part Affected',
+      type: 'text',
+      table: false,
+      visibleWhen: whenInjury,
     },
-    { key: 'reportToFedex', label: 'Report to Fedex', type: 'bool', defaultValue: false },
-    { key: 'amount', label: 'Amount', type: 'currency' },
-    capturedByField,
+    {
+      key: 'injuryDescription',
+      label: 'Description of injury',
+      type: 'textarea',
+      table: false,
+      visibleWhen: whenInjury,
+    },
+    {
+      key: 'medicalAttention',
+      label: 'Was medical Attention Required?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenInjury,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'emsCalled',
+      label: 'Was EMS Called?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenInjury,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'transportedToHospital',
+      label: 'Was the Injury person Transported to Hospital or Urgent Care? Concentra?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenInjury,
+      enumValues: YES_NO,
+    },
+    // ---- 15 a 21: tercero involucrado y accidente vehicular ----
+    { key: 'thirdPartyName', label: 'Third Party Full Name', type: 'text', table: false },
+    { key: 'thirdPartyPhone', label: 'Phone Number', type: 'text', table: false },
+    { key: 'licensePlate', label: 'License Plate Number', type: 'text', table: false },
+    {
+      key: 'policeOnScene',
+      label: 'Police  on Scene?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'policeReportNumber',
+      label: 'Police Report Number (If Available)',
+      type: 'text',
+      table: false,
+    },
+    {
+      key: 'accidentType',
+      label: 'Type Of Accident',
+      type: 'enum',
+      table: false,
+      visibleWhen: { field: 'incidentType', value: 'Vehicle Accident' },
+      enumValues: ['Backing', 'Overhead', 'Sideswipe', 'Front to front', 'Rear end', 'Other'],
+    },
+    {
+      key: 'reportedToFedexAccident',
+      label: 'Reported To FedEx?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    // ---- 22 y 23: daño a propiedad ----
+    {
+      key: 'propertyDamageType',
+      label: 'Type of Property Damage',
+      type: 'enum',
+      table: false,
+      visibleWhen: {
+        field: 'incidentType',
+        value: 'Property Damage (mailbox, Grass, Fence, etc.)',
+      },
+      enumValues: ['Mailbox', 'Lawn / Grass', 'Fence', 'Residential Home', 'Business', 'Other'],
+    },
+    {
+      key: 'reportedToFedexProperty',
+      label: 'Reported To FedEx? 2',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    // ---- 24 y 25: otro tipo de incidente ----
+    { key: 'otherIncidentType', label: 'Incident Type', type: 'text', table: false },
+    {
+      key: 'reportedToFedexOther',
+      label: 'Reported To FedEx? 3',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    // ---- 26 a 31: relato, evidencia y estado de la unidad ----
+    { key: 'description', label: 'Description of What Happened', type: 'textarea', table: false },
+    { key: 'scenePhotos', label: 'Upload Scene Photos', type: 'textarea', table: false },
+    {
+      key: 'additionalPhotos',
+      label: 'Upload Additional Photos Videos (If Available)',
+      type: 'textarea',
+      table: false,
+    },
+    {
+      key: 'canContinueRoute',
+      label: 'Can the vehicle continue the route?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'towRequired',
+      label: 'Is Tow Service Required?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'preventable',
+      label: 'Preventable or Non-Preventable?',
+      type: 'enum',
+      badge: true,
+      badgeTones: { Preventable: 'negative', 'Non-Preventable': 'positive' },
+      enumValues: ['Preventable', 'Non-Preventable'],
+    },
+    // ---- 32 a 35: cobro al operador ----
+    { key: 'startPaymentDate', label: 'Start Payment Date', type: 'date', table: false },
+    { key: 'driverTotalAmount', label: 'Driver total Amount', type: 'currency' },
+    { key: 'driverPaymentWeekly', label: 'Driver payment Weekly', type: 'currency', table: false },
+    {
+      key: 'lastPaymentDate',
+      label: 'Last payment Date',
+      type: 'date',
+      form: false,
+      table: false,
+      /**
+       * Fecha del último descuento: la de inicio más una semana por cada pago
+       * completo. En la hoja esta columna era una fórmula que devolvía
+       * #DIV/0! cuando faltaba el semanal; aquí simplemente queda vacía.
+       */
+      compute: (row) => {
+        const start = typeof row.startPaymentDate === 'string' ? row.startPaymentDate : '';
+        const total = typeof row.driverTotalAmount === 'number' ? row.driverTotalAmount : 0;
+        const weekly = typeof row.driverPaymentWeekly === 'number' ? row.driverPaymentWeekly : 0;
+        if (start === '' || total <= 0 || weekly <= 0) return '';
+        const weeks = Math.ceil(total / weekly);
+        const last = new Date(`${start}T00:00:00`);
+        if (Number.isNaN(last.getTime())) return '';
+        last.setDate(last.getDate() + weeks * 7);
+        return last.toISOString().slice(0, 10);
+      },
+    },
+    // ---- 36 y 37 ----
+    {
+      key: 'writeUpReceived',
+      label: 'Writte up RECEIVED?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+    },
+    { key: 'update', label: 'Emiro Update:', type: 'textarea', table: false },
+    // Interno: no sale en el Excel para respetar las 37 columnas del formulario.
+    { ...capturedByField, exportable: false },
   ],
 };
 
