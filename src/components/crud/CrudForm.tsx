@@ -93,26 +93,35 @@ export function CrudForm({
 
   /** Campos que sí se capturan (los form:false los llena el sistema),
       más el capturista cuando el rol tiene permiso de editarlo. */
+  /**
+   * Campos que forman el registro guardado. Incluye los que no se muestran en
+   * el alta (hideOnCreate) para que conserven su valor por omisión; excluye
+   * los calculados, que no se persisten.
+   */
+  const valueFields = useMemo(() => fields.filter((f) => f.compute === undefined), [fields]);
+
   const formFields = useMemo(
     () =>
       fields.filter((f) => {
         if (f.compute) return false;
         if (f.form === false) return f.key === editableCapturedByKey;
+        // Se pide solo al editar: en el alta toma su valor por omisión.
+        if (f.hideOnCreate && initial === null) return false;
         return true;
       }),
-    [fields, editableCapturedByKey],
+    [fields, editableCapturedByKey, initial],
   );
 
   useEffect(() => {
     if (open) {
-      const base = buildInitialValues(formFields, initial);
+      const base = buildInitialValues(valueFields, initial);
       // Alta: las fechas de registro arrancan en el día de hoy.
       if (!initial) {
         const today = new Date();
         const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
           today.getDate(),
         ).padStart(2, '0')}`;
-        formFields.forEach((field) => {
+        valueFields.forEach((field) => {
           if (field.defaultToday && (base[field.key] === null || base[field.key] === '')) {
             base[field.key] = iso;
           }
@@ -133,7 +142,7 @@ export function CrudForm({
       setValues(base);
       setTouchedSubmit(false);
     }
-  }, [open, formFields, initial, resetSignal, editableCapturedByKey, currentUid, presetValues]);
+  }, [open, valueFields, initial, resetSignal, editableCapturedByKey, currentUid, presetValues]);
 
   const refOptionsByField = useMemo(() => {
     const map: Record<string, SelectOption[]> = {};
@@ -202,12 +211,26 @@ export function CrudForm({
     [formFields, values],
   );
 
+  /** Un campo se muestra bloqueado si es de solo lectura, o si ya se fijó al crear. */
+  const isLocked = (field: FieldConfig) =>
+    field.readOnly === true ||
+    field.fixedOnCreate === true ||
+    (field.lockedAfterCreate === true && initial !== null);
+
+  /**
+   * Qué NO se reenvía al guardar. Un campo `fixedOnCreate` sí viaja en el alta
+   * (es cuando el sistema lo fija); a partir de ahí queda intacto.
+   */
+  const isStripped = (field: FieldConfig) =>
+    field.readOnly === true || (isLocked(field) && initial !== null);
+
   const missing = useMemo(
     () =>
       visibleFields
-        .filter((f) => f.required && !f.readOnly && isEmpty(values[f.key]))
+        .filter((f) => f.required && !isLocked(f) && isEmpty(values[f.key]))
         .map((f) => f.key),
-    [visibleFields, values],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleFields, values, initial],
   );
 
   const handleChange = (key: string, value: FieldValue) => {
@@ -269,7 +292,7 @@ export function CrudForm({
     // no pisar un valor que pudo cambiar mientras el formulario estaba abierto.
     const payload = { ...values };
     fields.forEach((field) => {
-      if (field.readOnly) delete payload[field.key];
+      if (isStripped(field)) delete payload[field.key];
     });
     onSubmit(payload, keepOpen);
   };
@@ -327,13 +350,19 @@ export function CrudForm({
           {visibleFields.map((field) => {
             // Dato que mantiene el sistema (p. ej. el millaje actual del
             // camión): se muestra, pero no se captura.
-            if (field.readOnly) {
+            if (isLocked(field)) {
               return (
                 <div key={field.key} className="crudform-locked">
                   <span className="crudform-locked-label">{field.label}</span>
                   <span
                     className="crudform-locked-value"
-                    title="Kept up to date by the system"
+                    title={
+                      field.readOnly
+                        ? 'Kept up to date by the system'
+                        : field.fixedOnCreate
+                          ? 'Set automatically by the system and cannot be changed'
+                          : 'Set when the record was created and cannot be changed'
+                    }
                   >
                     {displayCell(field, { id: '', ...values }, refLabel)}
                   </span>

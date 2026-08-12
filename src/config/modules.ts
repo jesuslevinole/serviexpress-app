@@ -1281,7 +1281,16 @@ export const requirementsModule: ModuleConfig = {
   icon: 'ClipboardList',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
+    {
+      key: 'date',
+      label: 'Date',
+      type: 'date',
+      defaultToday: true,
+      required: true,
+      // El día de la solicitud lo fija el sistema y queda como constancia:
+      // nadie lo puede mover después.
+      fixedOnCreate: true,
+    },
     {
       key: 'idRequest',
       label: 'Request type',
@@ -1304,6 +1313,9 @@ export const requirementsModule: ModuleConfig = {
       enumValues: REQUIREMENT_STATUS,
       required: true,
       defaultValue: 'PENDIENTE',
+      // Toda solicitud nace PENDIENTE: se quita del alta y se cambia después
+      // desde la edición, para no pedirle al BC un dato que nunca varía.
+      hideOnCreate: true,
     },
     capturedByField,
   ],
@@ -1320,7 +1332,15 @@ export const requirementsModule: ModuleConfig = {
       quantityKey: 'quantity',
     },
     fields: [
-      { key: 'registerDate', label: 'Register date', type: 'date', defaultToday: true },
+      {
+        key: 'registerDate',
+        label: 'Delivery date',
+        type: 'date',
+        defaultToday: true,
+        // El día de la entrega lo fija el sistema: queda como constancia y
+        // nadie lo modifica.
+        fixedOnCreate: true,
+      },
       {
         key: 'idUniformItem',
         label: 'Uniform',
@@ -1398,7 +1418,17 @@ export const uniformEntriesModule: ModuleConfig = {
   icon: 'Shirt',
   autoUserField: 'idUsers',
   fields: [
-    { key: 'date', label: 'Entry date', type: 'date', defaultToday: true, required: true },
+    {
+      key: 'date',
+      label: 'Entry date',
+      type: 'date',
+      defaultToday: true,
+      required: true,
+      // Constancia del día en que entró la mercancía: la pone el sistema y no
+      // se edita, ni al registrarla ni después. Para cargar el histórico con
+      // sus fechas reales se usa la importación por CSV.
+      fixedOnCreate: true,
+    },
     {
       key: 'idUniformItem',
       label: 'Uniform',

@@ -134,6 +134,27 @@ export interface FieldConfig {
    */
   highlight?: 'value' | 'balance';
   /**
+   * El valor se fija al dar de alta y ya no se puede cambiar al editar (p. ej.
+   * la fecha de entrada al inventario, que debe quedar como constancia del día
+   * en que llegó la mercancía). En el alta se captura normal; después se
+   * muestra bloqueado y no se reenvía al guardar.
+   */
+  lockedAfterCreate?: boolean;
+  /**
+   * El sistema fija el valor al dar de alta (con `defaultToday`, `defaultValue`
+   * o el alcance del usuario) y NADIE lo edita, ni al crear ni al editar: la
+   * fecha en que se cargaron los uniformes debe quedar como constancia del día
+   * real. Se muestra bloqueado siempre; al crear sí se guarda, al editar ya no
+   * se reenvía.
+   */
+  fixedOnCreate?: boolean;
+  /**
+   * El campo no se pide al CREAR (toma su defaultValue), pero sí aparece al
+   * editar. Para datos que siempre nacen igual y solo cambian después, como el
+   * estatus de una solicitud: quita un paso del alta sin perder el control.
+   */
+  hideOnCreate?: boolean;
+  /**
    * Campo visible en el formulario pero NO capturable: su valor lo mantiene
    * el sistema (p. ej. el millaje actual del camión, que escribe cada
    * mantenimiento preventivo). Se muestra bloqueado y no se reenvía al

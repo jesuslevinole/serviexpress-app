@@ -35,6 +35,8 @@ interface DetailModalProps {
   parent: EntityData;
   parentTitle: string;
   refMaps: RefMaps;
+  /** Abre la captura del primer renglón de una vez (al venir de un alta nueva). */
+  autoOpenForm?: boolean;
   onClose: () => void;
 }
 
@@ -48,6 +50,7 @@ export function DetailModal({
   parent,
   parentTitle,
   refMaps,
+  autoOpenForm = false,
   onClose,
 }: DetailModalProps) {
   const { can, firebaseUser, isAdmin } = useAuth();
@@ -61,7 +64,7 @@ export function DetailModal({
   );
   const { rows, loading } = useCollection(detail.collection, filter);
 
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(autoOpenForm);
   const [editing, setEditing] = useState<EntityData | null>(null);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
@@ -182,7 +185,9 @@ export function DetailModal({
     const available = totalIn - totalOut;
 
     if (requested > available) {
-      return `Not enough stock: ${available} available (${totalIn} in, ${totalOut} already delivered). Add an entry in Uniform inventory first.`;
+      return available <= 0
+        ? `There is no stock of this uniform and size (${totalIn} received, ${totalOut} already delivered). Register it first in Uniform inventory, with the “Add stock” button.`
+        : `Not enough stock: only ${available} available (${totalIn} received, ${totalOut} already delivered). Lower the quantity, or register more in Uniform inventory with the “Add stock” button.`;
     }
     return null;
   };
