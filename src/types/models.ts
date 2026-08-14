@@ -112,7 +112,13 @@ export interface FieldConfig {
   /** Tono del badge según el valor mostrado (Preventive ámbar, Corrective rojo…). */
   badgeTones?: Record<string, 'positive' | 'negative' | 'neutral' | 'info' | 'warning'>;
   /** El campo solo aparece en el formulario cuando otro campo tiene cierto valor. */
-  visibleWhen?: { field: string; value: FieldValue };
+  /**
+   * El campo solo se muestra cuando otro campo tiene cierto valor. Con `value`
+   * se compara el valor guardado; con `refNameIn` se compara el NOMBRE del
+   * registro referenciado (p. ej. mostrar el correo solo cuando el tipo de
+   * solicitud se llama "ADP"), útil porque el id del catálogo cambia por base.
+   */
+  visibleWhen?: { field: string; value?: FieldValue; refNameIn?: string[] };
   /** Al capturar un registro nuevo, la fecha arranca en el día de hoy. */
   defaultToday?: boolean;
   /**

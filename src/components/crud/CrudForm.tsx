@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
-import { catalogModules } from '../../config/modules';
+import { CRUD_MODULES, catalogModules } from '../../config/modules';
 import { useAuth } from '../../hooks/useAuth';
 import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
@@ -203,12 +203,25 @@ export function CrudForm({
   }, [values]);
 
   /** Campos visibles según las condiciones (p. ej. tipo Preventive/Corrective). */
+  /** ¿Se cumple la condición de visibilidad de un campo? */
+  const isVisible = (field: FieldConfig): boolean => {
+    const rule = field.visibleWhen;
+    if (!rule) return true;
+    const current = values[rule.field];
+    if (rule.refNameIn) {
+      // Se compara contra el nombre del catálogo, no contra su id.
+      const source = formFields.find((f) => f.key === rule.field);
+      if (!source?.refCollection || typeof current !== 'string' || current === '') return false;
+      const label = refMaps[source.refCollection]?.labels.get(current) ?? '';
+      return rule.refNameIn.some((name) => name.toLowerCase() === label.trim().toLowerCase());
+    }
+    return current === rule.value;
+  };
+
   const visibleFields = useMemo(
-    () =>
-      formFields.filter(
-        (f) => !f.visibleWhen || values[f.visibleWhen.field] === f.visibleWhen.value,
-      ),
-    [formFields, values],
+    () => formFields.filter(isVisible),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [formFields, values, refMaps],
   );
 
   /** Un campo se muestra bloqueado si es de solo lectura, o si ya se fijó al crear. */
@@ -278,11 +291,16 @@ export function CrudForm({
   const catalogFor = (field: FieldConfig) => {
     if (field.type !== 'ref' || !field.refCollection) return null;
     const catalog = catalogModules.find((module) => module.collection === field.refCollection);
-    if (!catalog) return null;
-    // Todos los catálogos se gobiernan con el permiso 'catalogs': es el id con
-    // el que CatalogosPage monta el motor, y el único que existe en la matriz.
-    if (!isAdmin && !can('catalogs', 'crear')) return null;
-    return catalog;
+    if (catalog) {
+      // Los catálogos se gobiernan con el permiso 'catalogs': es el id con el
+      // que CatalogosPage monta el motor, y el único que existe en la matriz.
+      return isAdmin || can('catalogs', 'crear') ? catalog : null;
+    }
+    // También se puede dar de alta un registro de otro módulo (p. ej. un
+    // conductor nuevo desde Requerimientos), si el rol puede crear ahí.
+    const target = CRUD_MODULES.find((module) => module.collection === field.refCollection);
+    if (!target) return null;
+    return isAdmin || can(target.id, 'crear') ? target : null;
   };
 
   const handleSubmit = (keepOpen: boolean) => {
@@ -425,6 +443,8 @@ export function CrudForm({
                 collection={catalog.collection}
                 title={catalog.title}
                 fields={catalog.fields}
+                autoUserField={catalog.autoUserField}
+                currentUid={currentUid}
                 onCreated={(id) => {
                   handleChange(quickAdd.key, id);
                   setQuickAdd(null);

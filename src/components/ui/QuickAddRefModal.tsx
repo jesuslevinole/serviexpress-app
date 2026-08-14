@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { FormField } from './FormField';
+import { useRefMaps } from '../../hooks/useRefMaps';
 import { createDocument } from '../../services/firestoreService';
 import type { FieldConfig, FieldValue } from '../../types/models';
+import type { SelectOption } from './SearchableSelect';
 
 interface QuickAddRefModalProps {
   /** Colección del catálogo donde se dará de alta el registro. */
@@ -13,6 +15,10 @@ interface QuickAddRefModalProps {
   fields: FieldConfig[];
   /** Texto ya escrito en el buscador, para no volver a teclearlo. */
   initialName?: string;
+  /** Uid del usuario actual, para sellar quién dio de alta el registro. */
+  currentUid?: string | null;
+  /** Campo donde se guarda el capturista (autoUserField del módulo destino). */
+  autoUserField?: string;
   /** Devuelve el id recién creado para seleccionarlo en el campo de origen. */
   onCreated: (id: string) => void;
   onClose: () => void;
@@ -27,10 +33,38 @@ export function QuickAddRefModal({
   title,
   fields,
   initialName = '',
+  currentUid,
+  autoUserField,
   onCreated,
   onClose,
 }: QuickAddRefModalProps) {
-  const formFields = fields.filter((field) => field.form !== false && field.readOnly !== true);
+  /**
+   * Solo se piden los campos indispensables: los obligatorios y el nombre. Un
+   * alta rápida que pidiera las 20 columnas de Drivers no sería rápida; el
+   * resto se completa después desde su propio módulo.
+   */
+  const formFields = useMemo(
+    () =>
+      fields.filter(
+        (field) =>
+          field.form !== false &&
+          field.readOnly !== true &&
+          field.compute === undefined &&
+          (field.required === true || field.key === 'name'),
+      ),
+    [fields],
+  );
+
+  // El alta puede tener sus propias referencias (un driver apunta a Team).
+  const refMaps = useRefMaps(formFields);
+  const refOptions = (field: FieldConfig): SelectOption[] => {
+    if (field.type !== 'ref' || !field.refCollection) return [];
+    const data = refMaps[field.refCollection];
+    if (!data) return [];
+    return [...data.labels.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  };
 
   const [values, setValues] = useState<Record<string, FieldValue>>(() => {
     const initial: Record<string, FieldValue> = {};
@@ -58,7 +92,17 @@ export function QuickAddRefModal({
     setBusy(true);
     setError(null);
     try {
-      const id = await createDocument(collection, values);
+      const payload: Record<string, FieldValue> = { ...values };
+      // El nombre resuelto se copia igual que en el alta normal, para que el
+      // resto del sistema siga mostrando texto y no ids.
+      formFields.forEach((field) => {
+        if (!field.copyLabelTo || !field.refCollection) return;
+        const chosen = values[field.key];
+        if (typeof chosen !== 'string' || chosen === '') return;
+        payload[field.copyLabelTo] = refMaps[field.refCollection]?.labels.get(chosen) ?? chosen;
+      });
+      if (autoUserField && currentUid) payload[autoUserField] = currentUid;
+      const id = await createDocument(collection, payload);
       onCreated(id);
     } catch {
       setError('The record could not be saved. Try again.');
@@ -97,7 +141,7 @@ export function QuickAddRefModal({
             field={field}
             value={values[field.key] ?? null}
             invalid={touched && missing.includes(field.key)}
-            refOptions={[]}
+            refOptions={refOptions(field)}
             onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
           />
         ))}

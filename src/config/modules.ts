@@ -1305,6 +1305,15 @@ export const requirementsModule: ModuleConfig = {
       refCollection: COLLECTIONS.drivers,
       required: true,
     },
+    {
+      key: 'email',
+      label: 'Email',
+      type: 'text',
+      table: false,
+      // Solo se pide en las solicitudes de ADP, que es donde hace falta el
+      // correo del conductor para darlo de alta en el portal.
+      visibleWhen: { field: 'idRequest', refNameIn: ['ADP', 'Adp'] },
+    },
     ...contextFields(false, false),
     {
       key: 'status',
