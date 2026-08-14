@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ListPlus, Plus, Trash2 } from 'lucide-react';
 import { FormField } from '../ui/FormField';
+import { Modal } from '../ui/Modal';
 import { displayCell } from './displayValue';
 import { useCollection } from '../../hooks/useCollection';
 import type { SelectOption } from '../ui/SearchableSelect';
@@ -136,68 +137,99 @@ export function DraftDetailRows({
     setDraft(blank);
   };
 
+  const [open, setOpen] = useState(false);
+
+  /** Resumen de un renglón, para la lista y para la barra del formulario. */
+  const rowText = (row: DraftRow) =>
+    fields
+      .map((field) => displayCell(field, { id: '', ...row }, refLabels))
+      .filter((text) => text !== '—')
+      .join(' · ');
+
   return (
-    <section className="draftrows">
-      <header className="draftrows-head">
-        <strong>{detail.title}</strong>
-        <span>{rows.length === 0 ? 'No lines yet' : `${rows.length} line(s)`}</span>
-      </header>
-
-      <div className="draftrows-form">
-        {fields.map((field) => (
-          <FormField
-            key={field.key}
-            field={field}
-            value={draft[field.key] ?? null}
-            invalid={false}
-            refOptions={refOptions(field)}
-            onChange={(key, value) =>
-              setDraft((prev) => {
-                const next = { ...prev, [key]: value };
-                // Al cambiar la prenda, la talla elegida puede dejar de aplicar.
-                detail.fields.forEach((f) => {
-                  if (f.refFilterFromRefField?.field === key) next[f.key] = '';
-                });
-                return next;
-              })
-            }
-          />
-        ))}
-        <button type="button" className="btn btn-outline draftrows-add" onClick={handleAdd}>
-          <Plus size={16} />
-          Add line
+    <>
+      {/* Barra compacta dentro del formulario: no estorba ni obliga a hacer
+          scroll; la captura vive en su propia ventana. */}
+      <section className="draftrows-bar">
+        <div className="draftrows-bar-text">
+          <strong>{detail.title}</strong>
+          <span>
+            {rows.length === 0
+              ? 'No lines yet'
+              : `${rows.length} line(s): ${rows.map(rowText).join(' | ')}`}
+          </span>
+        </div>
+        <button type="button" className="btn btn-outline" onClick={() => setOpen(true)}>
+          <ListPlus size={16} />
+          {rows.length === 0 ? 'Add lines' : 'Edit lines'}
         </button>
-      </div>
+      </section>
 
-      {control && available !== null ? (
-        <p className={`draftrows-stock ${available <= 0 ? 'is-empty' : ''}`}>
-          {available} available in stock
-        </p>
-      ) : null}
-      {error ? <p className="draftrows-error">{error}</p> : null}
+      <Modal
+        open={open}
+        layer="top"
+        size="md"
+        title={detail.title}
+        onClose={() => setOpen(false)}
+        footer={
+          <button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>
+            Done
+          </button>
+        }
+      >
+        <div className="draftrows">
+          <div className="draftrows-form">
+            {fields.map((field) => (
+              <FormField
+                key={field.key}
+                field={field}
+                value={draft[field.key] ?? null}
+                invalid={false}
+                refOptions={refOptions(field)}
+                onChange={(key, value) =>
+                  setDraft((prev) => {
+                    const next = { ...prev, [key]: value };
+                    // Al cambiar la prenda, la talla elegida puede dejar de aplicar.
+                    detail.fields.forEach((f) => {
+                      if (f.refFilterFromRefField?.field === key) next[f.key] = '';
+                    });
+                    return next;
+                  })
+                }
+              />
+            ))}
+            <button type="button" className="btn btn-outline draftrows-add" onClick={handleAdd}>
+              <Plus size={16} />
+              Add line
+            </button>
+          </div>
 
-      {rows.length > 0 ? (
-        <ul className="draftrows-list">
-          {rows.map((row, index) => (
-            <li key={index}>
-              <span>
-                {fields
-                  .map((field) => displayCell(field, { id: '', ...row }, refLabels))
-                  .filter((text) => text !== '—')
-                  .join(' · ')}
-              </span>
-              <button
-                type="button"
-                className="draftrows-remove"
-                aria-label="Remove line"
-                onClick={() => onChange(rows.filter((_, i) => i !== index))}
-              >
-                <Trash2 size={15} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
+          {control && available !== null ? (
+            <p className={`draftrows-stock ${available <= 0 ? 'is-empty' : ''}`}>
+              {available} available in stock
+            </p>
+          ) : null}
+          {error ? <p className="draftrows-error">{error}</p> : null}
+
+          {rows.length > 0 ? (
+            <ul className="draftrows-list">
+              {rows.map((row, index) => (
+                <li key={index}>
+                  <span>{rowText(row)}</span>
+                  <button
+                    type="button"
+                    className="draftrows-remove"
+                    aria-label="Remove line"
+                    onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </Modal>
+    </>
   );
 }
