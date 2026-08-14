@@ -29,6 +29,7 @@ import { DataTable, type SortDirection, type TableColumn } from '../ui/DataTable
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
 import { DetailModal } from './DetailModal';
+import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
@@ -182,6 +183,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+  /**
+   * Renglones capturados dentro del alta, antes de que exista el maestro:
+   * viven en memoria y se guardan en cuanto el maestro se crea.
+   */
+  const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
 
   /**
    * Enlace profundo `?record=<id>`: al llegar desde el detalle de otro módulo
@@ -383,6 +389,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const openCreate = () => {
     setEditing(null);
     setFormError(null);
+    // Un alta nueva nunca arrastra los renglones de la anterior.
+    setDraftRows([]);
     setFormOpen(true);
   };
 
@@ -454,7 +462,34 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
         }
       } else {
-        await createDocument(config.collection, payload);
+        const newId = await createDocument(config.collection, payload);
+        // Los renglones capturados dentro del alta se guardan ya con el id
+        // del maestro recién creado: así el uniforme se pide de una sola vez.
+        if (config.detail && draftRows.length > 0) {
+          const detail = config.detail;
+          const parent: EntityData = { id: newId, ...payload };
+          for (const row of draftRows) {
+            const rowPayload: Record<string, FieldValue> = {
+              ...row,
+              [detail.parentKey]: newId,
+            };
+            // Fechas que fija el sistema al crear (p. ej. la de entrega).
+            detail.fields.forEach((field) => {
+              if (field.fixedOnCreate && field.defaultToday) {
+                rowPayload[field.key] = new Date().toISOString().slice(0, 10);
+              }
+            });
+            const rowId = await createDocument(detail.collection, rowPayload);
+            if (detail.mirror) {
+              await setDocument(
+                detail.mirror.collection,
+                `${detail.mirror.idPrefix}${rowId}`,
+                detail.mirror.build(newId, parent, rowPayload),
+              );
+            }
+          }
+          setDraftRows([]);
+        }
       }
       await syncToReferences(payload);
       if (keepOpen && !editing) {
@@ -960,6 +995,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         error={formError}
         resetSignal={resetSignal}
         onConfigure={canCustomize ? () => setLayoutOpen(true) : undefined}
+        renderExtra={
+          !editing && config.detail && canCreate
+            ? (values) =>
+                detailEnabled({ id: '', ...values }) ? (
+                  <DraftDetailRows
+                    detail={config.detail!}
+                    rows={draftRows}
+                    refMaps={detailRefMaps}
+                    refLabels={detailRefLabel}
+                    onChange={setDraftRows}
+                  />
+                ) : null
+            : undefined
+        }
         extraSection={
           editing && config.detail && detailEnabled(editing) ? (
             <DetailSummary

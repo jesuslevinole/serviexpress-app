@@ -32,6 +32,12 @@ interface CrudFormProps {
   presetValues?: Record<string, FieldValue>;
   /** Contenido extra bajo el formulario (p. ej. los uniformes ya cargados). */
   extraSection?: ReactNode;
+  /**
+   * Igual que extraSection, pero recibe lo capturado hasta ahora: sirve para
+   * secciones que solo aplican según un valor del propio formulario (la
+   * subtabla de uniformes aparece al elegir tipo de solicitud "Uniforms").
+   */
+  renderExtra?: (values: Record<string, FieldValue>) => ReactNode;
   /** Aviso en vivo que depende de lo capturado (p. ej. existencia disponible). */
   renderBanner?: (values: Record<string, FieldValue>) => ReactNode;
   /** Alcance (entidad/estación) por usuario, para rellenar al elegir capturista. */
@@ -83,6 +89,7 @@ export function CrudForm({
   presetValues,
   userScopes,
   extraSection,
+  renderExtra,
   renderBanner,
   contextEditable = true,
   onClose,
@@ -433,6 +440,8 @@ export function CrudForm({
       {renderBanner ? <div className="crudform-banner">{renderBanner(values)}</div> : null}
 
       {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
+
+      {renderExtra ? <div className="crudform-extra">{renderExtra(values)}</div> : null}
 
       {quickAdd
         ? (() => {
