@@ -177,6 +177,12 @@ export interface FieldConfig {
    */
   copyLabelTo?: string;
   /**
+   * En el alta rápida ("+") no se elige un registro ya existente: se capturan
+   * aquí los datos del catálogo referenciado y se crean AMBOS de una vez
+   * (p. ej. un conductor nuevo se guarda en Team y en Drivers).
+   */
+  quickAddInline?: boolean;
+  /**
    * Si este campo está vacío o no se puede resolver, se muestra el valor de
    * esta otra clave. Sirve durante migraciones (dato viejo en otro campo).
    */

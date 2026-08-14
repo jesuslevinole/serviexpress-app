@@ -259,6 +259,9 @@ export const driversModule: ModuleConfig = {
       // El nombre elegido se copia a "name" para que el resto del app
       // (Assets, Fleet, Accidents, Requirements) siga mostrándolo.
       copyLabelTo: 'name',
+      // Alta rápida: se escriben los datos de la persona (nombre, correo,
+      // teléfono) y se guarda de una vez en Team y en Drivers.
+      quickAddInline: true,
       // Mientras un driver no tenga su referencia a Team, se muestra el
       // nombre que ya estaba guardado en el registro.
       fallbackField: 'name',
