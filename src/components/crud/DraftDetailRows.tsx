@@ -19,21 +19,6 @@ interface DraftDetailRowsProps {
   onChange: (rows: DraftRow[]) => void;
 }
 
-/** Suma la cantidad de las filas que coinciden en los campos que identifican el artículo. */
-function sumMatching(
-  rows: EntityData[] | DraftRow[],
-  matchKeys: string[],
-  quantityKey: string,
-  target: DraftRow,
-): number {
-  return (rows as DraftRow[]).reduce((total, row) => {
-    const same = matchKeys.every((key) => row[key] === target[key]);
-    if (!same) return total;
-    const value = row[quantityKey];
-    return total + (typeof value === 'number' ? value : Number(value) || 0);
-  }, 0);
-}
-
 /**
  * Subtabla de renglones capturados ANTES de que exista el registro maestro.
  * Se usa en el alta: las filas viven en memoria y el módulo las guarda en
@@ -75,25 +60,65 @@ export function DraftDetailRows({
   const entries = useCollection(control?.entriesCollection ?? '');
   const exits = useCollection(control ? detail.collection : '');
 
-  const available = useMemo(() => {
+  /**
+   * Existencia por combinación de los campos que identifican el artículo
+   * (prenda + talla): entradas menos lo ya entregado. Con esto solo se
+   * ofrecen prendas y tallas que realmente hay en el almacén.
+   */
+  const stockByKey = useMemo(() => {
     if (!control) return null;
+    const map = new Map<string, number>();
+    const keyOf = (row: DraftRow) => control.matchKeys.map((k) => String(row[k] ?? '')).join('|');
+    const add = (rows: EntityData[], sign: number) =>
+      (rows as DraftRow[]).forEach((row) => {
+        const value = row[control.quantityKey];
+        const qty = typeof value === 'number' ? value : Number(value) || 0;
+        map.set(keyOf(row), (map.get(keyOf(row)) ?? 0) + sign * qty);
+      });
+    add(entries.rows, 1);
+    add(exits.rows, -1);
+    // Lo que ya va en esta captura también reserva existencia.
+    rows.forEach((row) => {
+      const value = row[control.quantityKey];
+      const qty = typeof value === 'number' ? value : Number(value) || 0;
+      map.set(keyOf(row), (map.get(keyOf(row)) ?? 0) - qty);
+    });
+    return map;
+  }, [control, entries.rows, exits.rows, rows]);
+
+  /** Ids (del primer campo clave) que tienen existencia en alguna talla. */
+  const itemsWithStock = useMemo(() => {
+    if (!control || !stockByKey) return null;
+    const set = new Set<string>();
+    stockByKey.forEach((qty, key) => {
+      if (qty > 0) set.add(key.split('|')[0]);
+    });
+    return set;
+  }, [control, stockByKey]);
+
+  /** Existencia de la combinación que se está capturando ahora mismo. */
+  const available = useMemo(() => {
+    if (!control || !stockByKey) return null;
     const ready = control.matchKeys.every((key) => {
       const value = draft[key];
       return typeof value === 'string' && value !== '';
     });
     if (!ready) return null;
-    const totalIn = sumMatching(entries.rows, control.matchKeys, control.quantityKey, draft);
-    const totalOut = sumMatching(exits.rows, control.matchKeys, control.quantityKey, draft);
-    const inDraft = sumMatching(rows, control.matchKeys, control.quantityKey, draft);
-    return totalIn - totalOut - inDraft;
-  }, [control, draft, entries.rows, exits.rows, rows]);
+    return stockByKey.get(control.matchKeys.map((k) => String(draft[k] ?? '')).join('|')) ?? 0;
+  }, [control, stockByKey, draft]);
 
   const refOptions = (field: FieldConfig): SelectOption[] => {
     if (field.type !== 'ref' || !field.refCollection) return [];
     const data = refMaps[field.refCollection];
     if (!data) return [];
     let options = [...data.labels.entries()].map(([value, label]) => ({ value, label }));
-    // Tallas del tipo que usa la prenda elegida (mismo filtro del subformulario).
+
+    // Prenda: solo las que tienen existencia en alguna talla.
+    if (control && itemsWithStock && field.key === control.matchKeys[0]) {
+      options = options.filter((option) => itemsWithStock.has(option.value));
+    }
+
+    // Talla: del tipo que usa la prenda elegida y con existencia disponible.
     const filter = field.refFilterFromRefField;
     if (filter) {
       const sourceField = detail.fields.find((f) => f.key === filter.field);
@@ -106,6 +131,11 @@ export function DraftDetailRows({
             data.rows.filter((r) => r[filter.targetField] === expected).map((r) => r.id),
           );
           options = options.filter((option) => allowed.has(option.value));
+        }
+        if (control && stockByKey && field.key === control.matchKeys[1]) {
+          options = options.filter(
+            (option) => (stockByKey.get(`${sourceId}|${option.value}`) ?? 0) > 0,
+          );
         }
       }
     }
@@ -198,17 +228,25 @@ export function DraftDetailRows({
                 }
               />
             ))}
+            {control ? (
+              <div className="draftrows-avail">
+                <span className="draftrows-avail-label">In stock</span>
+                <span
+                  className={`draftrows-avail-value ${
+                    available !== null && available <= 0 ? 'is-empty' : ''
+                  }`}
+                  title="Kept by the system from Uniform inventory"
+                >
+                  {available === null ? '—' : available}
+                </span>
+              </div>
+            ) : null}
             <button type="button" className="btn btn-outline draftrows-add" onClick={handleAdd}>
               <Plus size={16} />
               Add line
             </button>
           </div>
 
-          {control && available !== null ? (
-            <p className={`draftrows-stock ${available <= 0 ? 'is-empty' : ''}`}>
-              {available} available in stock
-            </p>
-          ) : null}
           {error ? <p className="draftrows-error">{error}</p> : null}
 
           {rows.length > 0 ? (

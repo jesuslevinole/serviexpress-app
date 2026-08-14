@@ -33,9 +33,11 @@
   flex-shrink: 0;
 }
 
-/* Contenido de la ventana de captura. */
+/* Contenido de la ventana de captura. Alto mínimo para que la lista
+   desplegable de prendas y tallas quepa sin obligar a hacer scroll. */
 .draftrows {
   display: block;
+  min-height: 330px;
 }
 
 .draftrows-form {
@@ -50,14 +52,34 @@
   justify-content: center;
 }
 
-.draftrows-stock {
-  margin-top: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--success);
+/* Existencia disponible: la mantiene el sistema, no se captura. */
+.draftrows-avail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.draftrows-stock.is-empty {
+.draftrows-avail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.draftrows-avail-value {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--success);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.draftrows-avail-value.is-empty {
   color: var(--danger);
 }
 
