@@ -222,6 +222,7 @@ export function CrudForm({
       const label = refMaps[source.refCollection]?.labels.get(current) ?? '';
       return rule.refNameIn.some((name) => name.toLowerCase() === label.trim().toLowerCase());
     }
+    if (rule.valueIn) return rule.valueIn.includes(current);
     return current === rule.value;
   };
 

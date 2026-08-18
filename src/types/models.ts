@@ -22,7 +22,11 @@ export type PermissionAction =
   | 'plantilla'
   | 'importar'
   | 'exportar'
-  | 'filtrar';
+  | 'filtrar'
+  /** Ver los campos de dinero del módulo (cobros, montos, descuentos). */
+  | 'verFinanzas'
+  /** Ver las notas internas de seguimiento del módulo. */
+  | 'verNotas';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';
@@ -118,7 +122,20 @@ export interface FieldConfig {
    * registro referenciado (p. ej. mostrar el correo solo cuando el tipo de
    * solicitud se llama "ADP"), útil porque el id del catálogo cambia por base.
    */
-  visibleWhen?: { field: string; value?: FieldValue; refNameIn?: string[] };
+  visibleWhen?: {
+    field: string;
+    value?: FieldValue;
+    /** Se cumple si el campo tiene CUALQUIERA de estos valores. */
+    valueIn?: readonly FieldValue[];
+    refNameIn?: string[];
+  };
+  /**
+   * El campo solo lo ven los roles con esa acción marcada en la matriz de
+   * permisos del módulo. Sirve para datos que no le tocan a todo el mundo:
+   * lo que se le cobra al conductor, o las notas internas de seguimiento.
+   * Aplica en formulario, tabla, detalle y exportación.
+   */
+  requiresAction?: PermissionAction;
   /** Al capturar un registro nuevo, la fecha arranca en el día de hoy. */
   defaultToday?: boolean;
   /**

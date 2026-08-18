@@ -121,6 +121,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   /** Puede editar Entity/Station en formularios: admin o permiso entityStation. */
   const canEditContext = isAdmin || can('entityStation', 'editar');
 
+  /**
+   * Campos que el rol puede ver. Los marcados con requiresAction (dinero,
+   * notas internas) se ocultan salvo que la matriz de permisos los habilite.
+   * Se filtra una sola vez y de ahí salen tabla, formulario, detalle y Excel,
+   * para que un dato restringido no se escape por ninguna vía.
+   */
+  const allowedFields = useMemo(
+    () =>
+      config.fields.filter(
+        (field) => !field.requiresAction || isAdmin || can(config.id, field.requiresAction),
+      ),
+    [config.fields, config.id, isAdmin, can],
+  );
+
   /** Valores iniciales desde el alcance del usuario (su entidad/estación asignada). */
   const scopePresets = useMemo(
     () =>
@@ -252,8 +266,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     refMaps[collection]?.labels.get(id) ?? '—';
 
   const tableFields = useMemo(
-    () => config.fields.filter((f) => f.table !== false),
-    [config.fields],
+    () => allowedFields.filter((f) => f.table !== false),
+    [allowedFields],
   );
 
   const filteredRows = useMemo(() => {
@@ -703,7 +717,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       `${config.title}${rangeSuffix}`,
       // Los campos marcados exportable:false quedan fuera, para que el archivo
       // salga con las columnas exactas que espera quien lo recibe.
-      config.fields
+      allowedFields
         .filter((field) => field.exportable !== false)
         .map((field) => ({
           header: field.label,
@@ -879,7 +893,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
       <FilterPanel
         open={filterOpen}
-        fields={config.fields}
+        fields={allowedFields}
         filters={filters}
         refMaps={refMaps}
         onChange={setColumnFilter}
@@ -929,7 +943,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       {viewing ? (
         <RecordDetailModal
           title={config.title}
-          fields={config.fields}
+          fields={allowedFields}
           record={viewing}
           refLabels={refLabel}
           extra={
@@ -979,7 +993,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       {exportOpen ? (
         <ExportExcelModal
           title={config.title}
-          fields={config.fields}
+          fields={allowedFields}
           onClose={() => setExportOpen(false)}
           onExport={handleExport}
         />
@@ -988,7 +1002,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       <CrudForm
         open={formOpen}
         title={editing ? `Edit · ${config.title}` : `Add · ${config.title}`}
-        fields={config.fields}
+        fields={allowedFields}
         initial={editing}
         refMaps={refMaps}
         busy={busy}

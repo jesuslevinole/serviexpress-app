@@ -986,13 +986,31 @@ export const maintenanceModule: ModuleConfig = {
 /** Sí/No tal como los devuelve el formulario de incidentes. */
 const YES_NO = ['Yes', 'No'] as const;
 
-/** Solo se pregunta cuando el incidente fue una lesión. */
+/** El incidente fue una lesión: se pregunta por la persona, no por la unidad. */
 const whenInjury = { field: 'incidentType', value: 'Injury' } as const;
+/** Hubo un vehículo involucrado: choque o daño a propiedad. */
+const whenVehicle = {
+  field: 'incidentType',
+  valueIn: ['Vehicle Accident', 'Property Damage (mailbox, Grass, Fence, etc.)'],
+} as const;
+/** Solo choque entre vehículos. */
+const whenAccident = { field: 'incidentType', value: 'Vehicle Accident' } as const;
+/** Solo daño a propiedad. */
+const whenProperty = {
+  field: 'incidentType',
+  value: 'Property Damage (mailbox, Grass, Fence, etc.)',
+} as const;
+/** Cualquier otro incidente. */
+const whenOther = { field: 'incidentType', value: 'Other' } as const;
 
 /**
- * Módulo BD_ACCIDENTS — replica la estructura del formulario "Incident Report"
- * de Google Forms: mismas columnas, mismo orden y mismas etiquetas, para que
- * el Excel que exporta sea idéntico al de las respuestas del formulario.
+ * Módulo BD_ACCIDENTS — estructura del formulario "Incident Report".
+ *
+ * El orden está pensado para llenarse rápido y desde el teléfono: primero lo
+ * que ya viene resuelto (compañía, estación y fecha), luego las tres preguntas
+ * que siempre aplican (conductor, unidad, tipo), y de ahí en adelante SOLO el
+ * bloque del tipo elegido. Quien reporta una lesión no ve nada de vehículos, y
+ * quien reporta un choque no ve las preguntas de daño a propiedad.
  */
 export const accidentsModule: ModuleConfig = {
   id: 'accidents',
@@ -1001,18 +1019,16 @@ export const accidentsModule: ModuleConfig = {
   icon: 'AlertTriangle',
   autoUserField: 'idUsers',
   fields: [
-    // 1
     {
       key: 'timestamp',
       label: 'Timestamp',
       type: 'date',
       form: false,
       table: false,
-      // Momento de captura en el sistema: equivale al Timestamp del formulario.
       compute: (row) => (typeof row.createdAt === 'string' ? row.createdAt.slice(0, 10) : ''),
     },
-    // 2 — la columna "Company and Station number" del formulario, separada en
-    // sus dos catálogos: así el alcance por entidad/estación vuelve a filtrar.
+
+    // ── Contexto: llega resuelto desde el alcance del usuario ──
     {
       key: 'idEntity',
       label: '1. Company',
@@ -1021,6 +1037,7 @@ export const accidentsModule: ModuleConfig = {
       refCollection: COLLECTIONS.entities,
       defaultFromUserScope: 'entity',
       required: true,
+      table: false,
     },
     {
       key: 'idStation',
@@ -1030,38 +1047,30 @@ export const accidentsModule: ModuleConfig = {
       refCollection: COLLECTIONS.stations,
       defaultFromUserScope: 'station',
       required: true,
+      table: false,
     },
-    // 3
-    {
-      key: 'idDriver',
-      label: '2. Driver Name ',
-      type: 'ref',
-      refCollection: COLLECTIONS.drivers,
-      required: true,
-    },
-    // 4
-    {
-      key: 'idTruck',
-      label: 'WA/ Truck #',
-      type: 'ref',
-      refCollection: COLLECTIONS.trucks,
-    },
-    // 5 — la clave se llama `date` para que sirva de fecha del módulo
     {
       key: 'date',
-      label: '4. Date of incident',
+      label: '2. Date of incident',
+      importAliases: ['4. Date of incident'],
       type: 'date',
       defaultToday: true,
       required: true,
     },
-    // 6
-    { key: 'incidentTime', label: '5. Time of Incident', type: 'time' },
-    // 7
-    { key: 'address', label: '6. Address of incident ', type: 'text', table: false },
-    // 8
+
+    // ── Las tres preguntas que siempre aplican ──
+    {
+      key: 'idDriver',
+      label: '3. Driver',
+      importAliases: ['2. Driver Name '],
+      type: 'ref',
+      refCollection: COLLECTIONS.drivers,
+      required: true,
+    },
     {
       key: 'incidentType',
-      label: '7. Type of Incident',
+      label: '4. What happened?',
+      importAliases: ['7. Type of Incident'],
       type: 'enum',
       required: true,
       badge: true,
@@ -1078,7 +1087,16 @@ export const accidentsModule: ModuleConfig = {
         'Other',
       ],
     },
-    // ---- 9 a 14: solo cuando el incidente fue una lesión ----
+    {
+      key: 'description',
+      label: '5. Describe what happened',
+      importAliases: ['Description of What Happened'],
+      type: 'textarea',
+      required: true,
+      table: false,
+    },
+
+    // ── Lesión: la persona, nunca el vehículo ──
     {
       key: 'whoInjured',
       label: 'Who is injured?',
@@ -1125,80 +1143,30 @@ export const accidentsModule: ModuleConfig = {
       visibleWhen: whenInjury,
       enumValues: YES_NO,
     },
-    // ---- 15 a 21: tercero involucrado y accidente vehicular ----
-    { key: 'thirdPartyName', label: 'Third Party Full Name', type: 'text', table: false },
-    { key: 'thirdPartyPhone', label: 'Phone Number', type: 'text', table: false },
-    { key: 'licensePlate', label: 'License Plate Number', type: 'text', table: false },
+
+    // ── Unidad: solo cuando hubo un vehículo de por medio ──
     {
-      key: 'policeOnScene',
-      label: 'Police  on Scene?',
-      type: 'enum',
+      key: 'idTruck',
+      label: 'WA / Truck #',
+      type: 'ref',
+      refCollection: COLLECTIONS.trucks,
       table: false,
-      enumValues: YES_NO,
+      visibleWhen: whenVehicle,
     },
     {
-      key: 'policeReportNumber',
-      label: 'Police Report Number (If Available)',
+      key: 'address',
+      label: 'Address of incident',
+      importAliases: ['6. Address of incident '],
       type: 'text',
       table: false,
+      visibleWhen: whenVehicle,
     },
-    {
-      key: 'accidentType',
-      label: 'Type Of Accident',
-      type: 'enum',
-      table: false,
-      visibleWhen: { field: 'incidentType', value: 'Vehicle Accident' },
-      enumValues: ['Backing', 'Overhead', 'Sideswipe', 'Front to front', 'Rear end', 'Other'],
-    },
-    {
-      key: 'reportedToFedexAccident',
-      label: 'Reported To FedEx?',
-      type: 'enum',
-      table: false,
-      enumValues: YES_NO,
-    },
-    // ---- 22 y 23: daño a propiedad ----
-    {
-      key: 'propertyDamageType',
-      label: 'Type of Property Damage',
-      type: 'enum',
-      table: false,
-      visibleWhen: {
-        field: 'incidentType',
-        value: 'Property Damage (mailbox, Grass, Fence, etc.)',
-      },
-      enumValues: ['Mailbox', 'Lawn / Grass', 'Fence', 'Residential Home', 'Business', 'Other'],
-    },
-    {
-      key: 'reportedToFedexProperty',
-      label: 'Reported To FedEx? 2',
-      type: 'enum',
-      table: false,
-      enumValues: YES_NO,
-    },
-    // ---- 24 y 25: otro tipo de incidente ----
-    {
-      key: 'idIncidentType',
-      label: 'Incident Type',
-      importAliases: ['Incident Type'],
-      type: 'ref',
-      refCollection: COLLECTIONS.incidentTypes,
-      table: false,
-    },
-    {
-      key: 'reportedToFedexOther',
-      label: 'Reported To FedEx? 3',
-      type: 'enum',
-      table: false,
-      enumValues: YES_NO,
-    },
-    // ---- 26 a 31: relato, evidencia y estado de la unidad ----
-    { key: 'description', label: 'Description of What Happened', type: 'textarea', table: false },
     {
       key: 'canContinueRoute',
       label: 'Can the vehicle continue the route?',
       type: 'enum',
       table: false,
+      visibleWhen: whenVehicle,
       enumValues: YES_NO,
     },
     {
@@ -1206,7 +1174,108 @@ export const accidentsModule: ModuleConfig = {
       label: 'Is Tow Service Required?',
       type: 'enum',
       table: false,
+      visibleWhen: whenVehicle,
       enumValues: YES_NO,
+    },
+
+    // ── Choque: tercero y autoridad ──
+    {
+      key: 'accidentType',
+      label: 'Type Of Accident',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenAccident,
+      enumValues: ['Backing', 'Overhead', 'Sideswipe', 'Front to front', 'Rear end', 'Other'],
+    },
+    {
+      key: 'thirdPartyName',
+      label: 'Third Party Full Name',
+      type: 'text',
+      table: false,
+      visibleWhen: whenAccident,
+    },
+    {
+      key: 'thirdPartyPhone',
+      label: 'Phone Number',
+      type: 'text',
+      table: false,
+      visibleWhen: whenAccident,
+    },
+    {
+      key: 'licensePlate',
+      label: 'License Plate Number',
+      type: 'text',
+      table: false,
+      visibleWhen: whenAccident,
+    },
+    {
+      key: 'policeOnScene',
+      label: 'Police  on Scene?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenAccident,
+      enumValues: YES_NO,
+    },
+    {
+      key: 'policeReportNumber',
+      label: 'Police Report Number (If Available)',
+      type: 'text',
+      table: false,
+      visibleWhen: whenAccident,
+    },
+    {
+      key: 'reportedToFedexAccident',
+      label: 'Reported To FedEx?',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenAccident,
+      enumValues: YES_NO,
+    },
+
+    // ── Daño a propiedad ──
+    {
+      key: 'propertyDamageType',
+      label: 'Type of Property Damage',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenProperty,
+      enumValues: ['Mailbox', 'Lawn / Grass', 'Fence', 'Residential Home', 'Business', 'Other'],
+    },
+    {
+      key: 'reportedToFedexProperty',
+      label: 'Reported To FedEx? 2',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenProperty,
+      enumValues: YES_NO,
+    },
+
+    // ── Otro ──
+    {
+      key: 'idIncidentType',
+      label: 'Incident Type',
+      type: 'ref',
+      refCollection: COLLECTIONS.incidentTypes,
+      table: false,
+      visibleWhen: whenOther,
+    },
+    {
+      key: 'reportedToFedexOther',
+      label: 'Reported To FedEx? 3',
+      type: 'enum',
+      table: false,
+      visibleWhen: whenOther,
+      enumValues: YES_NO,
+    },
+
+    // ── Cierre del caso: lo llena la oficina, no quien reporta ──
+    {
+      key: 'incidentTime',
+      label: 'Time of Incident',
+      importAliases: ['5. Time of Incident'],
+      type: 'time',
+      table: false,
+      hideOnCreate: true,
     },
     {
       key: 'preventable',
@@ -1215,22 +1284,48 @@ export const accidentsModule: ModuleConfig = {
       badge: true,
       badgeTones: { Preventable: 'negative', 'Non-Preventable': 'positive' },
       enumValues: ['Preventable', 'Non-Preventable'],
+      hideOnCreate: true,
     },
-    // ---- 32 a 35: cobro al operador ----
-    { key: 'startPaymentDate', label: 'Start Payment Date', type: 'date', table: false },
-    { key: 'driverTotalAmount', label: 'Driver total Amount', type: 'currency' },
-    { key: 'driverPaymentWeekly', label: 'Driver payment Weekly', type: 'currency', table: false },
+    {
+      key: 'writeUpReceived',
+      label: 'Writte up RECEIVED?',
+      type: 'enum',
+      table: false,
+      enumValues: YES_NO,
+      hideOnCreate: true,
+    },
+
+    // ── Cobro al conductor: solo roles con permiso "Money fields" ──
+    {
+      key: 'startPaymentDate',
+      label: 'Start Payment Date',
+      type: 'date',
+      table: false,
+      hideOnCreate: true,
+      requiresAction: 'verFinanzas',
+    },
+    {
+      key: 'driverTotalAmount',
+      label: 'Driver total Amount',
+      type: 'currency',
+      hideOnCreate: true,
+      requiresAction: 'verFinanzas',
+    },
+    {
+      key: 'driverPaymentWeekly',
+      label: 'Driver payment Weekly',
+      type: 'currency',
+      table: false,
+      hideOnCreate: true,
+      requiresAction: 'verFinanzas',
+    },
     {
       key: 'lastPaymentDate',
       label: 'Last payment Date',
       type: 'date',
       form: false,
       table: false,
-      /**
-       * Fecha del último descuento: la de inicio más una semana por cada pago
-       * completo. En la hoja esta columna era una fórmula que devolvía
-       * #DIV/0! cuando faltaba el semanal; aquí simplemente queda vacía.
-       */
+      requiresAction: 'verFinanzas',
       compute: (row) => {
         const start = typeof row.startPaymentDate === 'string' ? row.startPaymentDate : '';
         const total = typeof row.driverTotalAmount === 'number' ? row.driverTotalAmount : 0;
@@ -1243,16 +1338,18 @@ export const accidentsModule: ModuleConfig = {
         return last.toISOString().slice(0, 10);
       },
     },
-    // ---- 36 y 37 ----
+
+    // ── Notas internas de seguimiento: solo roles con permiso "Internal notes" ──
     {
-      key: 'writeUpReceived',
-      label: 'Writte up RECEIVED?',
-      type: 'enum',
+      key: 'update',
+      label: 'Follow-up notes',
+      importAliases: ['Emiro Update:'],
+      type: 'textarea',
       table: false,
-      enumValues: YES_NO,
+      hideOnCreate: true,
+      requiresAction: 'verNotas',
     },
-    { key: 'update', label: 'Emiro Update:', type: 'textarea', table: false },
-    // Interno: no sale en el Excel del módulo.
+
     { ...capturedByField, exportable: false },
   ],
   /** Subformulario: la evidencia fotográfica se carga renglón por renglón. */

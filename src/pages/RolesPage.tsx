@@ -43,6 +43,8 @@ const ACTIONS: PermissionAction[] = [
   'importar',
   'exportar',
   'filtrar',
+  'verFinanzas',
+  'verNotas',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -55,6 +57,8 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   importar: 'Import CSV',
   exportar: 'Export Excel',
   filtrar: 'Filters',
+  verFinanzas: 'Money fields',
+  verNotas: 'Internal notes',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
