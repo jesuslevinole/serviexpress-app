@@ -1,4 +1,4 @@
-import { Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Columns3, Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
@@ -9,7 +9,7 @@ import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
 import type { SelectOption } from '../ui/SearchableSelect';
 import type { RefMaps } from '../../hooks/useRefMaps';
-import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
+import type { EntityData, FieldConfig, FieldValue, FormStep } from '../../types/models';
 import './CrudForm.css';
 
 interface CrudFormProps {
@@ -38,6 +38,10 @@ interface CrudFormProps {
    * subtabla de uniformes aparece al elegir tipo de solicitud "Uniforms").
    */
   renderExtra?: (values: Record<string, FieldValue>) => ReactNode;
+  /** Pestañas del alta. Sin esto el formulario se muestra completo, como antes. */
+  steps?: FormStep[];
+  /** Abre el editor de pestañas (solo administradores). */
+  onConfigureSteps?: () => void;
   /** Aviso en vivo que depende de lo capturado (p. ej. existencia disponible). */
   renderBanner?: (values: Record<string, FieldValue>) => ReactNode;
   /** Alcance (entidad/estación) por usuario, para rellenar al elegir capturista. */
@@ -90,6 +94,8 @@ export function CrudForm({
   userScopes,
   extraSection,
   renderExtra,
+  steps,
+  onConfigureSteps,
   renderBanner,
   contextEditable = true,
   onClose,
@@ -121,6 +127,7 @@ export function CrudForm({
 
   useEffect(() => {
     if (open) {
+      setStepIndex(0);
       const base = buildInitialValues(valueFields, initial);
       // Alta: las fechas de registro arrancan en el día de hoy.
       if (!initial) {
@@ -311,6 +318,45 @@ export function CrudForm({
     return isAdmin || can(target.id, 'crear') ? target : null;
   };
 
+  /**
+   * Reparto de los campos visibles por pestaña. Los que no estén asignados a
+   * ningún paso se agregan al último: así, si se configura mal o se agrega un
+   * campo nuevo al código, nunca desaparece del alta.
+   */
+  const [stepIndex, setStepIndex] = useState(0);
+
+  const stepGroups = useMemo(() => {
+    if (!steps || steps.length === 0) return null;
+    const assigned = new Set(steps.flatMap((step) => step.fieldKeys));
+    const leftovers = visibleFields.filter((field) => !assigned.has(field.key));
+    return steps.map((step, index) => ({
+      ...step,
+      fields: [
+        ...step.fieldKeys
+          .map((key) => visibleFields.find((field) => field.key === key))
+          .filter((field): field is FieldConfig => field !== undefined),
+        ...(index === steps.length - 1 ? leftovers : []),
+      ],
+    }));
+  }, [steps, visibleFields]);
+
+  // Una pestaña sin campos (porque su bloque no aplica a este tipo) se salta.
+  const activeGroups = useMemo(
+    () => stepGroups?.filter((group) => group.fields.length > 0) ?? null,
+    [stepGroups],
+  );
+
+  const current = activeGroups
+    ? (activeGroups[Math.min(stepIndex, activeGroups.length - 1)] ?? null)
+    : null;
+  const shownFields = current ? current.fields : visibleFields;
+  const isLastStep = !activeGroups || stepIndex >= activeGroups.length - 1;
+
+  /** Campos obligatorios sin llenar dentro de la pestaña actual. */
+  const missingHere = current
+    ? missing.filter((key) => current.fields.some((field) => field.key === key))
+    : missing;
+
   const handleSubmit = (keepOpen: boolean) => {
     setTouchedSubmit(true);
     if (missing.length > 0) return;
@@ -347,10 +393,49 @@ export function CrudForm({
               <span className="crud-btn-text">Required fields</span>
             </button>
           ) : null}
+          {onConfigureSteps ? (
+            <button
+              type="button"
+              className="btn btn-outline crudform-config"
+              title="Name the tabs and choose which field goes in each one"
+              onClick={onConfigureSteps}
+              disabled={busy}
+            >
+              <Columns3 size={15} />
+              <span className="crud-btn-text">Form steps</span>
+            </button>
+          ) : null}
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          {initial === null ? (
+          {activeGroups && stepIndex > 0 ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setStepIndex((n) => Math.max(0, n - 1))}
+              disabled={busy}
+            >
+              <ChevronLeft size={16} />
+              Back
+            </button>
+          ) : null}
+          {activeGroups && !isLastStep ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                // No se avanza dejando obligatorios sin llenar en este paso.
+                setTouchedSubmit(true);
+                if (missingHere.length > 0) return;
+                setStepIndex((n) => Math.min(activeGroups.length - 1, n + 1));
+              }}
+              disabled={busy}
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          ) : null}
+          {initial === null && isLastStep ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -360,6 +445,7 @@ export function CrudForm({
               {busy ? 'Saving…' : 'Save and add another'}
             </button>
           ) : null}
+          {isLastStep ? (
           <button
             type="button"
             className="btn btn-primary"
@@ -368,12 +454,30 @@ export function CrudForm({
           >
             {busy ? 'Saving…' : 'Save'}
           </button>
+          ) : null}
         </>
       }
     >
       <div className="crudform-layout">
+        {activeGroups && activeGroups.length > 1 ? (
+          <nav className="crudform-steps" aria-label="Form steps">
+            {activeGroups.map((group, index) => (
+              <button
+                key={group.id}
+                type="button"
+                className={`crudform-step ${index === stepIndex ? 'is-active' : ''} ${
+                  index < stepIndex ? 'is-done' : ''
+                }`}
+                onClick={() => setStepIndex(index)}
+              >
+                <span className="crudform-step-num">{index + 1}</span>
+                {group.title}
+              </button>
+            ))}
+          </nav>
+        ) : null}
         <div className="crudform-grid">
-          {visibleFields.map((field) => {
+          {shownFields.map((field) => {
             // Dato que mantiene el sistema (p. ej. el millaje actual del
             // camión): se muestra, pero no se captura.
             if (isLocked(field)) {

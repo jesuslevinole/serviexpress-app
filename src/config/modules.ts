@@ -1352,6 +1352,60 @@ export const accidentsModule: ModuleConfig = {
 
     { ...capturedByField, exportable: false },
   ],
+  /**
+   * Alta en cuatro pasos cortos. Cada pantalla cabe en un teléfono sin hacer
+   * scroll y las pestañas que no apliquen al tipo elegido se saltan solas:
+   * una lesión pasa directo de "Qué pasó" a "Evidencia".
+   */
+  formSteps: [
+    { id: 'who', title: 'Who', fieldKeys: ['idEntity', 'idStation', 'date', 'idDriver'] },
+    {
+      id: 'what',
+      title: 'What happened',
+      fieldKeys: ['incidentType', 'description'],
+    },
+    {
+      id: 'details',
+      title: 'Details',
+      fieldKeys: [
+        'whoInjured',
+        'bodyPart',
+        'injuryDescription',
+        'medicalAttention',
+        'emsCalled',
+        'transportedToHospital',
+        'idTruck',
+        'address',
+        'canContinueRoute',
+        'towRequired',
+        'accidentType',
+        'thirdPartyName',
+        'thirdPartyPhone',
+        'licensePlate',
+        'policeOnScene',
+        'policeReportNumber',
+        'reportedToFedexAccident',
+        'propertyDamageType',
+        'reportedToFedexProperty',
+        'idIncidentType',
+        'reportedToFedexOther',
+      ],
+    },
+    {
+      id: 'followup',
+      title: 'Follow-up',
+      fieldKeys: [
+        'incidentTime',
+        'preventable',
+        'writeUpReceived',
+        'startPaymentDate',
+        'driverTotalAmount',
+        'driverPaymentWeekly',
+        'update',
+        'idUsers',
+      ],
+    },
+  ],
   /** Subformulario: la evidencia fotográfica se carga renglón por renglón. */
   detail: {
     collection: COLLECTIONS.accidentPhotos,

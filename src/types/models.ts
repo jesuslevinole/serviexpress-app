@@ -291,6 +291,15 @@ export interface ChangeLogConfig {
   watch: string[];
 }
 
+/** Una pestaña del formulario por pasos. */
+export interface FormStep {
+  id: string;
+  /** Nombre visible de la pestaña; el admin lo puede cambiar. */
+  title: string;
+  /** Claves de los campos que se capturan en esta pestaña, en orden. */
+  fieldKeys: string[];
+}
+
 export interface ModuleConfig {
   /** Id estable del módulo (se usa en permisos y rutas). */
   id: string;
@@ -302,6 +311,12 @@ export interface ModuleConfig {
   /** Si se define, este campo se llena automáticamente con el uid del usuario actual. */
   autoUserField?: string;
   /** Módulo de detalle (maestro–detalle), p. ej. renglones del reporte BC. */
+  /**
+   * Divide el alta en pestañas para que se llene rápido, sobre todo en
+   * teléfono. Los campos que no aparezcan en ningún paso se agregan al
+   * último, para que nunca se pierda uno al reconfigurar.
+   */
+  formSteps?: FormStep[];
   detail?: DetailConfig;
   /**
    * Pestañas que separan los registros del módulo (p. ej. mantenimiento

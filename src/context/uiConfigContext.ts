@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { ModuleConfig } from '../types/models';
+import type { FormStep, ModuleConfig } from '../types/models';
 
 export interface FieldOverride {
   label?: string;
@@ -14,6 +14,8 @@ export interface ModuleOverride {
   title?: string;
   order?: number;
   fields?: Record<string, FieldOverride>;
+  /** Pestañas del formulario configuradas por el admin (sustituyen a las del código). */
+  formSteps?: FormStep[];
 }
 
 export interface UiOverrides {

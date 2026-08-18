@@ -114,3 +114,67 @@
 .crudform-diff.is-over strong {
   color: var(--danger);
 }
+
+/* Pestañas del alta por pasos: llenar poco a poco en vez de una sábana. */
+.crudform-steps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.crudform-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 14px 7px 8px;
+}
+
+.crudform-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.crudform-step.is-done {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.crudform-step.is-done .crudform-step-num {
+  background: var(--success);
+  color: #fff;
+}
+
+.crudform-step.is-active {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+
+.crudform-step.is-active .crudform-step-num {
+  background: var(--primary);
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .crudform-step {
+    font-size: 12px;
+    padding: 6px 11px 6px 6px;
+  }
+}

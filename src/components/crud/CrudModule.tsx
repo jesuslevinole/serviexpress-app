@@ -34,6 +34,7 @@ import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
 import { TableLayoutModal } from './TableLayoutModal';
+import { FormStepsModal } from './FormStepsModal';
 import { RelatedList, RelatedRecordsModal } from './RelatedRecordsModal';
 import { DetailSummary } from './DetailSummary';
 import { useUiConfig } from '../../hooks/useUiConfig';
@@ -197,6 +198,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+  /** Editor de pestañas del alta (solo administradores). */
+  const [stepsOpen, setStepsOpen] = useState(false);
   /**
    * Renglones capturados dentro del alta, antes de que exista el maestro:
    * viven en memoria y se guardan en cuanto el maestro se crea.
@@ -986,6 +989,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         />
       ) : null}
 
+      {stepsOpen ? (
+        <FormStepsModal base={baseConfig} onClose={() => setStepsOpen(false)} />
+      ) : null}
+
       {layoutOpen ? (
         <TableLayoutModal base={baseConfig} onClose={() => setLayoutOpen(false)} />
       ) : null}
@@ -1003,6 +1010,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         open={formOpen}
         title={editing ? `Edit · ${config.title}` : `Add · ${config.title}`}
         fields={allowedFields}
+        steps={config.formSteps}
+        onConfigureSteps={isAdmin ? () => setStepsOpen(true) : undefined}
         initial={editing}
         refMaps={refMaps}
         busy={busy}

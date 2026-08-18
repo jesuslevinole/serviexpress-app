@@ -144,6 +144,8 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
         })
         .sort((a, b) => a.order - b.order)
         .map((item) => item.field);
+      // Pestañas configuradas por el admin: sustituyen a las del código.
+      const formSteps = moduleOverride.formSteps ?? base.formSteps;
       // El detalle usa sus propios overrides bajo el id "<módulo>__detail".
       const detailOverride = overrides.modules[`${base.id}__detail`];
       const detail =
@@ -159,6 +161,7 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
         ...base,
         title: moduleOverride.title ?? base.title,
         fields,
+        ...(formSteps ? { formSteps } : {}),
         ...(detail ? { detail } : {}),
       };
     },
