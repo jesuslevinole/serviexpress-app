@@ -34,8 +34,49 @@
 }
 
 @media (max-width: 640px) {
+  /* Un solo campo por renglón, al 80% del ancho y centrado: la vista deja
+     aire a los lados y el ojo sigue una sola columna al bajar. */
   .crudform-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    width: 80%;
+    margin: 0 auto;
+    gap: 18px;
+  }
+
+  /* Los campos de ancho completo no se salen de esa columna. */
+  .crudform-grid .field-full {
+    grid-column: 1 / -1;
+  }
+
+  .crudform-layout {
+    gap: 16px;
+  }
+
+  /* Resumen del registro: debajo del formulario y con el mismo ancho. */
+  .ssum,
+  .crudform-extra,
+  .crudform-banner,
+  .crudform-diff {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Pestañas: se deslizan de borde a borde aunque el resto vaya al 80%. */
+  .crudform-steps {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    scrollbar-width: none;
+  }
+
+  .crudform-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .crudform-step {
+    min-height: 42px;
   }
 }
 

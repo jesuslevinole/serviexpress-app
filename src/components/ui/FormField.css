@@ -98,3 +98,30 @@
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
+
+@media (max-width: 640px) {
+  /* El "+" pasa a ser un objetivo táctil claro: mismo alto que el selector,
+     con el color de acento para que se vea que es una acción, no un adorno. */
+  .field-with-add {
+    gap: 8px;
+  }
+
+  .field-add {
+    width: 50px;
+    min-height: 50px;
+    border-radius: 13px;
+    border-color: var(--primary);
+    background: var(--primary-bg);
+  }
+
+  .field-add svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2.4;
+  }
+
+  .field-add:active {
+    background: var(--primary);
+    color: #fff;
+  }
+}

@@ -100,75 +100,6 @@ textarea {
 }
 
 /* ============================================================
-   Barras de desplazamiento: delgadas y en la paleta del app.
-   Se aplican a los contenedores que desplazan contenido propio
-   (paneles, modales, listas), no a la ventana completa.
-   ============================================================ */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
-}
-
-*::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 20px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-  transition: background 0.15s ease;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-  background-clip: content-box;
-}
-
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* El menú tiene su propia paleta (fondo navy): definida en Sidebar.css. */
-
-/* Botón de alta: un + grande e inconfundible. */
-.btn-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 6px 16px -6px var(--primary-darker);
-  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-  flex-shrink: 0;
-}
-
-.btn-add:hover {
-  background: var(--primary-dark);
-  transform: scale(1.07);
-  box-shadow: 0 8px 20px -6px var(--primary-darker);
-}
-
-.btn-add:active {
-  transform: scale(0.96);
-}
-
-.btn-add:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
-/* ============================================================
    Experiencia móvil (≤640px): targets táctiles grandes,
    tipografía cómoda e inputs a 16px (evita el zoom de iOS).
    Los !important son necesarios para vencer la especificidad
@@ -263,19 +194,19 @@ textarea {
   .crud-toolbar-actions {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
+  }
+
+  /* Agregar es la acción frecuente: renglón propio y a lo ancho. */
+  .crud-toolbar-actions .btn-primary {
+    grid-column: 1 / -1;
   }
 
   .crud-toolbar-actions .btn {
     justify-content: center;
     padding: 14px 8px;
     min-height: 50px;
-  }
-
-  .btn-add {
-    width: 54px;
-    height: 54px;
   }
 
   .crud-chip {
@@ -312,8 +243,22 @@ textarea {
   }
 
   .modal-footer .btn {
-    flex: 1;
+    flex: 1 1 45%;
     justify-content: center;
+  }
+
+  /* La acción principal ocupa su propio renglón: es la que se busca al
+     terminar de capturar y no debe quedar apretada entre las secundarias. */
+  .modal-footer .btn-primary {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  /* El error se lee completo, arriba de los botones. */
+  .modal-footer .crudform-error {
+    flex: 1 1 100%;
+    order: -1;
+    margin-right: 0;
   }
 
   /* --- Panel de filtros a pantalla completa --- */
@@ -342,7 +287,8 @@ textarea {
   }
 
   .ssum {
-    max-height: 260px;
+    max-height: 240px;
+    overflow-y: auto;
   }
 
   /* --- Dashboard: números protagonistas --- */
@@ -360,9 +306,39 @@ textarea {
     border-radius: 13px;
   }
 
-  .login-submit {
+  .login-submit,
+  .login-bypass {
     min-height: 54px;
     border-radius: 13px;
+  }
+
+  /* --- Subtabla de renglones (uniformes) --- */
+  .draftrows-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .draftrows-bar-text span {
+    white-space: normal;
+  }
+
+  .draftrows-form {
+    grid-template-columns: 1fr;
+  }
+
+  .draftrows-avail-value {
+    height: 50px;
+    font-size: 16px;
+  }
+
+  .draftrows-add {
+    min-height: 50px;
+  }
+
+  /* --- Alta rápida de catálogo dentro de un formulario --- */
+  .modal-overlay.is-top .modal-card {
+    max-height: 92vh;
   }
 
   /* --- Catálogos: pestañas presionables --- */
