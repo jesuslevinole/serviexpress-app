@@ -29,6 +29,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { CRUD_MODULES } from '../../config/modules';
 import { BrandLogo } from '../ui/BrandLogo';
+import { APP_VERSION } from '../../config/version';
 import './Sidebar.css';
 
 const ICONS: Record<string, LucideIcon> = {
@@ -195,6 +196,12 @@ export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: 
             </NavLink>
           ) : null}
         </nav>
+
+        {/* Firma y versión: siempre al final del menú, también plegado. */}
+        <div className="sidebar-about">
+          <span className="sidebar-version">{APP_VERSION}</span>
+          <span className="sidebar-author sidebar-link-text">Created by Jesús Molero</span>
+        </div>
 
         {onToggleCollapse ? (
           <footer className="sidebar-foot">

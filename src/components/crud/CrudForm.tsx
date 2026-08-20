@@ -300,22 +300,26 @@ export function CrudForm({
    * catálogo y el rol puede crear en él. Al guardar, el nuevo registro llega
    * solo a las opciones (los catálogos van suscritos en vivo) y se selecciona.
    */
-  const { can, isAdmin } = useAuth();
+  const { canOr, isAdmin } = useAuth();
   const [quickAdd, setQuickAdd] = useState<FieldConfig | null>(null);
 
+  /**
+   * Módulo destino del botón "+" de un campo de referencia, o null si este
+   * rol no lo puede usar. El permiso se decide desde la matriz de Roles con
+   * la acción "Quick add (+)"; los roles guardados antes de que existiera
+   * heredan su permiso de crear, para que nadie pierda un botón que ya usaba.
+   */
   const catalogFor = (field: FieldConfig) => {
     if (field.type !== 'ref' || !field.refCollection) return null;
+    // Los catálogos se administran todos con el id 'catalogs': es con el que
+    // CatalogosPage monta el motor y el único que existe en la matriz.
     const catalog = catalogModules.find((module) => module.collection === field.refCollection);
-    if (catalog) {
-      // Los catálogos se gobiernan con el permiso 'catalogs': es el id con el
-      // que CatalogosPage monta el motor, y el único que existe en la matriz.
-      return isAdmin || can('catalogs', 'crear') ? catalog : null;
-    }
-    // También se puede dar de alta un registro de otro módulo (p. ej. un
-    // conductor nuevo desde Requerimientos), si el rol puede crear ahí.
-    const target = CRUD_MODULES.find((module) => module.collection === field.refCollection);
+    const target =
+      catalog ?? CRUD_MODULES.find((module) => module.collection === field.refCollection);
     if (!target) return null;
-    return isAdmin || can(target.id, 'crear') ? target : null;
+    const moduleId = catalog ? 'catalogs' : target.id;
+    if (isAdmin) return target;
+    return canOr(moduleId, 'altaRapida', 'crear') ? target : null;
   };
 
   /**

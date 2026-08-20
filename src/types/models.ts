@@ -26,7 +26,14 @@ export type PermissionAction =
   /** Ver los campos de dinero del módulo (cobros, montos, descuentos). */
   | 'verFinanzas'
   /** Ver las notas internas de seguimiento del módulo. */
-  | 'verNotas';
+  | 'verNotas'
+  /**
+   * Usar el botón "+" para dar de alta un registro de este módulo desde el
+   * formulario de otro (p. ej. crear una estación mientras se captura un
+   * conductor). Es independiente de 'crear': se puede permitir capturar en el
+   * módulo y aun así no dejar crear catálogos al vuelo, o al revés.
+   */
+  | 'altaRapida';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';

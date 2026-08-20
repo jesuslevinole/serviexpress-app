@@ -45,6 +45,7 @@ const ACTIONS: PermissionAction[] = [
   'filtrar',
   'verFinanzas',
   'verNotas',
+  'altaRapida',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -59,6 +60,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   filtrar: 'Filters',
   verFinanzas: 'Money fields',
   verNotas: 'Internal notes',
+  altaRapida: 'Quick add (+)',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */

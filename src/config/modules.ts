@@ -1453,11 +1453,24 @@ export const requirementsModule: ModuleConfig = {
       required: true,
     },
     {
+      key: 'requestFor',
+      label: 'Who is this for?',
+      type: 'enum',
+      enumValues: ['For me', 'For someone else'],
+      required: true,
+      defaultValue: 'For me',
+      badge: true,
+      badgeTones: { 'For me': 'info', 'For someone else': 'neutral' },
+    },
+    {
       key: 'idDriver',
       label: 'Driver',
       type: 'ref',
       refCollection: COLLECTIONS.drivers,
       required: true,
+      // Solo se pregunta cuando la solicitud es para otra persona: si es para
+      // quien captura, ya queda identificado en "Captured by".
+      visibleWhen: { field: 'requestFor', value: 'For someone else' },
     },
     {
       key: 'email',

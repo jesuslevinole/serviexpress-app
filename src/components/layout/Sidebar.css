@@ -193,6 +193,35 @@
   display: none;
 }
 
+/* Firma y versión al final del menú. */
+.sidebar-about {
+  margin-top: auto;
+  padding: 14px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.sidebar-version {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.sidebar-author {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Con el menú plegado solo queda la versión, centrada. */
+.sidebar.is-collapsed .sidebar-about {
+  align-items: center;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 @media (min-width: 901px) {
   .sidebar {
     transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
@@ -200,7 +229,6 @@
 
   .sidebar-foot {
     display: block;
-    margin-top: auto;
     padding: 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     position: sticky;
