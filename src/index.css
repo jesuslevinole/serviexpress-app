@@ -162,17 +162,25 @@ textarea {
     line-height: 1.5;
   }
 
-  /* Etiqueta clara y separada del campo, como en la referencia. */
+  /* Las etiquetas de los campos que flotan se colocan desde FormField.css;
+     esta solo aplica a las que siguen arriba (casillas Sí/No). */
   .field-label {
     font-size: 14px;
     font-weight: 600;
     color: var(--text);
     letter-spacing: 0;
-    margin-bottom: 2px;
   }
 
   .field {
     gap: 7px;
+  }
+
+  /* Alineación vertical del contenido del selector con el input. */
+  .sselect-control {
+    min-height: 54px;
+    border-radius: 14px;
+    background: var(--surface-2);
+    border-color: transparent;
   }
 
   .field-check input,

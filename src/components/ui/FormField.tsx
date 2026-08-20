@@ -30,6 +30,15 @@ export function FormField({
 }: FormFieldProps) {
   const inputClass = `field-input ${invalid ? 'field-invalid' : ''}`;
 
+  /**
+   * ¿El campo tiene contenido? En móvil la etiqueta va DENTRO del campo y
+   * sube cuando hay valor o foco (patrón de etiqueta flotante). Con esto se
+   * consigue la vista limpia de una sola caja por renglón sin perder la
+   * etiqueta al escribir, que es el problema de usar solo placeholder.
+   */
+  const filled =
+    value !== null && value !== undefined && value !== '' && value !== false;
+
   const renderControl = () => {
     switch (field.type) {
       case 'textarea':
@@ -134,8 +143,20 @@ export function FormField({
     }
   };
 
+  // Las casillas Sí/No traen su propia etiqueta al lado: no flotan.
+  const floats = field.type !== 'bool';
+
   return (
-    <div className={`field ${field.type === 'textarea' ? 'field-full' : ''}`}>
+    <div
+      className={[
+        'field',
+        field.type === 'textarea' ? 'field-full' : '',
+        floats ? 'field-floats' : '',
+        filled ? 'is-filled' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <label className="field-label">
         {field.label}
         {field.required ? <span className="field-required">*</span> : null}

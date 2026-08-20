@@ -125,3 +125,92 @@
     color: #fff;
   }
 }
+
+/* ============================================================
+   Etiqueta flotante (solo móvil)
+   Una caja por renglón, con la etiqueta dentro cuando está vacía
+   y arriba —pequeña— cuando hay valor o foco. Se ve como un
+   formulario limpio de una sola columna, sin perder la etiqueta al
+   escribir, que es la falla de usar únicamente placeholder.
+   ============================================================ */
+@media (max-width: 640px) {
+  .field-floats {
+    position: relative;
+    gap: 0;
+  }
+
+  .field-floats .field-label {
+    position: absolute;
+    top: 17px;
+    left: 17px;
+    right: 44px;
+    z-index: 1;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text-muted);
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform-origin: left top;
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+
+  /* Con valor o con foco, la etiqueta sube y encoge dentro del campo. */
+  .field-floats.is-filled .field-label,
+  .field-floats:focus-within .field-label {
+    transform: translateY(-9px) scale(0.72);
+    color: var(--text-soft);
+  }
+
+  .field-floats:focus-within .field-label {
+    color: var(--primary);
+  }
+
+  /* El texto arranca más abajo para dejar sitio a la etiqueta flotada. */
+  .field-floats .field-input,
+  .field-floats .sselect-control {
+    padding-top: 23px;
+    padding-bottom: 9px;
+  }
+
+  .field-floats textarea.field-input {
+    padding-top: 26px;
+  }
+
+  /* Fecha y hora muestran su formato nativo siempre; se oculta mientras
+     el campo esté vacío para que no choque con la etiqueta. */
+  .field-floats:not(.is-filled):not(:focus-within) input[type='date'],
+  .field-floats:not(.is-filled):not(:focus-within) input[type='time'] {
+    color: transparent;
+  }
+
+  /* El selector vacío no repite el "Select…": manda la etiqueta. */
+  .field-floats:not(.is-filled) .sselect-placeholder {
+    visibility: hidden;
+  }
+
+  /* Los iconos del selector se mantienen centrados aunque el texto baje. */
+  .field-floats .sselect-control {
+    position: relative;
+  }
+
+  .field-floats .sselect-icons {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* El icono del calendario no se oculta junto con el texto de la fecha. */
+  .field-floats input[type='date']::-webkit-calendar-picker-indicator,
+  .field-floats input[type='time']::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+  }
+
+  .field-error {
+    font-size: 12.5px;
+    margin-top: 6px;
+  }
+}
