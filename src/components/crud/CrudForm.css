@@ -52,8 +52,7 @@
     gap: 16px;
   }
 
-  /* Resumen del registro: debajo del formulario y con el mismo ancho. */
-  .ssum,
+  /* Bloques auxiliares: mismo ancho que la columna de campos. */
   .crudform-extra,
   .crudform-banner,
   .crudform-diff {

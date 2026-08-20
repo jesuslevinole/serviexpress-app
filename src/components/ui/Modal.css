@@ -40,6 +40,11 @@ body.modal-open {
   max-width: 1140px;
 }
 
+/* Para rejillas anchas (matriz de permisos): casi toda la pantalla. */
+.modal-xl {
+  max-width: min(1600px, 96vw);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -73,9 +78,12 @@ body.modal-open {
   }
 
   .modal-card {
-    max-height: 96vh;
-    border-radius: 18px 18px 0 0;
-    padding-top: 8px;
+    /* Casi pantalla completa: los formularios largos se llenan sin pelear
+       con un panel corto que obliga a hacer scroll dentro del scroll. */
+    height: 94vh;
+    max-height: 94vh;
+    border-radius: 20px 20px 0 0;
+    padding-top: 10px;
     position: relative;
   }
 

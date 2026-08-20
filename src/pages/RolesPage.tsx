@@ -19,7 +19,6 @@ import { normalizeText } from '../services/csv';
 import { ImportCsvModal } from '../components/crud/ImportCsvModal';
 import { RecordDetailModal } from '../components/crud/RecordDetailModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { SaveSummary } from '../components/crud/SaveSummary';
 import { DataTable, type SortDirection, type TableColumn } from '../components/ui/DataTable';
 import { Modal } from '../components/ui/Modal';
 import { Pagination } from '../components/ui/Pagination';
@@ -248,6 +247,14 @@ export function RolesPage() {
     });
   };
 
+  /** Filtro por nombre de módulo: la matriz tiene más de 20 renglones. */
+  const [moduleFilter, setModuleFilter] = useState('');
+  const shownModules = useMemo(() => {
+    const term = moduleFilter.trim().toLowerCase();
+    if (term === '') return PERMISSION_MODULES;
+    return PERMISSION_MODULES.filter((m) => m.title.toLowerCase().includes(term));
+  }, [moduleFilter]);
+
   const setScope = (moduleId: string, alcance: ViewScope) => {
     setMatrix((prev) => ({
       ...prev,
@@ -264,6 +271,18 @@ export function RolesPage() {
         {},
       );
       return { ...prev, [moduleId]: next };
+    });
+  };
+
+  /** Marca o desmarca una acción en TODOS los módulos visibles. */
+  const toggleColumn = (action: PermissionAction) => {
+    setMatrix((prev) => {
+      const allOn = shownModules.every((m) => prev[m.id]?.[action] === true);
+      const next = { ...prev };
+      shownModules.forEach((m) => {
+        next[m.id] = { ...(next[m.id] ?? {}), [action]: !allOn };
+      });
+      return next;
     });
   };
 
@@ -463,9 +482,9 @@ export function RolesPage() {
 
       <Modal
         open={formOpen}
-        title={editing ? 'Editar rol' : 'Add role'}
+        title={editing ? 'Edit role' : 'Add role'}
         onClose={() => setFormOpen(false)}
-        size="lg"
+        size="xl"
         footer={
           <>
             {error ? <span className="roles-error">{error}</span> : null}
@@ -497,24 +516,52 @@ export function RolesPage() {
           />
         </div>
 
+        <div className="roles-toolbar">
+          <label className="roles-filter">
+            <Search size={15} />
+            <input
+              value={moduleFilter}
+              placeholder="Filter modules…"
+              onChange={(e) => setModuleFilter(e.target.value)}
+            />
+          </label>
+          <span className="roles-count">
+            {ACTIONS.reduce(
+              (total, action) =>
+                total + PERMISSION_MODULES.filter((m) => matrix[m.id]?.[action] === true).length,
+              0,
+            )}{' '}
+            permissions active
+          </span>
+        </div>
+
         <div className="roles-matrix-wrap">
           <table className="roles-matrix">
             <thead>
               <tr>
-                <th>Module</th>
+                <th className="roles-col-module">Module</th>
                 {ACTIONS.map((action) => (
-                  <th key={action}>{ACTION_LABEL[action]}</th>
+                  <th key={action}>
+                    <button
+                      type="button"
+                      className="roles-col-toggle"
+                      title={`Check or uncheck "${ACTION_LABEL[action]}" for every module shown`}
+                      onClick={() => toggleColumn(action)}
+                    >
+                      {ACTION_LABEL[action]}
+                    </button>
+                  </th>
                 ))}
                 <th>All</th>
                   <th>Visible records</th>
               </tr>
             </thead>
             <tbody>
-              {PERMISSION_MODULES.map((module) => {
+              {shownModules.map((module) => {
                 const perms = matrix[module.id] ?? {};
                 return (
                   <tr key={module.id}>
-                    <td>{module.title}</td>
+                    <td className="roles-col-module">{module.title}</td>
                     {ACTIONS.map((action) => (
                       <td key={action}>
                         <input
@@ -560,17 +607,6 @@ export function RolesPage() {
           </table>
         </div>
         </div>
-        <SaveSummary
-          fields={ROLE_SUMMARY_FIELDS}
-          values={{ name }}
-          refLabels={() => '—'}
-          footer={`${ACTIONS.reduce(
-            (total, action) =>
-              total +
-              PERMISSION_MODULES.filter((m) => matrix[m.id]?.[action] === true).length,
-            0,
-          )} active permissions in the matrix`}
-        />
         </div>
       </Modal>
 

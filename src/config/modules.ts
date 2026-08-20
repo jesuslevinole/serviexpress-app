@@ -1456,11 +1456,11 @@ export const requirementsModule: ModuleConfig = {
       key: 'requestFor',
       label: 'Who is this for?',
       type: 'enum',
-      enumValues: ['For me', 'For someone else'],
+      enumValues: ['BC Report', 'Driver'],
       required: true,
-      defaultValue: 'For me',
+      defaultValue: 'BC Report',
       badge: true,
-      badgeTones: { 'For me': 'info', 'For someone else': 'neutral' },
+      badgeTones: { 'BC Report': 'info', Driver: 'neutral' },
     },
     {
       key: 'idDriver',
@@ -1468,9 +1468,9 @@ export const requirementsModule: ModuleConfig = {
       type: 'ref',
       refCollection: COLLECTIONS.drivers,
       required: true,
-      // Solo se pregunta cuando la solicitud es para otra persona: si es para
-      // quien captura, ya queda identificado en "Captured by".
-      visibleWhen: { field: 'requestFor', value: 'For someone else' },
+      // Solo se pregunta cuando la solicitud es para un conductor; si es del
+      // propio BC, ya queda identificado en "Captured by".
+      visibleWhen: { field: 'requestFor', value: 'Driver' },
     },
     {
       key: 'email',

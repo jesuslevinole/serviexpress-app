@@ -132,16 +132,47 @@ textarea {
     font-size: 16px !important;
   }
 
+  /* --- Campos: relleno suave, esquinas amplias y foco evidente ---
+     El borde tenue sobre fondo relleno se lee mejor en pantalla chica que
+     una caja vacía con contorno, y da sensación de "toca aquí". */
   .field-input,
   .sselect-control {
-    min-height: 50px;
-    padding: 14px;
-    border-radius: 13px;
+    min-height: 54px;
+    padding: 15px 16px;
+    border-radius: 14px;
     font-size: 16px !important;
+    background: var(--surface-2);
+    border-color: transparent;
   }
 
+  .field-input:focus,
+  .sselect:focus-within .sselect-control {
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-bg);
+  }
+
+  .field-invalid {
+    background: var(--danger-bg);
+    border-color: var(--danger);
+  }
+
+  textarea.field-input {
+    min-height: 110px;
+    line-height: 1.5;
+  }
+
+  /* Etiqueta clara y separada del campo, como en la referencia. */
   .field-label {
-    font-size: 13.5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0;
+    margin-bottom: 2px;
+  }
+
+  .field {
+    gap: 7px;
   }
 
   .field-check input,
@@ -224,6 +255,17 @@ textarea {
     font-size: 13.5px;
   }
 
+  /* --- Formularios: una columna con aire entre campos --- */
+  .crudform-grid {
+    gap: 20px;
+  }
+
+  /* El resumen del registro estorba en el alta móvil: lo que importa es el
+     campo que se está llenando, no un panel repitiendo lo ya escrito. */
+  .ssum {
+    display: none;
+  }
+
   /* --- Modales (bottom sheet): más aire y zona segura --- */
   .modal-header {
     padding: 16px 18px 12px;
@@ -254,7 +296,6 @@ textarea {
     order: 2;
   }
 
-  /* El error se lee completo, arriba de los botones. */
   .modal-footer .crudform-error {
     flex: 1 1 100%;
     order: -1;
@@ -284,11 +325,6 @@ textarea {
 
   .rdetail-value {
     font-size: 15px;
-  }
-
-  .ssum {
-    max-height: 240px;
-    overflow-y: auto;
   }
 
   /* --- Dashboard: números protagonistas --- */
@@ -328,17 +364,18 @@ textarea {
   }
 
   .draftrows-avail-value {
-    height: 50px;
+    height: 54px;
     font-size: 16px;
   }
 
   .draftrows-add {
-    min-height: 50px;
+    min-height: 54px;
   }
 
   /* --- Alta rápida de catálogo dentro de un formulario --- */
   .modal-overlay.is-top .modal-card {
-    max-height: 92vh;
+    height: auto;
+    max-height: 90vh;
   }
 
   /* --- Catálogos: pestañas presionables --- */
