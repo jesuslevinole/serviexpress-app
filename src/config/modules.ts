@@ -275,6 +275,33 @@ export const driversModule: ModuleConfig = {
       type: 'ref',
       refCollection: COLLECTIONS.driverCategories,
     },
+    // --- Columnas del listado maestro de conductores ---
+    { key: 'badge', label: 'Badge', type: 'text', table: false, importable: true },
+    { key: 'nationality', label: 'Nationality', type: 'text', table: false, importable: true },
+    {
+      key: 'i9Date',
+      label: 'I9 start date',
+      type: 'date',
+      table: false,
+      importable: true,
+    },
+    {
+      key: 'employmentPermit',
+      label: 'Employment permit',
+      type: 'date',
+      table: false,
+      importable: true,
+    },
+    { key: 'dlState', label: 'DL state', type: 'text', table: false, importable: true },
+    { key: 'dlExpDate', label: 'DL exp. date', type: 'date', table: false, importable: true },
+    { key: 'dotExpDate', label: 'DOT exp. date', type: 'date', table: false, importable: true },
+    {
+      key: 'certExpDate',
+      label: 'Certification exp. date',
+      type: 'date',
+      table: false,
+      importable: true,
+    },
     { key: 'fa', label: 'FA', type: 'bool', table: false },
     { key: 'sta', label: 'STA', type: 'bool', table: false },
     { key: 'status', label: 'Status', type: 'bool', defaultValue: true },
@@ -1581,6 +1608,16 @@ const catalogFields: FieldConfig[] = [
   { key: 'name', label: 'Name', type: 'text', required: true },
 ];
 
+/**
+ * Categorías de conductor: el código de autorización de trabajo (C08, C11…)
+ * no dice nada por sí solo, así que el catálogo guarda también qué significa.
+ * Así quien captura elige con criterio en vez de adivinar.
+ */
+const driverCategoryFields: FieldConfig[] = [
+  { key: 'name', label: 'Name', type: 'text', required: true },
+  { key: 'description', label: 'Description', type: 'text' },
+];
+
 /** Prendas y tallas: comparten el tipo de talla (numérica o alfabética). */
 const typeSizeField: FieldConfig = {
   key: 'typeSize',
@@ -1655,7 +1692,13 @@ export const catalogModules: ModuleConfig[] = [
   { id: 'team', collection: COLLECTIONS.team, title: 'Team', icon: 'UsersRound', fields: teamFields },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
   { id: 'stations', collection: COLLECTIONS.stations, title: 'Stations', icon: 'MapPin', fields: catalogFields },
-  { id: 'driverCategories', collection: COLLECTIONS.driverCategories, title: 'Driver categories', icon: 'Tags', fields: catalogFields },
+  {
+    id: 'driverCategories',
+    collection: COLLECTIONS.driverCategories,
+    title: 'Driver categories',
+    icon: 'Tags',
+    fields: driverCategoryFields,
+  },
   { id: 'shopNames', collection: COLLECTIONS.shopNames, title: 'Shops', icon: 'Store', fields: catalogFields },
   { id: 'vendors', collection: COLLECTIONS.vendors, title: 'Vendors', icon: 'Handshake', fields: catalogFields },
   { id: 'requestTypes', collection: COLLECTIONS.requestTypes, title: 'Request types', icon: 'ListChecks', fields: catalogFields },
