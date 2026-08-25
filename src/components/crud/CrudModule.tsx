@@ -9,6 +9,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -198,6 +199,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [detailParent, setDetailParent] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
+  /** Registros marcados para eliminar en bloque. */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   /** Editor de pestañas del alta (solo administradores). */
   const [stepsOpen, setStepsOpen] = useState(false);
   /**
@@ -255,6 +259,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canCreate = can(config.id, 'crear');
   const canEdit = can(config.id, 'editar');
   const canDelete = can(config.id, 'eliminar');
+  /** Borrado en bloque: acción propia, más peligrosa que borrar de uno en uno. */
+  const canBulkDelete = isAdmin || can(config.id, 'eliminarMasivo');
   /**
    * Botones de la barra superior. Cada uno tiene su propio permiso; los roles
    * que aún no lo definen heredan el permiso equivalente sobre los registros,
@@ -516,6 +522,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not save');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Elimina de una vez todos los registros marcados. */
+  const handleBulkDelete = async () => {
+    setBusy(true);
+    try {
+      for (const id of selectedIds) {
+        await deleteDocument(config.collection, id);
+      }
+      setSelectedIds(new Set());
+      setBulkDeleting(false);
     } finally {
       setBusy(false);
     }
@@ -866,6 +886,27 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       {loading ? (
         <Spinner />
       ) : (
+        <>
+        {canBulkDelete && selectedIds.size > 0 ? (
+          <div className="crud-bulkbar">
+            <span>{selectedIds.size} selected</span>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear selection
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => setBulkDeleting(true)}
+            >
+              <Trash2 size={16} />
+              Delete selected
+            </button>
+          </div>
+        ) : null}
         <DataTable
           columns={columns}
           rows={pageRows}
@@ -882,7 +923,33 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           onRowClick={(row) => setViewing(row)}
           historyLabel={config.relatedViews?.[0]?.title ?? 'History'}
           onHistory={config.relatedViews ? (row) => setHistoryFor(row) : undefined}
+          selectedIds={canBulkDelete ? selectedIds : undefined}
+          onToggleSelect={
+            canBulkDelete
+              ? (id) =>
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  })
+              : undefined
+          }
+          onToggleSelectAll={
+            canBulkDelete
+              ? () =>
+                  setSelectedIds((prev) => {
+                    const allShown = pageRows.every((row) => prev.has(row.id));
+                    const next = new Set(prev);
+                    pageRows.forEach((row) =>
+                      allShown ? next.delete(row.id) : next.add(row.id),
+                    );
+                    return next;
+                  })
+              : undefined
+          }
         />
+        </>
       )}
 
       {!loading ? (
@@ -1058,6 +1125,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         contextEditable={canEditContext}
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleting}
+        title={`Delete ${selectedIds.size} record(s)`}
+        message={`You are about to delete ${selectedIds.size} record(s). This action cannot be undone.`}
+        busy={busy}
+        onCancel={() => setBulkDeleting(false)}
+        onConfirm={handleBulkDelete}
       />
 
       <ConfirmDialog

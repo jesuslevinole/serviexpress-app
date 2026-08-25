@@ -40,6 +40,13 @@ interface DataTableProps<T extends { id: string }> {
   /** Acción extra por fila (historial / registros relacionados). */
   historyLabel?: string;
   onHistory?: (row: T) => void;
+  /**
+   * Selección múltiple. Si se define, aparece una casilla por fila y otra en
+   * el encabezado para marcar o desmarcar todo lo que se está viendo.
+   */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
 }
 
 /** Tabla genérica con acciones. Todas las tablas del app pasan por aquí. */
@@ -60,9 +67,17 @@ export function DataTable<T extends { id: string }>({
   onRowClick,
   historyLabel,
   onHistory,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: DataTableProps<T>) {
   const showActions =
     (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory;
+  const showSelect = selectedIds !== undefined && onToggleSelect !== undefined;
+  const allSelected =
+    showSelect && rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
+  /** Columnas fijas que se suman a las de datos (selección y acciones). */
+  const extraCols = (showSelect ? 1 : 0) + (showActions ? 1 : 0);
 
   const sortIcon = (key: string) => {
     if (sortKey !== key || !sortDir) return <ChevronsUpDown size={13} className="dtable-sort-idle" />;
@@ -74,6 +89,18 @@ export function DataTable<T extends { id: string }>({
       <table className="dtable">
         <thead>
           <tr>
+            {showSelect ? (
+              <th className="dtable-select-col">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  aria-label="Select all rows shown"
+                  title="Select all rows shown"
+                  onChange={() => onToggleSelectAll?.()}
+                />
+              </th>
+            ) : null}
+            {showActions ? <th className="dtable-actions-col">Actions</th> : null}
             {columns.map((col) =>
               onSort ? (
                 <th
@@ -91,13 +118,12 @@ export function DataTable<T extends { id: string }>({
                 <th key={col.key}>{col.label}</th>
               ),
             )}
-            {showActions ? <th className="dtable-actions-col">Actions</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className="dtable-empty" colSpan={columns.length + (showActions ? 1 : 0)}>
+              <td className="dtable-empty" colSpan={columns.length + extraCols}>
                 {emptyMessage}
               </td>
             </tr>
@@ -105,12 +131,24 @@ export function DataTable<T extends { id: string }>({
             rows.map((row) => (
               <tr
                 key={row.id}
-                className={onRowClick ? 'dtable-row-click' : ''}
+                className={[
+                  onRowClick ? 'dtable-row-click' : '',
+                  showSelect && selectedIds.has(row.id) ? 'is-selected' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
-                {columns.map((col) => (
-                  <td key={col.key}>{col.render(row)}</td>
-                ))}
+                {showSelect ? (
+                  <td className="dtable-select" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(row.id)}
+                      aria-label="Select row"
+                      onChange={() => onToggleSelect(row.id)}
+                    />
+                  </td>
+                ) : null}
                 {showActions ? (
                   <td className="dtable-actions" onClick={(e) => e.stopPropagation()}>
                     {onDetail && (!canDetail || canDetail(row)) ? (
@@ -155,6 +193,9 @@ export function DataTable<T extends { id: string }>({
                     ) : null}
                   </td>
                 ) : null}
+                {columns.map((col) => (
+                  <td key={col.key}>{col.render(row)}</td>
+                ))}
               </tr>
             ))
           )}

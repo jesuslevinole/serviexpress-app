@@ -33,7 +33,13 @@ export type PermissionAction =
    * conductor). Es independiente de 'crear': se puede permitir capturar en el
    * módulo y aun así no dejar crear catálogos al vuelo, o al revés.
    */
-  | 'altaRapida';
+  | 'altaRapida'
+  /**
+   * Seleccionar varios registros y eliminarlos de una vez. Va aparte de
+   * 'eliminar' porque el borrado masivo es mucho más peligroso: se puede
+   * permitir borrar de uno en uno sin habilitar el borrado en bloque.
+   */
+  | 'eliminarMasivo';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';

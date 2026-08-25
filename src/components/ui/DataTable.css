@@ -92,3 +92,24 @@
 .dtable-row-click:hover td {
   background: var(--primary-bg);
 }
+
+/* --- Selección múltiple: casilla al inicio de cada fila --- */
+.dtable-select-col,
+.dtable-select {
+  width: 44px;
+  text-align: center;
+  padding-left: 12px !important;
+  padding-right: 4px !important;
+}
+
+.dtable-select input[type='checkbox'],
+.dtable-select-col input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.dtable tbody tr.is-selected td {
+  background: var(--primary-bg);
+}

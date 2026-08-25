@@ -45,6 +45,7 @@ const ACTIONS: PermissionAction[] = [
   'verFinanzas',
   'verNotas',
   'altaRapida',
+  'eliminarMasivo',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -60,6 +61,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   verFinanzas: 'Money fields',
   verNotas: 'Internal notes',
   altaRapida: 'Quick add (+)',
+  eliminarMasivo: 'Bulk delete',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */

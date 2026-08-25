@@ -327,6 +327,11 @@ export const fleetModule: ModuleConfig = {
   icon: 'Route',
   autoUserField: 'idUsers',
   fields: [
+    // Entidad y estación: además de mostrarse en la tabla, son las que
+    // permiten limitar por alcance ("Station" en la matriz de Roles). Sin
+    // ellas el filtro por estación no tenía contra qué comparar y un BC veía
+    // todos los registros.
+    ...contextFields(true, true),
     { key: 'route', label: 'Route', type: 'text', required: true },
     {
       key: 'idTruck',
@@ -615,6 +620,21 @@ export const bcReportsModule: ModuleConfig = {
       foreignKey: 'idBcReport',
       emptyMessage: 'No maintenance linked to this report yet',
       fields: [
+        /**
+         * Cada renglón nace preventivo (la revisión diaria del BC). Si el BC
+         * detecta una falla puede marcarlo correctivo desde aquí, sin salir a
+         * Maintenance: el espejo se crea con ese mismo tipo.
+         */
+        {
+          key: 'type',
+          label: 'Maintenance type',
+          type: 'enum',
+          enumValues: ['Preventive', 'Corrective'],
+          required: true,
+          defaultValue: 'Preventive',
+          badge: true,
+          badgeTones: { Preventive: 'warning', Corrective: 'negative' },
+        },
         {
           key: 'idTruck',
           label: 'Truck',
@@ -679,7 +699,8 @@ export const bcReportsModule: ModuleConfig = {
       idPrefix: 'bc-',
       build: (parentId, parent, row) => ({
         ...row,
-        type: 'Preventive',
+        // El tipo lo decide el renglón; si no viene, es la revisión diaria.
+        type: typeof row.type === 'string' && row.type !== '' ? row.type : 'Preventive',
         date: typeof parent.date === 'string' ? parent.date : null,
         idEntity: typeof parent.idEntity === 'string' ? parent.idEntity : null,
         idStation: typeof parent.idStation === 'string' ? parent.idStation : null,

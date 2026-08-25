@@ -187,3 +187,22 @@
   color: var(--text-soft);
   margin-bottom: 10px;
 }
+/* Barra de selección múltiple: aparece solo cuando hay filas marcadas. */
+.crud-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary-bg);
+}
+
+.crud-bulkbar span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin-right: auto;
+}
