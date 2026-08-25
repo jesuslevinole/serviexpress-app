@@ -157,6 +157,12 @@ export interface FieldConfig {
    */
   copyFromRefField?: { field: string; sourceField: string };
   /**
+   * Muestra la referencia usando SOLO este campo del registro apuntado, en vez
+   * de la etiqueta completa del catálogo. Sirve cuando en un módulo estorba el
+   * dato extra: en Fleet basta el número de unidad, sin la placa.
+   */
+  refLabelFrom?: string;
+  /**
    * Al guardar, escribe este valor en el registro referenciado por otro campo
    * (p. ej. el millaje capturado actualiza el camión). Evita tener que
    * recalcularlo leyendo todos los mantenimientos.
@@ -243,6 +249,18 @@ export interface FieldConfig {
 }
 
 export interface DetailConfig {
+  /** Texto del botón de alta (por omisión "Add"). */
+  addLabel?: string;
+  /**
+   * Botones de alta adicionales que abren el mismo formulario con algunos
+   * campos ya definidos. Sirve para atajos frecuentes, como registrar un
+   * mantenimiento correctivo sin tener que cambiar el tipo a mano.
+   */
+  extraAdd?: {
+    label: string;
+    tone?: 'negative' | 'neutral';
+    preset: Record<string, FieldValue>;
+  }[];
   /** Colección de los renglones de detalle. */
   collection: string;
   /** Campo del detalle que apunta al id del registro maestro. */

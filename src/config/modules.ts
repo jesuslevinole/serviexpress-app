@@ -366,6 +366,8 @@ export const fleetModule: ModuleConfig = {
       type: 'ref',
       refCollection: COLLECTIONS.trucks,
       required: true,
+      // En Fleet basta el número de unidad: la placa solo alarga la columna.
+      refLabelFrom: 'unitN',
     },
     {
       key: 'idDriver',
@@ -405,6 +407,22 @@ export const shopModule: ModuleConfig = {
       type: 'ref',
       refCollection: COLLECTIONS.trucks,
       required: true,
+    },
+    // Entidad y estación llegan del camión (su ubicación actual): quien abre
+    // la orden no las teclea y no pueden quedar en desacuerdo con Trucks.
+    {
+      key: 'idEntity',
+      label: 'Entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      copyFromRefField: { field: 'idTruck', sourceField: 'idEntityActual' },
+    },
+    {
+      key: 'idStation',
+      label: 'Station',
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      copyFromRefField: { field: 'idTruck', sourceField: 'idStationActual' },
     },
     {
       key: 'idShopName',
@@ -718,7 +736,11 @@ export const bcReportsModule: ModuleConfig = {
   detail: {
     collection: COLLECTIONS.bcReportDetails,
     parentKey: 'idBcReport',
-    title: 'Preventive maintenance',
+    title: 'Maintenance',
+    addLabel: 'Add preventive',
+    // Atajo para el correctivo: abre el mismo formulario ya marcado, que es
+    // lo que se necesita cuando el BC detecta una falla durante la revisión.
+    extraAdd: [{ label: 'Add corrective', tone: 'negative', preset: { type: 'Corrective' } }],
     fields: bcDetailFields,
     /** Cada renglón se copia a Maintenance marcado con su origen. */
     mirror: {

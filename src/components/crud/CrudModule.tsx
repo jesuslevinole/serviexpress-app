@@ -271,8 +271,21 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canExport = canOr(config.id, 'exportar', 'ver');
   const canFilter = canOr(config.id, 'filtrar', 'ver');
 
-  const refLabel = (collection: string, id: string): string =>
-    refMaps[collection]?.labels.get(id) ?? '—';
+  /**
+   * Etiqueta de una referencia. El sufijo "#campo" (que pone displayValue
+   * cuando el campo usa refLabelFrom) pide mostrar solo ese dato del registro
+   * apuntado, p. ej. el número de unidad sin la placa.
+   */
+  const refLabel = (collection: string, id: string): string => {
+    const [name, only] = collection.split('#');
+    if (only) {
+      const row = refMaps[name]?.rows.find((r) => r.id === id);
+      const value = row?.[only];
+      if (typeof value === 'string' && value !== '') return value;
+      if (typeof value === 'number') return String(value);
+    }
+    return refMaps[name]?.labels.get(id) ?? '—';
+  };
 
   const tableFields = useMemo(
     () => allowedFields.filter((f) => f.table !== false),

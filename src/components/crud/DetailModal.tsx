@@ -66,6 +66,12 @@ export function DetailModal({
 
   const [formOpen, setFormOpen] = useState(autoOpenForm);
   const [editing, setEditing] = useState<EntityData | null>(null);
+  /**
+   * Valores con los que arranca un alta nueva. Permite ofrecer botones que
+   * abren el mismo formulario ya marcado (p. ej. "Add corrective" deja el
+   * tipo listo, para no obligar a cambiarlo a mano cada vez).
+   */
+  const [preset, setPreset] = useState<Record<string, FieldValue> | undefined>(undefined);
   const [deleting, setDeleting] = useState<EntityData | null>(null);
   const [viewing, setViewing] = useState<EntityData | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -348,14 +354,33 @@ export function DetailModal({
             className="btn btn-primary"
             onClick={() => {
               setEditing(null);
+              setPreset(undefined);
               setFormError(null);
               setFormOpen(true);
             }}
           >
             <Plus size={16} />
-            Add
+            {detail.addLabel ?? 'Add'}
           </button>
         ) : null}
+        {canCreate
+          ? (detail.extraAdd ?? []).map((extra) => (
+              <button
+                key={extra.label}
+                type="button"
+                className={`btn ${extra.tone === 'negative' ? 'btn-danger' : 'btn-outline'}`}
+                onClick={() => {
+                  setEditing(null);
+                  setPreset(extra.preset);
+                  setFormError(null);
+                  setFormOpen(true);
+                }}
+              >
+                <Plus size={16} />
+                {extra.label}
+              </button>
+            ))
+          : null}
       </div>
 
       {loading ? (
@@ -422,6 +447,7 @@ export function DetailModal({
         title={editing ? `Edit · ${detail.title}` : `Add · ${detail.title}`}
         fields={detailFields}
         initial={editing}
+        presetValues={editing === null ? preset : undefined}
         refMaps={refMaps}
         busy={busy}
         error={formError}

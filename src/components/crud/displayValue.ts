@@ -25,7 +25,13 @@ export function displayValue(
   if (value === null || value === '' || value === undefined) return '—';
   switch (field.type) {
     case 'ref':
-      return field.refCollection ? refLabels(field.refCollection, String(value)) : String(value);
+      if (!field.refCollection) return String(value);
+      // Con refLabelFrom la etiqueta la resuelve quien llama (conoce las filas
+      // del catálogo); aquí se pide con un sufijo para no romper la firma.
+      return refLabels(
+        field.refLabelFrom ? `${field.refCollection}#${field.refLabelFrom}` : field.refCollection,
+        String(value),
+      );
     case 'bool':
       return value === true ? 'Yes' : 'No';
     case 'currency':
