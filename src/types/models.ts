@@ -331,6 +331,24 @@ export interface FormStep {
   fieldKeys: string[];
 }
 
+/**
+ * Aviso de cobertura entre dos colecciones: de los N registros de una lista
+ * (los camiones), cuántos están dados de alta en otra (Fleet) y cuáles no.
+ */
+export interface CoverageConfig {
+  /** Lista de referencia (p. ej. camiones). */
+  sourceCollection: string;
+  /** Colección que debe cubrirla (p. ej. fleet). */
+  targetCollection: string;
+  /** Campo de la colección destino que apunta al registro de referencia. */
+  targetKey: string;
+  /** Campos con los que se identifica un registro de referencia en la lista. */
+  sourceLabelKeys: string[];
+  sourceLabel: string;
+  coveredLabel: string;
+  missingLabel: string;
+}
+
 export interface ModuleConfig {
   /** Id estable del módulo (se usa en permisos y rutas). */
   id: string;
@@ -348,6 +366,13 @@ export interface ModuleConfig {
    * último, para que nunca se pierda uno al reconfigurar.
    */
   formSteps?: FormStep[];
+  /** Aviso de cobertura en la parte superior de la tabla. */
+  coverage?: CoverageConfig;
+  /**
+   * Impide dar de alta dos registros con el mismo valor en este campo. Al
+   * intentarlo, se avisa quién capturó el que ya existe.
+   */
+  uniqueBy?: { field: string; label: string };
   detail?: DetailConfig;
   /**
    * Pestañas que separan los registros del módulo (p. ej. mantenimiento

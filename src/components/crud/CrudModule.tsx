@@ -31,6 +31,7 @@ import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
 import { DetailModal } from './DetailModal';
 import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
+import { CoverageBanner } from './CoverageBanner';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
@@ -498,6 +499,21 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
         }
       } else {
+        // Un valor que debe ser único (el camión en Fleet): se avisa quién lo
+        // registró para poder preguntarle, en vez de un error sin contexto.
+        const unique = config.uniqueBy;
+        if (unique) {
+          const value = payload[unique.field];
+          const clash = rows.find((row) => row[unique.field] === value);
+          if (clash) {
+            const who = typeof clash.idUsers === 'string' ? refLabel(COLLECTIONS.users, clash.idUsers) : '';
+            setFormError(
+              `That ${unique.label} is already registered${who && who !== '—' ? ` by ${who}` : ''}. Look it up in the list and check with them before adding it again.`,
+            );
+            setBusy(false);
+            return;
+          }
+        }
         const newId = await createDocument(config.collection, payload);
         // Los renglones capturados dentro del alta se guardan ya con el id
         // del maestro recién creado: así el uniforme se pide de una sola vez.
@@ -900,6 +916,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <Spinner />
       ) : (
         <>
+        {config.coverage ? (
+          <CoverageBanner
+            config={config.coverage}
+            rows={rows}
+            rowsAreSource={config.collection === config.coverage.sourceCollection}
+          />
+        ) : null}
         {canBulkDelete && selectedIds.size > 0 ? (
           <div className="crud-bulkbar">
             <span>{selectedIds.size} selected</span>

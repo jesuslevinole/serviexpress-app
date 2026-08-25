@@ -135,6 +135,13 @@ export function DetailModal({
   const [resetSignal, setResetSignal] = useState(0);
 
   const canCreate = can(moduleId, 'crear');
+  /**
+   * Cargar existencia es una acción del módulo de inventario, no de este
+   * formulario: se pide el permiso de crear DE ESE módulo. Sin esto, quien
+   * podía pedir uniformes también podía inventar entradas de almacén.
+   */
+  const canAddStock =
+    entryModule !== undefined && (isAdmin || can(entryModule.id, 'crear'));
   const canEdit = can(moduleId, 'editar');
   const canDelete = can(moduleId, 'eliminar');
 
@@ -192,8 +199,8 @@ export function DetailModal({
 
     if (requested > available) {
       return available <= 0
-        ? `There is no stock of this uniform and size (${totalIn} received, ${totalOut} already delivered). Register it first in Uniform inventory, with the “Add stock” button.`
-        : `Not enough stock: only ${available} available (${totalIn} received, ${totalOut} already delivered). Lower the quantity, or register more in Uniform inventory with the “Add stock” button.`;
+        ? `There is no stock of this uniform and size (${totalIn} received, ${totalOut} already delivered). It has to be registered in Uniform inventory first.`
+        : `Not enough stock: only ${available} available (${totalIn} received, ${totalOut} already delivered). Lower the quantity, or have more registered in Uniform inventory.`;
     }
     return null;
   };
@@ -463,18 +470,20 @@ export function DetailModal({
                         ? 'Pick a uniform and size to see the stock on hand'
                         : `Stock on hand: ${available}`}
                     </span>
-                    <button
-                      type="button"
-                      className="btn btn-outline dstock-add"
-                      onClick={() => {
-                        setPendingValues(values);
-                        setEntryError(null);
-                        setEntryOpen(true);
-                      }}
-                    >
-                      <PackagePlus size={16} />
-                      Add stock
-                    </button>
+                    {canAddStock ? (
+                      <button
+                        type="button"
+                        className="btn btn-outline dstock-add"
+                        onClick={() => {
+                          setPendingValues(values);
+                          setEntryError(null);
+                          setEntryOpen(true);
+                        }}
+                      >
+                        <PackagePlus size={16} />
+                        Add stock
+                      </button>
+                    ) : null}
                   </div>
                 );
               }
@@ -488,7 +497,7 @@ export function DetailModal({
         <TableLayoutModal base={parentModule} target="detail" onClose={() => setLayoutOpen(false)} />
       ) : null}
 
-      {entryOpen && entryModule && detail.stockControl ? (
+      {entryOpen && canAddStock && entryModule && detail.stockControl ? (
         <CrudForm
           open
           title={`Add stock · ${entryModule.title}`}

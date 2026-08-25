@@ -77,6 +77,15 @@ export const trucksModule: ModuleConfig = {
   title: 'Trucks',
   icon: 'Truck',
   autoUserField: 'idUsers',
+  coverage: {
+    sourceCollection: COLLECTIONS.trucks,
+    targetCollection: COLLECTIONS.fleet,
+    targetKey: 'idTruck',
+    sourceLabelKeys: ['unitN'],
+    sourceLabel: 'registered trucks',
+    coveredLabel: 'are already in Fleet',
+    missingLabel: 'are not',
+  },
   fields: [
     { key: 'date', label: 'Register date', type: 'date', defaultToday: true, required: true, table: false },
     {
@@ -353,13 +362,18 @@ export const fleetModule: ModuleConfig = {
   title: 'Fleet',
   icon: 'Route',
   autoUserField: 'idUsers',
+  coverage: {
+    sourceCollection: COLLECTIONS.trucks,
+    targetCollection: COLLECTIONS.fleet,
+    targetKey: 'idTruck',
+    sourceLabelKeys: ['unitN'],
+    sourceLabel: 'registered trucks',
+    coveredLabel: 'are already in Fleet',
+    missingLabel: 'are not',
+  },
+  /** Un camión no puede quedar dado de alta dos veces en la flotilla. */
+  uniqueBy: { field: 'idTruck', label: 'truck' },
   fields: [
-    // Entidad y estación: además de mostrarse en la tabla, son las que
-    // permiten limitar por alcance ("Station" en la matriz de Roles). Sin
-    // ellas el filtro por estación no tenía contra qué comparar y un BC veía
-    // todos los registros.
-    ...contextFields(true, true),
-    { key: 'route', label: 'Route', type: 'text', required: true },
     {
       key: 'idTruck',
       label: 'Truck',
@@ -369,6 +383,28 @@ export const fleetModule: ModuleConfig = {
       // En Fleet basta el número de unidad: la placa solo alarga la columna.
       refLabelFrom: 'unitN',
     },
+    // Entidad y estación llegan del camión (su ubicación actual): así el
+    // registro nace con la estación correcta y el filtro por alcance funciona
+    // sin que nadie tenga que teclearla.
+    {
+      key: 'idEntity',
+      label: 'Entity',
+      type: 'ref',
+      refCollection: COLLECTIONS.entities,
+      copyFromRefField: { field: 'idTruck', sourceField: 'idEntityActual' },
+    },
+    {
+      key: 'idStation',
+      label: 'Station',
+      type: 'ref',
+      refCollection: COLLECTIONS.stations,
+      copyFromRefField: { field: 'idTruck', sourceField: 'idStationActual' },
+    },
+    { key: 'route', label: 'Route', type: 'text', required: true },
+    // Entidad y estación: además de mostrarse en la tabla, son las que
+    // permiten limitar por alcance ("Station" en la matriz de Roles). Sin
+    // ellas el filtro por estación no tenía contra qué comparar y un BC veía
+    // todos los registros.
     {
       key: 'idDriver',
       label: 'Driver',
