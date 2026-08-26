@@ -3,6 +3,7 @@ import { Eye, EyeOff, LogOut, Menu, Moon, Pencil, Sun } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { ViewAsModal } from './ViewAsModal';
+import { UpdateNotice } from './UpdateNotice';
 import './Topbar.css';
 
 interface TopbarProps {
@@ -45,6 +46,8 @@ export function Topbar({ title, onMenu }: TopbarProps) {
         </button>
         <h1 className="topbar-title">{title}</h1>
         <div className="topbar-user">
+          {/* Aviso de versión nueva: lo ven todos los usuarios, no solo admin. */}
+          <UpdateNotice />
           {isAdmin ? (
             <button
               type="button"

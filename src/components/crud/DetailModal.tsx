@@ -454,6 +454,7 @@ export function DetailModal({
         title={editing ? `Edit · ${detail.title}` : `Add · ${detail.title}`}
         fields={detailFields}
         initial={editing}
+        ownerModuleId={moduleId}
         presetValues={editing === null ? preset : undefined}
         refMaps={refMaps}
         busy={busy}

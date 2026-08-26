@@ -1119,6 +1119,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         open={formOpen}
         title={editing ? `Edit · ${config.title}` : `Add · ${config.title}`}
         fields={allowedFields}
+        ownerModuleId={config.id}
         steps={config.formSteps}
         onConfigureSteps={canConfigureForm ? () => setStepsOpen(true) : undefined}
         initial={editing}

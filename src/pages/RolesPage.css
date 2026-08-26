@@ -85,7 +85,7 @@
    quedan fijos para no perder de vista qué se está marcando. */
 .roles-matrix-wrap {
   overflow: auto;
-  max-height: 62vh;
+  max-height: calc(100vh - 250px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }

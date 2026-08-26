@@ -41,7 +41,9 @@ export type PermissionAction =
    */
   | 'eliminarMasivo'
   /** Abrir los editores del formulario: campos, encabezados y pestañas. */
-  | 'configurarForm';
+  | 'configurarForm'
+  /** Modificar los campos protegidos del módulo (los marcados como tales). */
+  | 'editarProtegidos';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';
@@ -151,6 +153,12 @@ export interface FieldConfig {
    * Aplica en formulario, tabla, detalle y exportación.
    */
   requiresAction?: PermissionAction;
+  /**
+   * El campo se VE siempre, pero solo lo puede modificar quien tenga la
+   * acción "Edit locked fields" del módulo en la matriz de Roles. Para datos
+   * que no debe cambiar cualquiera: el estatus de una orden, un monto.
+   */
+  editRequiresAction?: boolean;
   /** Al capturar un registro nuevo, la fecha arranca en el día de hoy. */
   defaultToday?: boolean;
   /**

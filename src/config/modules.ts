@@ -507,6 +507,9 @@ const BC_TYPE_TO_UNIT: Record<string, string | null> = {
  * Las claves coinciden con las de Maintenance para que cada renglón se
  * copie tal cual al módulo de mantenimiento.
  */
+/** En el correctivo solo se piden camión, millaje, observación y estatus. */
+const whenBcPreventive = { field: 'type', value: 'Preventive' } as const;
+
 const bcDetailFields: FieldConfig[] = [
   {
     key: 'unitType',
@@ -515,6 +518,7 @@ const bcDetailFields: FieldConfig[] = [
     enumValues: BC_TYPES,
     required: true,
     defaultValue: 'TRUCK + SCANNER',
+    visibleWhen: whenBcPreventive,
   },
   {
     key: 'idTruck',
@@ -537,6 +541,7 @@ const bcDetailFields: FieldConfig[] = [
     type: 'number',
     highlight: 'value',
     copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
+    visibleWhen: whenBcPreventive,
   },
   {
     key: 'diffMileage',
@@ -549,20 +554,21 @@ const bcDetailFields: FieldConfig[] = [
       const mileage = typeof row.mileage === 'number' ? row.mileage : null;
       return next === null || mileage === null ? null : next - mileage;
     },
+    visibleWhen: whenBcPreventive,
   },
-  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number', table: false },
-  { key: 'frontRPass', label: 'Front R/Pass', type: 'number', table: false },
-  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', table: false },
-  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number', table: false },
-  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number', table: false },
-  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number', table: false },
-  { key: 'vedr', label: 'Vdr', type: 'bool', table: false },
-  { key: 'fuses', label: 'Fuses', type: 'bool', table: false },
-  { key: 'pouch', label: 'Pouch', type: 'bool', table: false },
-  { key: 'fireExt', label: 'Fire ext', type: 'bool', table: false },
-  { key: 'triangle', label: 'Triangle', type: 'bool', table: false },
-  { key: 'inspection', label: 'Inspection', type: 'bool', table: false },
-  { key: 'dolly', label: 'Dolly', type: 'number', table: false },
+  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'frontRPass', label: 'Front R/Pass', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number', table: false, visibleWhen: whenBcPreventive },
+  { key: 'vedr', label: 'Vdr', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'fuses', label: 'Fuses', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'pouch', label: 'Pouch', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'fireExt', label: 'Fire ext', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'triangle', label: 'Triangle', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'inspection', label: 'Inspection', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'dolly', label: 'Dolly', type: 'number', table: false, visibleWhen: whenBcPreventive },
   {
     key: 'idScanner',
     label: 'Scanner',
@@ -570,16 +576,18 @@ const bcDetailFields: FieldConfig[] = [
     refCollection: COLLECTIONS.assets,
     refFilter: { field: 'type', value: 'SCANNER' },
     table: false,
+    visibleWhen: whenBcPreventive,
   },
-  { key: 'batteries', label: 'Batteries', type: 'number', table: false },
+  { key: 'batteries', label: 'Batteries', type: 'number', table: false, visibleWhen: whenBcPreventive },
   {
     key: 'idRoute',
     label: 'Route',
     type: 'ref',
     refCollection: COLLECTIONS.routes,
+    visibleWhen: whenBcPreventive,
   },
-  { key: 'isClean', label: 'Is clean?', type: 'bool', table: false },
-  { key: 'cameraFunction', label: 'Camera Function', type: 'bool', table: false },
+  { key: 'isClean', label: 'Is clean?', type: 'bool', table: false, visibleWhen: whenBcPreventive },
+  { key: 'cameraFunction', label: 'Camera Function', type: 'bool', table: false, visibleWhen: whenBcPreventive },
   { key: 'observation', label: 'Observation', type: 'textarea', table: false },
   {
     key: 'status',
@@ -1067,6 +1075,9 @@ export const maintenanceModule: ModuleConfig = {
     { key: 'observation', label: 'Observation', type: 'textarea', table: false },
     {
       key: 'status',
+      // Cerrar o reabrir un mantenimiento no lo debe hacer cualquiera: se
+      // ve siempre, pero solo lo cambia quien tenga "Edit locked fields".
+      editRequiresAction: true,
       label: 'Status',
       type: 'enum',
       enumValues: MAINTENANCE_STATUS,

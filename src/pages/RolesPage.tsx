@@ -47,6 +47,7 @@ const ACTIONS: PermissionAction[] = [
   'altaRapida',
   'eliminarMasivo',
   'configurarForm',
+  'editarProtegidos',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -64,6 +65,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   altaRapida: 'Quick add (+)',
   eliminarMasivo: 'Bulk delete',
   configurarForm: 'Configure form',
+  editarProtegidos: 'Edit locked fields',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
@@ -488,7 +490,7 @@ export function RolesPage() {
         open={formOpen}
         title={editing ? 'Edit role' : 'Add role'}
         onClose={() => setFormOpen(false)}
-        size="xl"
+        size="full"
         footer={
           <>
             {error ? <span className="roles-error">{error}</span> : null}

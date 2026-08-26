@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   /** 'top' lo dibuja por encima de otro modal abierto (alta rápida de catálogo). */
   layer?: 'base' | 'top';
 }

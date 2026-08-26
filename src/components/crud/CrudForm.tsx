@@ -4,6 +4,7 @@ import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
+import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
 import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
@@ -38,6 +39,8 @@ interface CrudFormProps {
    * subtabla de uniformes aparece al elegir tipo de solicitud "Uniforms").
    */
   renderExtra?: (values: Record<string, FieldValue>) => ReactNode;
+  /** Id del módulo dueño del formulario, para resolver sus permisos. */
+  ownerModuleId?: string;
   /** Pestañas del alta. Sin esto el formulario se muestra completo, como antes. */
   steps?: FormStep[];
   /** Abre el editor de pestañas (solo administradores). */
@@ -95,6 +98,7 @@ export function CrudForm({
   extraSection,
   renderExtra,
   steps,
+  ownerModuleId,
   onConfigureSteps,
   renderBanner,
   contextEditable = true,
@@ -158,6 +162,20 @@ export function CrudForm({
     }
   }, [open, valueFields, initial, resetSignal, editableCapturedByKey, currentUid, presetValues]);
 
+  const { can, canOr, isAdmin, profile, role } = useAuth();
+
+  /**
+   * Estaciones a las que el usuario está limitado. Vacío = sin límite (admin,
+   * personal de oficina o alcance "All"), y entonces se ofrece todo.
+   */
+  const scopeStations = useMemo(() => {
+    if (isAdmin || profile?.isOffice === true) return [];
+    if (ownerModuleId === undefined) return [];
+    const alcance = role?.permissions?.[ownerModuleId]?.alcance ?? 'all';
+    if (alcance !== 'station' && alcance !== 'entity_station') return [];
+    return profile?.scopeStations ?? [];
+  }, [isAdmin, profile, role, ownerModuleId]);
+
   const refOptionsByField = useMemo(() => {
     const map: Record<string, SelectOption[]> = {};
     formFields.forEach((field) => {
@@ -199,12 +217,34 @@ export function CrudForm({
         const filterKey = filter.field;
         rows = rows.filter((r) => String(r[filterKey] ?? '').toUpperCase() === target);
       }
+      // Alcance por estación: si el rol solo ve lo de su estación, tampoco
+      // debe poder ELEGIR algo de otra. Se filtra por el campo de estación
+      // del catálogo apuntado (el marcado con scopeKey, o cualquiera que
+      // apunte al catálogo de estaciones).
+      if (scopeStations.length > 0) {
+        const target = CRUD_MODULES.find((m) => m.collection === field.refCollection);
+        const stationKeys = (target?.fields ?? [])
+          .filter(
+            (f) =>
+              f.scopeKey === 'station' ||
+              (f.scopeKey === undefined && f.type === 'ref' && f.refCollection === COLLECTIONS.stations),
+          )
+          .map((f) => f.key);
+        if (stationKeys.length > 0) {
+          rows = rows.filter((r) =>
+            stationKeys.some((key) => {
+              const value = r[key];
+              return typeof value === 'string' && scopeStations.includes(value);
+            }),
+          );
+        }
+      }
       map[field.key] = rows
         .map((r) => ({ value: r.id, label: refData.labels.get(r.id) ?? r.id }))
         .sort((a, b) => a.label.localeCompare(b.label));
     });
     return map;
-  }, [formFields, fields, refMaps, values]);
+  }, [formFields, fields, refMaps, values, scopeStations]);
 
   /** Diferencia de millaje en vivo: Next mant − Actual Mileage. */
   const mileageDiff = useMemo(() => {
@@ -243,7 +283,9 @@ export function CrudForm({
   const isLocked = (field: FieldConfig) =>
     field.readOnly === true ||
     field.fixedOnCreate === true ||
-    (field.lockedAfterCreate === true && initial !== null);
+    (field.lockedAfterCreate === true && initial !== null) ||
+    // Campo protegido: se ve, pero solo lo edita quien tenga el permiso.
+    (field.editRequiresAction === true && !canEditProtected);
 
   /**
    * Qué NO se reenvía al guardar. Un campo `fixedOnCreate` sí viaja en el alta
@@ -300,7 +342,12 @@ export function CrudForm({
    * catálogo y el rol puede crear en él. Al guardar, el nuevo registro llega
    * solo a las opciones (los catálogos van suscritos en vivo) y se selecciona.
    */
-  const { canOr, isAdmin } = useAuth();
+  /**
+   * Permiso para tocar los campos protegidos de ESTE módulo. Se resuelve una
+   * vez y de ahí sale tanto el bloqueo visual como la exclusión al guardar.
+   */
+  const canEditProtected =
+    isAdmin || (ownerModuleId !== undefined && can(ownerModuleId, 'editarProtegidos'));
   const [quickAdd, setQuickAdd] = useState<FieldConfig | null>(null);
 
   /**
