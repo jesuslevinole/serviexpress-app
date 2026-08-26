@@ -129,6 +129,9 @@ export const trucksModule: ModuleConfig = {
     {
       key: 'idEntityActual',
       label: 'Current entity',
+      // Manda para el alcance: importa dónde está el camión hoy, no dónde se
+      // registró. Así un BC ve solo los camiones de su estación actual.
+      scopeKey: 'entity',
       type: 'ref',
       refCollection: COLLECTIONS.entities,
       required: true,
@@ -137,6 +140,7 @@ export const trucksModule: ModuleConfig = {
     {
       key: 'idStationActual',
       label: 'Current station',
+      scopeKey: 'station',
       type: 'ref',
       refCollection: COLLECTIONS.stations,
       required: true,
@@ -837,7 +841,6 @@ export const rentalsModule: ModuleConfig = {
 
 /** Solo visible cuando el mantenimiento es de este tipo. */
 const whenPreventive = { field: 'type', value: 'Preventive' } as const;
-const whenCorrective = { field: 'type', value: 'Corrective' } as const;
 
 /** Módulo Maintenance — preventivo y correctivo en un solo módulo. */
 export const maintenanceModule: ModuleConfig = {
@@ -881,7 +884,15 @@ export const maintenanceModule: ModuleConfig = {
       // Preventivo ámbar, correctivo rojo.
       badgeTones: { Preventive: 'warning', Corrective: 'negative' },
     },
-    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
+    {
+      key: 'date',
+      label: 'Date',
+      type: 'date',
+      defaultToday: true,
+      required: true,
+      // En el correctivo no se pregunta: se registra con la fecha del día.
+      visibleWhen: whenPreventive,
+    },
     {
       key: 'idEntity',
       label: 'Entity',
@@ -890,6 +901,9 @@ export const maintenanceModule: ModuleConfig = {
       required: true,
       defaultFromUserScope: 'entity',
       table: false,
+      // En el correctivo llega del camión elegido, no se captura.
+      copyFromRefField: { field: 'idTruck', sourceField: 'idEntityActual' },
+      visibleWhen: whenPreventive,
     },
     {
       key: 'idStation',
@@ -899,6 +913,8 @@ export const maintenanceModule: ModuleConfig = {
       required: true,
       defaultFromUserScope: 'station',
       table: false,
+      copyFromRefField: { field: 'idTruck', sourceField: 'idStationActual' },
+      visibleWhen: whenPreventive,
     },
     {
       key: 'idTruck',
@@ -949,7 +965,8 @@ export const maintenanceModule: ModuleConfig = {
       type: 'number',
       table: false,
       highlight: 'value',
-      visibleWhen: whenPreventive,
+      // Se pide en los dos tipos: en el correctivo es uno de los cuatro
+      // datos que interesan (camión, millaje, observación y estatus).
       // El millaje capturado pasa a ser el millaje actual del camión.
       syncToRefField: {
         field: 'idTruck',
@@ -1027,7 +1044,7 @@ export const maintenanceModule: ModuleConfig = {
       importAliases: ['difference mileage', 'Difference Mileage'],
       type: 'number',
       table: false,
-      visibleWhen: whenCorrective,
+      form: false,
     },
     // ---- Calculado para ambos: preventivo = Next mant - Mileage ----
     {

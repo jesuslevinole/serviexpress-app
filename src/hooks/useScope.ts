@@ -36,12 +36,15 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
         return row[key] === userId;
       }
 
-      const stationFields = config.fields.filter(
-        (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
-      );
-      const entityFields = config.fields.filter(
-        (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.entities,
-      );
+      // Si el módulo marca cuál campo manda (scopeKey), solo ese decide; si
+      // no, valen todos los que apunten al catálogo, como antes.
+      const pick = (kind: 'station' | 'entity', collection: string) => {
+        const marked = config.fields.filter((f) => f.scopeKey === kind);
+        if (marked.length > 0) return marked;
+        return config.fields.filter((f) => f.type === 'ref' && f.refCollection === collection);
+      };
+      const stationFields = pick('station', COLLECTIONS.stations);
+      const entityFields = pick('entity', COLLECTIONS.entities);
 
       const matchesStation =
         scopeStations.length === 0 ||

@@ -46,6 +46,7 @@ const ACTIONS: PermissionAction[] = [
   'verNotas',
   'altaRapida',
   'eliminarMasivo',
+  'configurarForm',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -62,6 +63,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   verNotas: 'Internal notes',
   altaRapida: 'Quick add (+)',
   eliminarMasivo: 'Bulk delete',
+  configurarForm: 'Configure form',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */

@@ -39,7 +39,9 @@ export type PermissionAction =
    * 'eliminar' porque el borrado masivo es mucho más peligroso: se puede
    * permitir borrar de uno en uno sin habilitar el borrado en bloque.
    */
-  | 'eliminarMasivo';
+  | 'eliminarMasivo'
+  /** Abrir los editores del formulario: campos, encabezados y pestañas. */
+  | 'configurarForm';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';
@@ -162,6 +164,13 @@ export interface FieldConfig {
    * dato extra: en Fleet basta el número de unidad, sin la placa.
    */
   refLabelFrom?: string;
+  /**
+   * Marca el campo que decide el alcance por estación o entidad. Sin esto se
+   * usan TODOS los campos que apunten a esos catálogos, y en Trucks bastaba
+   * con que coincidiera la estación de registro para ver el camión, aunque
+   * hoy esté en otra.
+   */
+  scopeKey?: 'station' | 'entity';
   /**
    * Al guardar, escribe este valor en el registro referenciado por otro campo
    * (p. ej. el millaje capturado actualiza el camión). Evita tener que

@@ -103,6 +103,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [layoutOpen, setLayoutOpen] = useState(false);
   /** Puede personalizar layout y obligatorios: admin o rol con permiso Customization. */
   const canCustomize = isAdmin || can('customize', 'editar');
+  /**
+   * Configurar el formulario (campos, encabezados y pestañas) es su propio
+   * permiso por módulo: se puede dejar que un supervisor ajuste el alta de su
+   * área sin darle acceso a la configuración de todo el sistema.
+   */
+  const canConfigureForm = isAdmin || can(config.id, 'configurarForm');
   /** Puede editar el campo "Captured by": admin o rol con ese permiso en Roles. */
   const canEditCapturedBy =
     config.autoUserField !== undefined && (isAdmin || can('capturedBy', 'editar'));
@@ -1114,13 +1120,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         title={editing ? `Edit · ${config.title}` : `Add · ${config.title}`}
         fields={allowedFields}
         steps={config.formSteps}
-        onConfigureSteps={isAdmin ? () => setStepsOpen(true) : undefined}
+        onConfigureSteps={canConfigureForm ? () => setStepsOpen(true) : undefined}
         initial={editing}
         refMaps={refMaps}
         busy={busy}
         error={formError}
         resetSignal={resetSignal}
-        onConfigure={canCustomize ? () => setLayoutOpen(true) : undefined}
+        onConfigure={canConfigureForm || canCustomize ? () => setLayoutOpen(true) : undefined}
         renderExtra={
           !editing && config.detail && canCreate
             ? (values) =>

@@ -140,6 +140,7 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
       title={`Edit layout · ${baseTitle}`}
       onClose={onClose}
       size="md"
+      layer="top"
       footer={
         <>
           <button type="button" className="btn btn-outline" onClick={handleReset} disabled={busy}>
