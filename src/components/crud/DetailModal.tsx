@@ -53,11 +53,11 @@ export function DetailModal({
   autoOpenForm = false,
   onClose,
 }: DetailModalProps) {
-  const { can, firebaseUser, isAdmin } = useAuth();
+  const { can, firebaseUser, isAdminView } = useAuth();
   const { editMode } = useUiConfig();
   const [layoutOpen, setLayoutOpen] = useState(false);
   /** Puede reordenar y ocultar columnas: admin o permiso Customization. */
-  const canCustomize = isAdmin || can('customize', 'editar');
+  const canCustomize = isAdminView || can('customize', 'editar');
   const filter = useMemo(
     () => ({ field: detail.parentKey, value: parent.id }),
     [detail.parentKey, parent.id],
@@ -141,7 +141,7 @@ export function DetailModal({
    * podía pedir uniformes también podía inventar entradas de almacén.
    */
   const canAddStock =
-    entryModule !== undefined && (isAdmin || can(entryModule.id, 'crear'));
+    entryModule !== undefined && (isAdminView || can(entryModule.id, 'crear'));
   const canEdit = can(moduleId, 'editar');
   const canDelete = can(moduleId, 'eliminar');
 

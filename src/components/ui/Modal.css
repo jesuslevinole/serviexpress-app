@@ -55,6 +55,16 @@ body.modal-open {
   border-radius: 0;
 }
 
+/* El cuerpo NO desplaza: desplaza solo la rejilla de adentro. Con dos
+   contenedores desplazables el encabezado fijo se despega y se encima
+   sobre las filas. */
+.modal-full .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .modal-header {
   display: flex;
   align-items: center;

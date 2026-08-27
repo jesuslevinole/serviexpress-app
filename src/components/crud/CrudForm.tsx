@@ -162,19 +162,19 @@ export function CrudForm({
     }
   }, [open, valueFields, initial, resetSignal, editableCapturedByKey, currentUid, presetValues]);
 
-  const { can, canOr, isAdmin, profile, role } = useAuth();
+  const { can, canOr, isAdminView, profile, role } = useAuth();
 
   /**
    * Estaciones a las que el usuario está limitado. Vacío = sin límite (admin,
    * personal de oficina o alcance "All"), y entonces se ofrece todo.
    */
   const scopeStations = useMemo(() => {
-    if (isAdmin || profile?.isOffice === true) return [];
+    if (isAdminView || profile?.isOffice === true) return [];
     if (ownerModuleId === undefined) return [];
     const alcance = role?.permissions?.[ownerModuleId]?.alcance ?? 'all';
     if (alcance !== 'station' && alcance !== 'entity_station') return [];
     return profile?.scopeStations ?? [];
-  }, [isAdmin, profile, role, ownerModuleId]);
+  }, [isAdminView, profile, role, ownerModuleId]);
 
   const refOptionsByField = useMemo(() => {
     const map: Record<string, SelectOption[]> = {};
@@ -280,6 +280,9 @@ export function CrudForm({
   );
 
   /** Un campo se muestra bloqueado si es de solo lectura, o si ya se fijó al crear. */
+  const canEditProtected =
+    isAdminView || (ownerModuleId !== undefined && can(ownerModuleId, 'editarProtegidos'));
+
   const isLocked = (field: FieldConfig) =>
     field.readOnly === true ||
     field.fixedOnCreate === true ||
@@ -346,8 +349,6 @@ export function CrudForm({
    * Permiso para tocar los campos protegidos de ESTE módulo. Se resuelve una
    * vez y de ahí sale tanto el bloqueo visual como la exclusión al guardar.
    */
-  const canEditProtected =
-    isAdmin || (ownerModuleId !== undefined && can(ownerModuleId, 'editarProtegidos'));
   const [quickAdd, setQuickAdd] = useState<FieldConfig | null>(null);
 
   /**
@@ -365,7 +366,7 @@ export function CrudForm({
       catalog ?? CRUD_MODULES.find((module) => module.collection === field.refCollection);
     if (!target) return null;
     const moduleId = catalog ? 'catalogs' : target.id;
-    if (isAdmin) return target;
+    if (isAdminView) return target;
     return canOr(moduleId, 'altaRapida', 'crear') ? target : null;
   };
 

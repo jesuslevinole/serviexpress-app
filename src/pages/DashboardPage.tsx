@@ -36,7 +36,7 @@ interface StatCard {
 }
 
 export function DashboardPage() {
-  const { can, profile, viewAs, isAdmin, effectiveRole } = useAuth();
+  const { can, profile, viewAs, isAdminView, effectiveRole } = useAuth();
   const { moduleTitle } = useUiConfig();
 
   /**
@@ -52,7 +52,7 @@ export function DashboardPage() {
   /** Con alcance restringido no se pueden usar agregados: se avisa y no se cuenta. */
   const effectiveUser = viewAs ?? profile;
   const restricted =
-    !isAdmin &&
+    !isAdminView &&
     effectiveUser?.isOffice !== true &&
     Object.values(effectiveRole?.permissions ?? {}).some(
       (permission) => permission.alcance && permission.alcance !== 'all',

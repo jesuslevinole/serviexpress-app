@@ -96,22 +96,22 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  * y exportación a Excel. TODOS los módulos del app usan este componente.
  */
 export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
-  const { can, canOr, firebaseUser, isAdmin, profile } = useAuth();
+  const { can, canOr, firebaseUser, isAdminView, profile } = useAuth();
   const { editMode, applyToModule } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
   const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
   const [layoutOpen, setLayoutOpen] = useState(false);
   /** Puede personalizar layout y obligatorios: admin o rol con permiso Customization. */
-  const canCustomize = isAdmin || can('customize', 'editar');
+  const canCustomize = isAdminView || can('customize', 'editar');
   /**
    * Configurar el formulario (campos, encabezados y pestañas) es su propio
    * permiso por módulo: se puede dejar que un supervisor ajuste el alta de su
    * área sin darle acceso a la configuración de todo el sistema.
    */
-  const canConfigureForm = isAdmin || can(config.id, 'configurarForm');
+  const canConfigureForm = isAdminView || can(config.id, 'configurarForm');
   /** Puede editar el campo "Captured by": admin o rol con ese permiso en Roles. */
   const canEditCapturedBy =
-    config.autoUserField !== undefined && (isAdmin || can('capturedBy', 'editar'));
+    config.autoUserField !== undefined && (isAdminView || can('capturedBy', 'editar'));
 
   /**
    * ¿La fila puede abrir su subtabla? Solo si el campo condicionado apunta a un
@@ -128,7 +128,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   };
 
   /** Puede editar Entity/Station en formularios: admin o permiso entityStation. */
-  const canEditContext = isAdmin || can('entityStation', 'editar');
+  const canEditContext = isAdminView || can('entityStation', 'editar');
 
   /**
    * Campos que el rol puede ver. Los marcados con requiresAction (dinero,
@@ -139,9 +139,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const allowedFields = useMemo(
     () =>
       config.fields.filter(
-        (field) => !field.requiresAction || isAdmin || can(config.id, field.requiresAction),
+        (field) => !field.requiresAction || isAdminView || can(config.id, field.requiresAction),
       ),
-    [config.fields, config.id, isAdmin, can],
+    [config.fields, config.id, isAdminView, can],
   );
 
   /** Valores iniciales desde el alcance del usuario (su entidad/estación asignada). */
@@ -267,7 +267,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canEdit = can(config.id, 'editar');
   const canDelete = can(config.id, 'eliminar');
   /** Borrado en bloque: acción propia, más peligrosa que borrar de uno en uno. */
-  const canBulkDelete = isAdmin || can(config.id, 'eliminarMasivo');
+  const canBulkDelete = isAdminView || can(config.id, 'eliminarMasivo');
   /**
    * Botones de la barra superior. Cada uno tiene su propio permiso; los roles
    * que aún no lo definen heredan el permiso equivalente sobre los registros,
@@ -846,7 +846,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Import CSV</span>
             </button>
           ) : null}
-          {(editMode && isAdmin) || (editMode && canCustomize) ? (
+          {editMode && canCustomize ? (
             <button
               type="button"
               className="btn btn-primary"

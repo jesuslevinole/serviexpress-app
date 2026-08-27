@@ -227,6 +227,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return ['admin', 'administrador', 'administrator', 'administradora'].includes(name);
   }, [role]);
   const effectiveRole = viewAs ? viewRole : role;
+  /** Con "View as" activo, deja de tratarse como administrador. */
+  const isAdminView = isAdmin && viewAs === null;
 
   const startViewAs = useCallback(async (profile: UserProfile) => {
     const loadedRole = await loadRole(profile.roleId);
@@ -250,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       canOr,
       isAdmin,
+      isAdminView,
       viewAs,
       startViewAs,
       stopViewAs,
@@ -265,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       can,
       canOr,
       isAdmin,
+      isAdminView,
       viewAs,
       startViewAs,
       stopViewAs,

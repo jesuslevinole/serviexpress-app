@@ -54,14 +54,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: SidebarProps) {
-  const { can, isAdmin } = useAuth();
+  const { can, isAdminView } = useAuth();
   const { editMode, moduleTitle, sortModules, saveModuleOverride, saveMenuOrder } = useUiConfig();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   const orderedModules = useMemo(() => sortModules(CRUD_MODULES), [sortModules]);
   const visibleModules = orderedModules.filter((m) => can(m.id, 'ver'));
-  const editing = editMode && isAdmin;
+  const editing = editMode && isAdminView;
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `sidebar-link ${isActive ? 'is-active' : ''}`;

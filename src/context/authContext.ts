@@ -17,8 +17,18 @@ export interface AuthContextValue {
    * todos los roles perderían los botones hasta que alguien editara la matriz.
    */
   canOr: (moduleId: string, action: PermissionAction, fallback: PermissionAction) => boolean;
-  /** True cuando el rol REAL del usuario es admin. */
+  /**
+   * True cuando el rol REAL del usuario es admin. Sigue siendo true con
+   * "View as" activo: sirve para lo que es del administrador de verdad
+   * (salir de la simulación, el modo edición del menú).
+   */
   isAdmin: boolean;
+  /**
+   * True solo si es admin Y no está simulando a nadie. Es el que se usa para
+   * decidir qué VE el usuario: con "View as" activo hay que ver exactamente
+   * lo que vería esa persona, o la simulación no sirve para comprobar nada.
+   */
+  isAdminView: boolean;
   /** Perfil que se está simulando con "View as" (null = vista propia). */
   viewAs: UserProfile | null;
   startViewAs: (profile: UserProfile) => Promise<void>;
