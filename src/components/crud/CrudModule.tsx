@@ -166,7 +166,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       ),
     [config.fields, profile],
   );
-  const { rows: allRows, loading, error } = useCollection(config.collection);
+  const { rows: allRows, loading, error } = useCollection(
+    config.collection,
+    undefined,
+    config.listLimit,
+  );
   const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
   const scopeFilter = useScopeFilter();
   /** Filas dentro del alcance (entidades/estaciones asignadas al usuario). */
@@ -929,6 +933,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <Spinner />
       ) : (
         <>
+        {config.listLimit !== undefined && rows.length >= config.listLimit ? (
+          <p className="crud-limit-note">
+            Showing the {config.listLimit} most recent records. Use Filters or the search box
+            to work with older ones, or Export Excel for the full history.
+          </p>
+        ) : null}
         {config.coverage ? (
           <CoverageBanner
             config={config.coverage}

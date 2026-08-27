@@ -439,6 +439,8 @@ export const shopModule: ModuleConfig = {
   title: 'Shop',
   icon: 'Wrench',
   autoUserField: 'idUsers',
+  /** Solo los más recientes: la colección completa agota la cuota diaria. */
+  listLimit: 500,
   fields: [
     { key: 'creationDate', label: 'Creation date', type: 'date', required: true },
     {
@@ -607,6 +609,8 @@ export const bcReportsModule: ModuleConfig = {
   title: 'BC Reports',
   icon: 'ClipboardCheck',
   autoUserField: 'idUsers',
+  /** Solo los más recientes: la colección completa agota la cuota diaria. */
+  listLimit: 500,
   fields: [
     { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
     ...contextFields(),
@@ -880,6 +884,8 @@ export const maintenanceModule: ModuleConfig = {
       match: (row) => typeof row.idBcReport === 'string' && row.idBcReport.trim() !== '',
     },
   ],
+  /** Solo los más recientes: la colección completa agota la cuota diaria. */
+  listLimit: 500,
   fields: [
     {
       key: 'type',
@@ -1152,6 +1158,8 @@ export const accidentsModule: ModuleConfig = {
   title: 'Accidents',
   icon: 'AlertTriangle',
   autoUserField: 'idUsers',
+  /** Solo los más recientes: la colección completa agota la cuota diaria. */
+  listLimit: 500,
   fields: [
     {
       key: 'timestamp',
@@ -1568,6 +1576,8 @@ export const requirementsModule: ModuleConfig = {
   title: 'Requirements',
   icon: 'ClipboardList',
   autoUserField: 'idUsers',
+  /** Solo los más recientes: la colección completa agota la cuota diaria. */
+  listLimit: 500,
   fields: [
     {
       key: 'date',

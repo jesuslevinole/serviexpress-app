@@ -30,7 +30,8 @@ const DONUT_C = 2 * Math.PI * DONUT_R;
 interface StatCard {
   id: string;
   label: string;
-  value: number;
+  /** null cuando el conteo no se pudo leer: se muestra "—", nunca un 0 falso. */
+  value: number | null;
   icon: typeof Truck;
   tone: 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'teal';
 }
@@ -108,6 +109,8 @@ export function DashboardPage() {
 
   const corrective = counts.corrective ?? 0;
   const preventive = counts.preventive ?? 0;
+  /** Sin conteos no se muestra 0, que haría pensar que no hay registros. */
+  const countsFailed = countError !== null;
   const maintenanceTotal = corrective + preventive;
   const correctivePct = maintenanceTotal === 0 ? 0 : Math.round((corrective / maintenanceTotal) * 100);
   const preventivePct = maintenanceTotal === 0 ? 0 : 100 - correctivePct;
@@ -145,17 +148,17 @@ export function DashboardPage() {
   const maxRequirement = Math.max(1, ...requirementsByType.map(([, count]) => count));
 
   const allCards: StatCard[] = [
-    { id: 'bcReports', label: 'BC Reports', value: counts.bcReports ?? 0, icon: ClipboardCheck, tone: 'blue' },
-    { id: 'trucks', label: 'Trucks', value: counts.trucks ?? 0, icon: Truck, tone: 'blue' },
-    { id: 'drivers', label: 'Drivers', value: counts.drivers ?? 0, icon: Users, tone: 'teal' },
-    { id: 'assets', label: 'Assets', value: counts.assets ?? 0, icon: ScanLine, tone: 'violet' },
-    { id: 'fleet', label: 'Fleet', value: counts.fleet ?? 0, icon: Route, tone: 'green' },
-    { id: 'shop', label: 'Shop orders', value: counts.shop ?? 0, icon: Wrench, tone: 'amber' },
-    { id: 'rentals', label: 'Rentals', value: counts.rentals ?? 0, icon: KeySquare, tone: 'violet' },
+    { id: 'bcReports', label: 'BC Reports', value: counts.bcReports ?? null, icon: ClipboardCheck, tone: 'blue' },
+    { id: 'trucks', label: 'Trucks', value: counts.trucks ?? null, icon: Truck, tone: 'blue' },
+    { id: 'drivers', label: 'Drivers', value: counts.drivers ?? null, icon: Users, tone: 'teal' },
+    { id: 'assets', label: 'Assets', value: counts.assets ?? null, icon: ScanLine, tone: 'violet' },
+    { id: 'fleet', label: 'Fleet', value: counts.fleet ?? null, icon: Route, tone: 'green' },
+    { id: 'shop', label: 'Shop orders', value: counts.shop ?? null, icon: Wrench, tone: 'amber' },
+    { id: 'rentals', label: 'Rentals', value: counts.rentals ?? null, icon: KeySquare, tone: 'violet' },
     {
       id: 'requirements',
       label: 'Requirements',
-      value: counts.requirements ?? 0,
+      value: counts.requirements ?? null,
       icon: ClipboardList,
       tone: 'teal',
     },
@@ -228,7 +231,9 @@ export function DashboardPage() {
       {restricted || countError ? (
         <p className="dash-note">
           {countError
-            ? `Counters unavailable: ${countError}`
+            ? /quota/i.test(countError)
+              ? 'The counters could not be read: the database reached its daily read quota. The modules keep working; the counters come back when the quota resets or when the plan limit is raised.'
+              : `Counters unavailable: ${countError}`
             : 'These counters show the totals of the whole fleet; each module still shows only the records your role allows.'}
         </p>
       ) : null}
@@ -242,7 +247,9 @@ export function DashboardPage() {
                 <Icon size={16} />
               </span>
               <span className="dash-card-label">{moduleTitle(card.id, card.label)}</span>
-              <strong>{card.value.toLocaleString('en-US')}</strong>
+              <strong>
+                {card.value === null ? '—' : card.value.toLocaleString('en-US')}
+              </strong>
             </article>
           );
         })}
@@ -253,7 +260,7 @@ export function DashboardPage() {
           <section className="dash-panel">
             <header className="dash-panel-head">
               <h2>Maintenance</h2>
-              <span>{maintenanceTotal.toLocaleString('en-US')} total</span>
+              <span>{countsFailed ? '—' : maintenanceTotal.toLocaleString('en-US')} total</span>
             </header>
             <div className="dash-donut-wrap">
               <div className="dash-donut-chart">
@@ -278,7 +285,7 @@ export function DashboardPage() {
                   </g>
                 </svg>
                 <div className="dash-donut-center">
-                  <strong>{maintenanceTotal.toLocaleString('en-US')}</strong>
+                  <strong>{countsFailed ? '—' : maintenanceTotal.toLocaleString('en-US')}</strong>
                   <span>records</span>
                 </div>
               </div>
@@ -308,7 +315,7 @@ export function DashboardPage() {
           <section className="dash-panel">
             <header className="dash-panel-head">
               <h2>Requirements by type</h2>
-              <span>{(counts.requirements ?? 0).toLocaleString('en-US')} total</span>
+              <span>{countsFailed ? '—' : (counts.requirements ?? 0).toLocaleString('en-US')} total</span>
             </header>
             {requirementsByType.length === 0 ? (
               <p className="dash-empty">No requirements captured yet.</p>

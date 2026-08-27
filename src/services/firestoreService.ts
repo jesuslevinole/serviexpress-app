@@ -12,6 +12,8 @@ import {
   Timestamp,
   updateDoc,
   where,
+  orderBy,
+  limit as limitTo,
   type DocumentData,
   type QueryConstraint,
   type Unsubscribe,
@@ -52,6 +54,16 @@ export function toEntity(id: string, data: DocumentData): EntityData {
   return entity;
 }
 
+/** Opciones de lectura de una colección. */
+export interface CollectionOptions {
+  /**
+   * Máximo de documentos a traer, de los más recientes hacia atrás. Sin esto
+   * se lee la colección COMPLETA en cada carga, que es lo que dispara el
+   * consumo: un módulo con 4.500 registros cuesta 4.500 lecturas por visita.
+   */
+  limit?: number;
+}
+
 export interface CollectionFilter {
   field: string;
   value: FieldValue;
@@ -86,8 +98,9 @@ export function subscribeToCollection(
   onData: (rows: EntityData[]) => void,
   onError: (error: Error) => void,
   filter?: CollectionFilter,
+  options?: CollectionOptions,
 ): Unsubscribe {
-  const key = subscriptionKey(collectionName, filter);
+  const key = `${subscriptionKey(collectionName, filter)}|${options?.limit ?? 'all'}`;
   let entry = shared.get(key);
 
   if (!entry) {
@@ -118,6 +131,12 @@ export function subscribeToCollection(
     const constraints: QueryConstraint[] = [];
     if (filter) {
       constraints.push(where(filter.field, '==', filter.value));
+    }
+    if (options?.limit) {
+      // Más recientes primero y solo los N necesarios. Los documentos sin
+      // createdAt (migraciones antiguas) quedarían fuera de este orden, por
+      // eso el tope solo se aplica donde el módulo lo pide expresamente.
+      constraints.push(orderBy('createdAt', 'desc'), limitTo(options.limit));
     }
     const q = query(collection(db, collectionName), ...constraints);
     current.unsubscribe = onSnapshot(

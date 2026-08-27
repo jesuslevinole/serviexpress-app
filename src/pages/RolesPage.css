@@ -10,15 +10,12 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  height: 100%;
-  min-height: 0;
 }
 
 .roles-form-col {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  flex: 1;
+  min-width: 0;
 }
 
 .roles-name {
@@ -90,10 +87,11 @@
 
 /* La matriz ocupa el alto disponible; el encabezado y la primera columna
    quedan fijos para no perder de vista qué se está marcando. */
+/* La rejilla desplaza sola dentro del modal: si además desplazara el cuerpo
+   del modal, el encabezado fijo se despegaría y se encimaría con las filas. */
 .roles-matrix-wrap {
   overflow: auto;
-  flex: 1;
-  min-height: 0;
+  max-height: 55vh;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }

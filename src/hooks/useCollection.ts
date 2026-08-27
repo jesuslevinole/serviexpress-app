@@ -12,6 +12,8 @@ interface UseCollectionResult {
 export function useCollection(
   collectionName: string,
   filter?: CollectionFilter,
+  /** Tope de documentos (los más recientes). Sin él se lee todo. */
+  limit?: number,
 ): UseCollectionResult {
   const [rows, setRows] = useState<EntityData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,9 +45,10 @@ export function useCollection(
         setLoading(false);
       },
       activeFilter,
+      limit !== undefined ? { limit } : undefined,
     );
     return unsubscribe;
-  }, [collectionName, filterField, filterValue]);
+  }, [collectionName, filterField, filterValue, limit]);
 
   return { rows, loading, error };
 }

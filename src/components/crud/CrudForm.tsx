@@ -165,6 +165,22 @@ export function CrudForm({
           }
         });
       }
+      // Entidad y estación del capturista: hasta ahora solo se rellenaban al
+      // CAMBIAR el capturista, así que en un alta normal quedaban vacías.
+      if (!initial) {
+        const ownerId = base[editableCapturedByKey ?? capturedByKey ?? ''];
+        const scope = typeof ownerId === 'string' ? userScopes?.[ownerId] : undefined;
+        if (scope) {
+          valueFields.forEach((f) => {
+            if (f.defaultFromUserScope === 'entity' && scope.entity && !base[f.key]) {
+              base[f.key] = scope.entity;
+            }
+            if (f.defaultFromUserScope === 'station' && scope.station && !base[f.key]) {
+              base[f.key] = scope.station;
+            }
+          });
+        }
+      }
       setValues(base);
       setTouchedSubmit(false);
     }
@@ -177,6 +193,7 @@ export function CrudForm({
     capturedByKey,
     currentUid,
     presetValues,
+    userScopes,
   ]);
 
   const { can, canOr, isAdminView, profile, role } = useAuth();

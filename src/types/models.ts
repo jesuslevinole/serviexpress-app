@@ -383,6 +383,12 @@ export interface ModuleConfig {
    * último, para que nunca se pierda uno al reconfigurar.
    */
   formSteps?: FormStep[];
+  /**
+   * Tope de registros que se leen al abrir el módulo, de los más recientes
+   * hacia atrás. Se pone en los módulos con miles de renglones: sin él, cada
+   * visita cuesta una lectura por documento y agota la cuota diaria.
+   */
+  listLimit?: number;
   /** Aviso de cobertura en la parte superior de la tabla. */
   coverage?: CoverageConfig;
   /**
