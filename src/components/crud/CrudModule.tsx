@@ -96,7 +96,7 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  * y exportación a Excel. TODOS los módulos del app usan este componente.
  */
 export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
-  const { can, canOr, firebaseUser, isAdminView, profile } = useAuth();
+  const { can, canOr, firebaseUser, isAdminView, profile, viewAs } = useAuth();
   const { editMode, applyToModule } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
   const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
@@ -110,6 +110,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    */
   const canConfigureForm = isAdminView || can(config.id, 'configurarForm');
   /** Puede editar el campo "Captured by": admin o rol con ese permiso en Roles. */
+  /**
+   * Usuario a nombre de quien queda el registro. Con "View as" activo es el
+   * usuario simulado: el formulario debe mostrar y guardar lo mismo que vería
+   * esa persona, o la simulación engañaría sobre a quién se le atribuye.
+   */
+  const capturingUid = (viewAs ?? profile)?.id ?? firebaseUser?.uid ?? null;
+
   const canEditCapturedBy =
     config.autoUserField !== undefined && (isAdminView || can('capturedBy', 'editar'));
 
@@ -477,7 +484,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         // si no, el sistema lo llena con la sesión actual.
         const chosen = payload[config.autoUserField];
         if (!canEditCapturedBy || typeof chosen !== 'string' || chosen === '') {
-          payload[config.autoUserField] = firebaseUser.uid;
+          payload[config.autoUserField] = capturingUid ?? firebaseUser.uid;
         }
       }
       if (editing) {
@@ -1162,7 +1169,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           ) : undefined
         }
         editableCapturedByKey={canEditCapturedBy ? config.autoUserField : undefined}
-        currentUid={firebaseUser?.uid ?? null}
+        capturedByKey={config.autoUserField}
+        currentUid={capturingUid}
         presetValues={scopePresets}
         userScopes={userScopes}
         contextEditable={canEditContext}

@@ -27,6 +27,12 @@ interface CrudFormProps {
   onConfigure?: () => void;
   /** Clave del campo capturista (idUsers) cuando el rol puede editarlo en el formulario. */
   editableCapturedByKey?: string;
+  /**
+   * Campo del capturista. Siempre se MUESTRA, para que quien captura vea a
+   * nombre de quién queda el registro; solo es editable si además llega en
+   * `editableCapturedByKey`.
+   */
+  capturedByKey?: string;
   /** Uid del usuario actual: valor inicial del capturista en altas. */
   currentUid?: string | null;
   /** Valores iniciales extra en altas (p. ej. entidad/estación del usuario). */
@@ -92,6 +98,7 @@ export function CrudForm({
   resetSignal,
   onConfigure,
   editableCapturedByKey,
+  capturedByKey,
   currentUid,
   presetValues,
   userScopes,
@@ -121,12 +128,12 @@ export function CrudForm({
     () =>
       fields.filter((f) => {
         if (f.compute) return false;
-        if (f.form === false) return f.key === editableCapturedByKey;
+        if (f.form === false) return f.key === editableCapturedByKey || f.key === capturedByKey;
         // Se pide solo al editar: en el alta toma su valor por omisión.
         if (f.hideOnCreate && initial === null) return false;
         return true;
       }),
-    [fields, editableCapturedByKey, initial],
+    [fields, editableCapturedByKey, capturedByKey, initial],
   );
 
   useEffect(() => {
@@ -146,8 +153,9 @@ export function CrudForm({
         });
       }
       // Alta: el capturista arranca con los datos del usuario actual.
-      if (!initial && editableCapturedByKey && currentUid) {
-        base[editableCapturedByKey] = currentUid;
+      const ownerKey = editableCapturedByKey ?? capturedByKey;
+      if (!initial && ownerKey && currentUid) {
+        base[ownerKey] = currentUid;
       }
       // Alta: valores del alcance del usuario (su entidad/estación).
       if (!initial && presetValues) {
@@ -160,7 +168,16 @@ export function CrudForm({
       setValues(base);
       setTouchedSubmit(false);
     }
-  }, [open, valueFields, initial, resetSignal, editableCapturedByKey, currentUid, presetValues]);
+  }, [
+    open,
+    valueFields,
+    initial,
+    resetSignal,
+    editableCapturedByKey,
+    capturedByKey,
+    currentUid,
+    presetValues,
+  ]);
 
   const { can, canOr, isAdminView, profile, role } = useAuth();
 
@@ -284,6 +301,8 @@ export function CrudForm({
     isAdminView || (ownerModuleId !== undefined && can(ownerModuleId, 'editarProtegidos'));
 
   const isLocked = (field: FieldConfig) =>
+    // El capturista se ve siempre; solo se edita con el permiso correspondiente.
+    (field.key === capturedByKey && field.key !== editableCapturedByKey) ||
     field.readOnly === true ||
     field.fixedOnCreate === true ||
     (field.lockedAfterCreate === true && initial !== null) ||
@@ -539,7 +558,9 @@ export function CrudForm({
                   <span
                     className="crudform-locked-value"
                     title={
-                      field.readOnly
+                      field.key === capturedByKey
+                        ? 'The record is saved under this user'
+                        : field.readOnly
                         ? 'Kept up to date by the system'
                         : field.fixedOnCreate
                           ? 'Set automatically by the system and cannot be changed'

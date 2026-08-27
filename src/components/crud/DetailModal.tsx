@@ -53,7 +53,7 @@ export function DetailModal({
   autoOpenForm = false,
   onClose,
 }: DetailModalProps) {
-  const { can, firebaseUser, isAdminView } = useAuth();
+  const { can, firebaseUser, isAdminView, profile, viewAs } = useAuth();
   const { editMode } = useUiConfig();
   const [layoutOpen, setLayoutOpen] = useState(false);
   /** Puede reordenar y ocultar columnas: admin o permiso Customization. */
@@ -118,7 +118,8 @@ export function DetailModal({
     try {
       const payload = { ...values };
       if (entryModule?.autoUserField && firebaseUser) {
-        payload[entryModule.autoUserField] = firebaseUser.uid;
+        // Igual que en el módulo: con "View as" queda a nombre del simulado.
+        payload[entryModule.autoUserField] = (viewAs ?? profile)?.id ?? firebaseUser.uid;
       }
       await createDocument(control.entriesCollection, payload);
       setEntryOpen(false);
