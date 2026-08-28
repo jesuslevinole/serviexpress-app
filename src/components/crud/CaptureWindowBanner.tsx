@@ -24,6 +24,8 @@ interface CaptureWindowBannerProps {
   stationsCollection: string;
   /** Si se define, el admin puede abrir/ajustar la ventana desde aquí. */
   onConfigure?: () => void;
+  /** Nombres de los BC asignados a una estación (para el grupo de faltantes). */
+  stationBcs?: (stationId: string) => string[];
 }
 
 type PendingKind = 'missing' | 'done' | 'blocked';
@@ -43,6 +45,7 @@ export function CaptureWindowBanner({
   scopeEntities,
   stationsCollection,
   onConfigure,
+  stationBcs,
 }: CaptureWindowBannerProps) {
   const [open, setOpen] = useState(false);
   const [showDone, setShowDone] = useState(false);
@@ -198,18 +201,27 @@ export function CaptureWindowBanner({
         <div className="cwin-lists">
           {missing.length > 0 ? (
             grouped ? (
-              groups.map((group) => (
-                <div key={group.id} className="cwin-group">
-                  <span className="cwin-group-title">
-                    {group.label} · {group.missing.length} missing
-                  </span>
-                  <ul className="cwin-list">
-                    {group.missing.map((item) => (
-                      <li key={item.row.id}>{item.label}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))
+              groups.map((group) => {
+                const bcs = group.id && stationBcs ? stationBcs(group.id) : [];
+                return (
+                  <div key={group.id} className="cwin-group">
+                    <span className="cwin-group-title">
+                      {group.label} · {group.missing.length} missing
+                    </span>
+                    {stationBcs ? (
+                      <span className="cwin-group-bcs">
+                        BCs of this station:{' '}
+                        {bcs.length > 0 ? <strong>{bcs.join(', ')}</strong> : 'none assigned'}
+                      </span>
+                    ) : null}
+                    <ul className="cwin-list">
+                      {group.missing.map((item) => (
+                        <li key={item.row.id}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })
             ) : (
               <div className="cwin-group">
                 <span className="cwin-group-title">Missing</span>

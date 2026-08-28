@@ -260,3 +260,40 @@
 .cwin-modal-preview.is-overlap {
   color: var(--warning);
 }
+
+.cwin-note-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cwin-note-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.cwin-note-search input {
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: 12.5px;
+  width: 170px;
+}
+
+.cwin-group-bcs {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.cwin-group-bcs strong {
+  color: var(--text);
+}

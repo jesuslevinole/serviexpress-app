@@ -35,6 +35,7 @@ import { DetailModal } from './DetailModal';
 import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
 import { CoverageBanner } from './CoverageBanner';
 import { CaptureWindowBanner } from './CaptureWindowBanner';
+import { BlockedRefsNote } from './BlockedRefsNote';
 import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
@@ -388,7 +389,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * entró en esta ventana (con quién y dónde) y el que está en taller o con
    * correctivo pendiente. El renglón que se edita no se bloquea a sí mismo.
    */
-  const blockedRefsFor = (excludeRowId: string | null): Record<string, Map<string, string>> => {
+  /** Campo del reporte que indica su estación (para atar los camiones a ella). */
+  const reportStationKey = useMemo(
+    () => config.fields.find((f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations)?.key,
+    [config.fields],
+  );
+
+  const blockedRefsFor = (
+    excludeRowId: string | null,
+    /** Estación del reporte: los camiones de OTRA estación no se pueden elegir. */
+    stationId?: string | null,
+  ): Record<string, Map<string, string>> => {
     if (!captureSpec) return {};
     const map = new Map<string, string>();
     // "Una vez por ventana" aplica mientras la ventana está abierta (cuando
@@ -402,45 +413,81 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     captureInfo.blocked.forEach((reason, id) => {
       if (!map.has(id)) map.set(id, reason);
     });
+    // Cada camión solo entra por SU estación: los de otra estación quedan
+    // fuera del desplegable (los exentos —admin y roles con permiso— no).
+    if (!exemptFromWindow && typeof stationId === 'string' && stationId !== '') {
+      captureInfo.sourceRows.forEach((row) => {
+        const truckStation = row[captureSpec.once.sourceStationKey];
+        if (typeof truckStation === 'string' && truckStation !== '' && truckStation !== stationId && !map.has(row.id)) {
+          map.set(
+            row.id,
+            `belongs to ${refLabel(COLLECTIONS.stations, truckStation)} — this report is for ${refLabel(COLLECTIONS.stations, stationId)}`,
+          );
+        }
+      });
+    }
     return { [captureSpec.once.detailKey]: map };
   };
 
-  /** Aviso dentro del formulario: los camiones de su estación que no se pueden elegir. */
-  const renderBlockedNote = (excludeRowId: string | null): ReactNode => {
+  /**
+   * Regla "un BC Report por BC por ventana": si el usuario ya creó el suyo
+   * dentro de la ventana vigente, no puede abrir otro; debe seguir agregando
+   * camiones en ese. Los exentos (admin, oficina con permiso) no aplican.
+   */
+  const oneReportLock = (): string | null => {
+    if (!captureSpec || exemptFromWindow || !firebaseUser) return null;
+    const occ = captureInfo.occurrence;
+    if (!occ || windowStatus(captureInfo.window, Date.now()) !== 'open') return null;
+    const mine = allRows.find(
+      (row) =>
+        config.autoUserField !== undefined &&
+        row[config.autoUserField] === firebaseUser.uid &&
+        typeof row.createdAt === 'string' &&
+        row.createdAt >= occ.startAt &&
+        row.createdAt <= occ.endAt,
+    );
+    if (!mine) return null;
+    return `You already created your BC Report for this window (${describeParent(mine)}). Open that report and keep adding your trucks there — only one report per BC per window.`;
+  };
+
+  /**
+   * Aviso dentro del formulario: los camiones que no se pueden elegir, con
+   * buscador por número. Se listan los de las estaciones del usuario (o los
+   * de la estación del reporte cuando viene indicada).
+   */
+  const renderBlockedNote = (excludeRowId: string | null, stationId?: string | null): ReactNode => {
     if (!captureSpec) return null;
-    const blocked = blockedRefsFor(excludeRowId)[captureSpec.once.detailKey];
+    const blocked = blockedRefsFor(excludeRowId, stationId)[captureSpec.once.detailKey];
     if (!blocked || blocked.size === 0) return null;
     const { once } = captureSpec;
-    const inScope = captureInfo.sourceRows.filter((row) => {
-      if (!blocked.has(row.id)) return false;
-      const station = row[once.sourceStationKey];
-      if (pendingStations.length > 0 && !(typeof station === 'string' && pendingStations.includes(station))) {
-        return false;
-      }
-      if (once.sourceEntityKey && pendingEntities.length > 0) {
-        const entity = row[once.sourceEntityKey];
-        if (!(typeof entity === 'string' && pendingEntities.includes(entity))) return false;
-      }
-      return true;
-    });
-    if (inScope.length === 0) return null;
-    const shown = inScope.slice(0, 40);
+    const stations =
+      typeof stationId === 'string' && stationId !== '' ? [stationId] : pendingStations;
+    const items = captureInfo.sourceRows
+      .filter((row) => {
+        if (!blocked.has(row.id)) return false;
+        const station = row[once.sourceStationKey];
+        if (stations.length > 0 && !(typeof station === 'string' && stations.includes(station))) {
+          return false;
+        }
+        if (once.sourceEntityKey && pendingEntities.length > 0) {
+          const entity = row[once.sourceEntityKey];
+          if (!(typeof entity === 'string' && pendingEntities.includes(entity))) return false;
+        }
+        return true;
+      })
+      .map((row) => ({
+        id: row.id,
+        label: detailRefLabel(once.sourceCollection, row.id),
+        reason: blocked.get(row.id) ?? '',
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    if (items.length === 0) return null;
     return (
-      <div className="cwin-note">
-        <strong>
-          {inScope.length} {once.sourceLabel}
-          {inScope.length === 1 ? '' : 's'} can't be added right now
-        </strong>{' '}
-        (they are out of the list):
-        <ul>
-          {shown.map((row) => (
-            <li key={row.id}>
-              {detailRefLabel(once.sourceCollection, row.id)} — {blocked.get(row.id)}
-            </li>
-          ))}
-          {inScope.length > shown.length ? <li>…and {inScope.length - shown.length} more</li> : null}
-        </ul>
-      </div>
+      <BlockedRefsNote
+        title={`${items.length} ${once.sourceLabel}${items.length === 1 ? '' : 's'} can't be added right now`}
+        items={items}
+        searchPlaceholder={`Search by ${once.sourceLabel} number…`}
+      />
     );
   };
 
@@ -742,8 +789,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   );
 
   const openCreate = () => {
-    // Fuera de la ventana de captura no se abre el alta.
-    if (captureLocked) return;
+    // Fuera de la ventana de captura, o con su reporte de la semana ya
+    // creado, no se abre el alta.
+    if (captureLocked || oneReportLock()) return;
     setEditing(null);
     setFormError(null);
     // Un alta nueva nunca arrastra los renglones de la anterior.
@@ -819,17 +867,28 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
         }
       } else {
-        // La ventana de captura pudo cerrarse con el formulario abierto.
-        const lockedNow = lockedRightNow();
+        // La ventana de captura pudo cerrarse con el formulario abierto, o
+        // el BC pudo haber guardado ya su reporte de esta ventana en otra pestaña.
+        const lockedNow = lockedRightNow() ?? oneReportLock();
         if (lockedNow) {
           setFormError(lockedNow);
+          setBusy(false);
+          return;
+        }
+        // Prohibido guardar un BC Report VACÍO: debe traer al menos un
+        // renglón de mantenimiento (los exentos pueden, para correcciones).
+        if (captureSpec && !exemptFromWindow && config.detail && draftRows.length === 0) {
+          setFormError(
+            'An empty BC Report cannot be saved: use "Add lines" and capture at least one truck before saving.',
+          );
           setBusy(false);
           return;
         }
         // Renglones del alta: un camión que otro BC capturó mientras este
         // formulario estaba abierto ya no puede entrar.
         if (config.detail && draftRows.length > 0) {
-          const blockedNow = blockedRefsFor(null);
+          const stationNow = reportStationKey ? values[reportStationKey] : null;
+          const blockedNow = blockedRefsFor(null, typeof stationNow === 'string' ? stationNow : null);
           for (const row of draftRows) {
             for (const [key, reasons] of Object.entries(blockedNow)) {
               const value = row[key];
@@ -1250,8 +1309,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             <button
               type="button"
               className="btn btn-primary"
-              title={captureLocked ?? undefined}
-              disabled={captureLocked !== null}
+              title={captureLocked ?? oneReportLock() ?? undefined}
+              disabled={captureLocked !== null || oneReportLock() !== null}
               onClick={openCreate}
             >
               <Plus size={16} />
@@ -1329,6 +1388,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             scopeEntities={pendingEntities}
             stationsCollection={COLLECTIONS.stations}
             onConfigure={canConfigureWindow ? () => setWindowOpen(true) : undefined}
+            stationBcs={(stationId) =>
+              (refMaps[COLLECTIONS.users]?.rows ?? [])
+                .filter(
+                  (user) =>
+                    user.status !== false &&
+                    Array.isArray(user.scopeStations) &&
+                    user.scopeStations.includes(stationId),
+                )
+                .map((user) => refLabel(COLLECTIONS.users, user.id))
+                .sort((a, b) => a.localeCompare(b))
+            }
           />
         ) : null}
         {config.coverage ? (
@@ -1547,10 +1617,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                       rows={draftRows}
                       refMaps={detailRefMaps}
                       refLabels={detailRefLabel}
-                      blockedRefs={blockedRefsFor(null)}
+                      blockedRefs={blockedRefsFor(
+                        null,
+                        reportStationKey && typeof values[reportStationKey] === 'string'
+                          ? (values[reportStationKey] as string)
+                          : null,
+                      )}
                       onChange={setDraftRows}
                     />
-                    {renderBlockedNote(null)}
+                    {renderBlockedNote(
+                      null,
+                      reportStationKey && typeof values[reportStationKey] === 'string'
+                        ? (values[reportStationKey] as string)
+                        : null,
+                    )}
                   </>
                 ) : null
             : undefined
@@ -1627,8 +1707,28 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           refMaps={detailRefMaps}
           captureLocked={captureLocked}
           captureLockedNow={lockedRightNow}
-          blockedRefsFor={captureSpec ? blockedRefsFor : undefined}
-          formNoteFor={captureSpec ? renderBlockedNote : undefined}
+          blockedRefsFor={
+            captureSpec
+              ? (editingRowId) =>
+                  blockedRefsFor(
+                    editingRowId,
+                    reportStationKey && typeof detailParent[reportStationKey] === 'string'
+                      ? (detailParent[reportStationKey] as string)
+                      : null,
+                  )
+              : undefined
+          }
+          formNoteFor={
+            captureSpec
+              ? (editingRowId) =>
+                  renderBlockedNote(
+                    editingRowId,
+                    reportStationKey && typeof detailParent[reportStationKey] === 'string'
+                      ? (detailParent[reportStationKey] as string)
+                      : null,
+                  )
+              : undefined
+          }
           windowSummary={renderWindowSummary(detailParent)}
           onClose={() => setDetailParent(null)}
         />
