@@ -138,6 +138,8 @@ export function ImportCsvModal({
   const [imported, setImported] = useState(0);
   const [failures, setFailures] = useState<{ index: number; message: string }[]>([]);
   const [hasIdColumn, setHasIdColumn] = useState(false);
+  /** Claves de los campos que SÍ vienen en el archivo (para el previo). */
+  const [presentKeys, setPresentKeys] = useState<Set<string> | null>(null);
   /** true = actualiza solo las columnas del archivo y conserva el resto. */
   const [partialUpdate, setPartialUpdate] = useState(false);
   /** true = casa por nombre contra los registros existentes; nunca crea. */
@@ -419,6 +421,15 @@ export function ImportCsvModal({
         if (stale !== -1) warnings.splice(stale, 1);
         if (matches.length === 1) {
           docId = matches[0].id;
+          // Solo se LLENAN campos vacíos: lo que el registro ya tiene
+          // capturado en el app no se toca (Entity, Station, o cualquier
+          // otro valor ya trabajado ahí manda sobre el archivo).
+          const existing = matches[0];
+          Object.keys(values).forEach((key) => {
+            const current = existing[key];
+            const isEmpty = current === null || current === undefined || current === '';
+            if (!isEmpty) delete values[key];
+          });
           if (!resolvedIsId) {
             // El nombre casó por texto pero la referencia no resolvió: se
             // conserva la referencia y el nombre que el registro ya tiene.
@@ -455,6 +466,11 @@ export function ImportCsvModal({
       return { index: rowIndex + 2, docId, values, display, errors, warnings };
     });
     setHasIdColumn(idColumnIndex !== -1);
+    // El previo dibuja SOLO las columnas del archivo: dibujar las 28 del
+    // módulo con valores salteados es lo que hacía ver "columnas corridas".
+    setPresentKeys(
+      partialUpdate || matchMode ? new Set([...columnByField.keys()]) : null,
+    );
     setPrepared(preparedRows);
     setPhase('preview');
   };
@@ -571,8 +587,9 @@ export function ImportCsvModal({
                   <strong>Update existing records by {matchField.label}</strong>
                   <small>
                     Rows are matched by the name in the &quot;{matchField.label}&quot; column
-                    (surname/first-name order and capitals don&apos;t matter). Only the columns in
-                    the file change; rows that don&apos;t match are skipped and{' '}
+                    (surname/first-name order and capitals don&apos;t matter). It only FILLS
+                    fields that are currently empty in the app — values already captured are
+                    never replaced — rows that don&apos;t match are skipped, and{' '}
                     <strong>nothing new is ever created or duplicated</strong>.
                   </small>
                 </span>
@@ -682,9 +699,11 @@ export function ImportCsvModal({
                   <th>#</th>
                   <th>Status</th>
                   {hasIdColumn ? <th>ID</th> : null}
-                  {fields.map((f) => (
-                    <th key={f.key}>{f.label}</th>
-                  ))}
+                  {fields
+                    .filter((f) => presentKeys === null || presentKeys.has(f.key))
+                    .map((f) => (
+                      <th key={f.key}>{f.label}</th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
