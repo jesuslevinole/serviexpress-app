@@ -6,6 +6,7 @@ import {
   getCountFromServer,
   getDoc,
   getDocs,
+  increment,
   onSnapshot,
   query,
   serverTimestamp,
@@ -255,4 +256,22 @@ export async function updateDocument(
 /** Elimina un documento. */
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   await deleteDoc(doc(db, collectionName, id));
+}
+
+/**
+ * Suma (o resta) 1 a un contador del documento de forma atómica: aunque dos
+ * personas capturen renglones a la vez, el total no se pisa. Se usa para el
+ * número de renglones de cada BC Report ("cuáles están vacíos") sin tener
+ * que leer la colección de renglones completa.
+ */
+export async function adjustCounter(
+  collectionName: string,
+  id: string,
+  field: string,
+  delta: number,
+): Promise<void> {
+  await updateDoc(doc(db, collectionName, id), {
+    [field]: increment(delta),
+    updatedAt: serverTimestamp(),
+  });
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import type { RefMaps } from '../../hooks/useRefMaps';
 import {
+  adjustCounter,
   createDocument,
   deleteDocument,
   fetchCollection,
@@ -53,6 +54,8 @@ interface DetailModalProps {
   blockedRefsFor?: (editingRowId: string | null) => Record<string, Map<string, string>>;
   /** Aviso dentro del formulario (los camiones no disponibles), según el renglón editado. */
   formNoteFor?: (editingRowId: string | null) => ReactNode;
+  /** Resumen de la ventana para ESTE registro (camiones de su estación que faltan). */
+  windowSummary?: ReactNode;
   onClose: () => void;
 }
 
@@ -71,6 +74,7 @@ export function DetailModal({
   captureLockedNow,
   blockedRefsFor,
   formNoteFor,
+  windowSummary,
   onClose,
 }: DetailModalProps) {
   const { can, firebaseUser, isAdminView, profile, viewAs } = useAuth();
@@ -247,6 +251,20 @@ export function DetailModal({
   };
 
 
+  /**
+   * Mantiene el contador de renglones del registro maestro (para que la
+   * tabla marque los reportes vacíos). Atómico: dos capturas a la vez no se
+   * pisan. Si el maestro no existiera ya, el conteo no debe tirar la captura.
+   */
+  const bumpCount = async (delta: number) => {
+    if (!detail.countField || !parentModule) return;
+    try {
+      await adjustCounter(parentModule.collection, parent.id, detail.countField, delta);
+    } catch {
+      // El renglón ya quedó guardado; el conteo se autocorrige al recargar.
+    }
+  };
+
   /** Escribe en el registro referenciado los datos marcados con syncToRefField. */
   const syncToReferences = async (values: Record<string, FieldValue>) => {
     for (const field of detail.fields) {
@@ -299,6 +317,7 @@ export function DetailModal({
             detail.mirror.build(parent.id, parent, payload),
           );
         }
+        await bumpCount(1);
       }
       await syncToReferences(payload);
       if (keepOpen && !editing) {
@@ -321,6 +340,7 @@ export function DetailModal({
       if (detail.mirror) {
         await deleteDocument(detail.mirror.collection, `${detail.mirror.idPrefix}${deleting.id}`);
       }
+      await bumpCount(-1);
     } finally {
       setDeleting(null);
       setBusy(false);
@@ -346,6 +366,7 @@ export function DetailModal({
       await setDocument(detail.collection, docId, payload);
     } else {
       rowId = await createDocument(detail.collection, payload);
+      await bumpCount(1);
     }
     if (detail.mirror && rowId) {
       await setDocument(
@@ -450,6 +471,8 @@ export function DetailModal({
           {captureLocked}
         </p>
       ) : null}
+
+      {windowSummary}
 
       {loading ? (
         <Spinner />

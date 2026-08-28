@@ -662,8 +662,43 @@ export const bcReportsModule: ModuleConfig = {
       },
     ],
   },
+  /** Pestañas para localizar de un vistazo los reportes sin ningún camión. */
+  viewTabs: [
+    { id: 'all', label: 'All' },
+    {
+      id: 'empty',
+      label: 'Empty',
+      tone: 'negative',
+      match: (row) => row.rowsCount === 0,
+    },
+    {
+      id: 'filled',
+      label: 'With trucks',
+      tone: 'positive',
+      match: (row) => typeof row.rowsCount === 'number' && row.rowsCount > 0,
+    },
+  ],
   fields: [
     { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
+    {
+      /**
+       * Cuántos camiones (renglones) tiene el reporte. Lo mantiene el motor
+       * con el contador rowsCount; 0 se pinta en rojo como EMPTY para ubicar
+       * de inmediato los reportes que se guardaron sin nada.
+       */
+      key: 'trucksAdded',
+      label: 'Trucks',
+      type: 'text',
+      form: false,
+      badge: true,
+      badgeTones: { EMPTY: 'negative' },
+      compute: (row) =>
+        typeof row.rowsCount === 'number'
+          ? row.rowsCount === 0
+            ? 'EMPTY'
+            : String(row.rowsCount)
+          : null,
+    },
     ...contextFields(),
     { ...capturedByField, label: 'BC (captured by)' },
   ],
@@ -842,6 +877,8 @@ export const bcReportsModule: ModuleConfig = {
     title: 'Maintenance',
     /** El mismo camión no puede ir dos veces en un mismo reporte. */
     uniqueRowKey: { key: 'idTruck', label: 'truck' },
+    /** El motor lleva la cuenta de renglones para marcar los reportes vacíos. */
+    countField: 'rowsCount',
     addLabel: 'Add preventive',
     // Atajo para el correctivo: abre el mismo formulario ya marcado, que es
     // lo que se necesita cuando el BC detecta una falla durante la revisión.

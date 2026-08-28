@@ -151,6 +151,16 @@
   color: var(--text-soft);
 }
 
+.cwin-note.is-ok {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.cwin-note.is-ok strong {
+  color: var(--success);
+}
+
 .cwin-note.is-danger {
   border-color: var(--danger);
   background: var(--danger-bg);

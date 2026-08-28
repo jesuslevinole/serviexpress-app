@@ -16,6 +16,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
+  adjustCounter,
+  countDocuments,
   createDocument,
   fetchCollection,
   setDocument,
@@ -307,6 +309,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       : undefined,
   );
   const [historyFor, setHistoryFor] = useState<EntityData | null>(null);
+  /** Registros a los que ya se les calculó el contador (para no repetir). */
+  const backfilled = useRef<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   /** Encabezados creados durante la importación masiva (clave de grupo -> id). */
   const bulkHeaders = useRef<Map<string, string>>(new Map());
@@ -439,6 +443,54 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     );
   };
 
+  /**
+   * Resumen de la ventana DENTRO del reporte abierto: cuántos camiones de la
+   * estación del reporte ya entraron en esta ventana y cuáles faltan, porque
+   * el BC debe capturar TODOS los de su estación antes de que cierre.
+   */
+  const renderWindowSummary = (parent: EntityData): ReactNode => {
+    if (!captureSpec || captureInfo.status !== 'open') return null;
+    const { once } = captureSpec;
+    const stationField = config.fields.find(
+      (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
+    );
+    const station = stationField ? parent[stationField.key] : null;
+    const hasStation = typeof station === 'string' && station !== '';
+    const inStation = captureInfo.sourceRows.filter(
+      (row) => !hasStation || row[once.sourceStationKey] === station,
+    );
+    if (inStation.length === 0) return null;
+    const missing = inStation.filter(
+      (row) => !captureInfo.taken.has(row.id) && !captureInfo.blocked.has(row.id),
+    );
+    const done = inStation.length - missing.length -
+      inStation.filter((row) => !captureInfo.taken.has(row.id) && captureInfo.blocked.has(row.id)).length;
+    const blockedCount = inStation.filter((row) => captureInfo.blocked.has(row.id)).length;
+    const stationName = hasStation ? refLabel(COLLECTIONS.stations, station as string) : 'all stations';
+    const names = missing
+      .map((row) => detailRefLabel(once.sourceCollection, row.id))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const shown = names.slice(0, 25);
+    return (
+      <div className={`cwin-note ${missing.length > 0 ? '' : 'is-ok'}`}>
+        <strong>
+          This window · {stationName}: {done} of {done + missing.length} {once.sourceLabel}s added
+        </strong>
+        {blockedCount > 0 ? ` (${blockedCount} in shop/corrective, not required)` : ''}
+        {missing.length > 0 ? (
+          <>
+            {' '}
+            — every {once.sourceLabel} of the station must be in before the window closes. Missing:{' '}
+            {shown.join(', ')}
+            {names.length > shown.length ? ` and ${names.length - shown.length} more` : ''}.
+          </>
+        ) : (
+          <> — all {once.sourceLabel}s of the station are in. Nothing missing.</>
+        )}
+      </div>
+    );
+  };
+
   const tableFields = useMemo(
     () => allowedFields.filter((f) => f.table !== false),
     [allowedFields],
@@ -522,6 +574,46 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     () => sortedRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
     [sortedRows, safePage],
   );
+
+  /**
+   * Autocompletado del contador de renglones: los registros de ANTES de esta
+   * versión no traen rowsCount. Para los que están a la vista se hace UNA
+   * consulta de conteo (1 lectura cada una, no una por renglón) y se guarda
+   * en el documento, de modo que solo cuesta la primera vez en la vida de
+   * cada registro; después la tabla ya sabe cuáles están vacíos.
+   */
+  const countField = config.detail?.countField;
+  const detailCollection = config.detail?.collection ?? '';
+  const detailParentKey = config.detail?.parentKey ?? '';
+  useEffect(() => {
+    if (!countField || detailCollection === '' || loading) return;
+    const pending = pageRows.filter(
+      (row) => typeof row[countField] !== 'number' && !backfilled.current.has(row.id),
+    );
+    if (pending.length === 0) return;
+    pending.forEach((row) => backfilled.current.add(row.id));
+    let cancelled = false;
+    void (async () => {
+      for (const row of pending) {
+        if (cancelled) return;
+        try {
+          const total = await countDocuments(detailCollection, {
+            field: detailParentKey,
+            value: row.id,
+          });
+          await setDocument(config.collection, row.id, { [countField]: total }, true);
+        } catch {
+          // Sin permiso o sin red: se reintenta en otra visita.
+          backfilled.current.delete(row.id);
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countField, detailCollection, detailParentKey, loading, pageRows]);
 
   const setColumnFilter = (key: string, filter: ColumnFilter | null) => {
     setPage(1);
@@ -686,6 +778,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             return;
           }
         }
+        // El contador de renglones nace con lo capturado en el alta (0 si
+        // se guardó vacío): así la tabla marca EMPTY desde el primer momento.
+        if (config.detail?.countField) {
+          payload[config.detail.countField] = draftRows.length;
+        }
         const newId = await createDocument(config.collection, payload);
         // Los renglones capturados dentro del alta se guardan ya con el id
         // del maestro recién creado: así el uniforme se pide de una sola vez.
@@ -798,6 +895,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       const existing = allRows.find((row) =>
         bulk.groupBy.every((key) => String(row[key] ?? '') === String(headerValues[key] ?? '')),
       );
+      if (!existing && detail.countField) headerValues[detail.countField] = 0;
       headerId = existing ? existing.id : await createDocument(config.collection, headerValues);
       bulkHeaders.current.set(groupKey, headerId);
     }
@@ -817,6 +915,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         `${detail.mirror.idPrefix}${rowId}`,
         detail.mirror.build(headerId, { id: headerId, ...headerValues }, rowValues),
       );
+    }
+    if (detail.countField) {
+      try {
+        await adjustCounter(config.collection, headerId, detail.countField, 1);
+      } catch {
+        // El conteo se autocorrige al abrir el módulo (backfill).
+      }
     }
   };
 
@@ -1408,6 +1513,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           captureLockedNow={lockedRightNow}
           blockedRefsFor={captureSpec ? blockedRefsFor : undefined}
           formNoteFor={captureSpec ? renderBlockedNote : undefined}
+          windowSummary={renderWindowSummary(detailParent)}
           onClose={() => setDetailParent(null)}
         />
       ) : null}

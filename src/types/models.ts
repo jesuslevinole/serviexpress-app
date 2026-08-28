@@ -303,6 +303,14 @@ export interface DetailConfig {
    */
   uniqueRowKey?: { key: string; label: string };
   /**
+   * Campo del registro MAESTRO donde el motor mantiene cuántos renglones
+   * tiene (se suma al crear y se resta al borrar, de forma atómica). Con él
+   * la tabla puede decir qué registros están VACÍOS sin leer los renglones.
+   * Los registros de antes de esta versión no lo traen: el módulo lo
+   * completa solo, una vez, con una consulta de conteo por registro visible.
+   */
+  countField?: string;
+  /**
    * El detalle solo se habilita cuando el campo indicado apunta a un registro
    * cuyo nombre está en la lista (p. ej. tipo de solicitud = "Uniforms").
    */
