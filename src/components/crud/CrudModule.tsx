@@ -601,23 +601,43 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [backfillRetry, setBackfillRetry] = useState(0);
   /** Progreso visible del conteo, para no depurar a ciegas si algo falla. */
   const [backfillState, setBackfillState] = useState<{
+    /** Módulo dueño del conteo: la nota solo se muestra en él. */
+    module: string;
     done: number;
     failed: number;
     total: number;
     running: boolean;
     error: string | null;
   } | null>(null);
+  /**
+   * Versión del verificador de conteos. Subirla obliga a re-verificar TODOS
+   * los registros una única vez con la lógica nueva (v2 cuenta en el espejo
+   * Y en el detalle, tomando el mayor, porque los datos migrados enlazan a
+   * veces por uno y a veces por el otro).
+   */
+  const COUNT_OK_VERSION = 2;
   useEffect(() => {
     if (!countField || countCollection === '' || loading || backfillRunning.current) return;
     // Se (re)cuenta todo lo que no tenga la marca de verificado: cubre los
     // registros nunca contados Y los que la versión anterior contó sobre la
     // colección equivocada (los históricos que salían EMPTY teniendo espejo).
     const pending = allRows.filter(
-      (row) => row[countOkField] !== true && !backfilled.current.has(row.id),
+      (row) => row[countOkField] !== COUNT_OK_VERSION && !backfilled.current.has(row.id),
     );
     if (pending.length === 0) return;
     backfillRunning.current = true;
-    setBackfillState({ done: 0, failed: 0, total: pending.length, running: true, error: null });
+    const owner = config.id;
+    const fallbackCollection =
+      config.detail && config.detail.collection !== countCollection ? config.detail.collection : '';
+    const fallbackKey = config.detail?.parentKey ?? '';
+    setBackfillState({
+      module: owner,
+      done: 0,
+      failed: 0,
+      total: pending.length,
+      running: true,
+      error: null,
+    });
     void (async () => {
       let done = 0;
       let failed = 0;
@@ -627,14 +647,22 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           if (backfilled.current.has(row.id)) continue;
           backfilled.current.add(row.id);
           try {
-            const total = await countDocumentsSafe(countCollection, {
+            let total = await countDocumentsSafe(countCollection, {
               field: countParentKey,
               value: row.id,
             });
+            // Datos migrados con enlaces mixtos: si el espejo dice 0, se
+            // verifica también la colección de renglones y se toma el mayor.
+            if (total === 0 && fallbackCollection !== '') {
+              total = await countDocumentsSafe(fallbackCollection, {
+                field: fallbackKey,
+                value: row.id,
+              });
+            }
             await setDocument(
               config.collection,
               row.id,
-              { [countField]: total, [countOkField]: true },
+              { [countField]: total, [countOkField]: COUNT_OK_VERSION },
               true,
             );
             done += 1;
@@ -648,6 +676,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             }
           }
           setBackfillState({
+            module: owner,
             done,
             failed,
             total: pending.length,
@@ -659,12 +688,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         backfillRunning.current = false;
         setBackfillState(
           failed > 0
-            ? { done, failed, total: pending.length, running: false, error: firstError }
+            ? { module: owner, done, failed, total: pending.length, running: false, error: firstError }
             : null,
         );
       }
     })();
-  }, [countField, countOkField, countCollection, countParentKey, loading, allRows, config.collection, backfillRetry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- config es estable por módulo; el loop captura sus valores al arrancar
+  }, [countField, countOkField, countCollection, countParentKey, loading, allRows, config.collection, config.id, backfillRetry]);
 
   const setColumnFilter = (key: string, filter: ColumnFilter | null) => {
     setPage(1);
@@ -1260,7 +1290,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             to work with older ones, or Export Excel for the full history.
           </p>
         ) : null}
-        {backfillState ? (
+        {backfillState && backfillState.module === config.id ? (
           <p className={`crud-backfill-note ${!backfillState.running && backfillState.failed > 0 ? 'is-error' : ''}`}>
             {backfillState.running ? (
               <>

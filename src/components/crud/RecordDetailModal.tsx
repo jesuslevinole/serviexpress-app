@@ -33,9 +33,10 @@ function highlightText(field: FieldConfig, record: EntityData, fallback: string)
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString('es-MX', {
-    day: '2-digit',
+  // Todo el app muestra MES/DÍA/AÑO, también los sellos de captura.
+  return date.toLocaleString('en-US', {
     month: '2-digit',
+    day: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',

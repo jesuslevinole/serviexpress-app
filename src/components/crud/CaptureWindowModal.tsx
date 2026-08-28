@@ -9,6 +9,7 @@ import {
   formatDuration,
   formatTexas,
   resolveOccurrence,
+  windowsOverlap,
   type CaptureWindow,
 } from '../../services/captureWindow';
 import './CaptureWindow.css';
@@ -35,6 +36,7 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
   const [startTime, setStartTime] = useState(window?.startTime ?? '08:00');
   const [endDay, setEndDay] = useState(String(window?.endDay ?? 0));
   const [endTime, setEndTime] = useState(window?.endTime ?? '23:59');
+  const [endNextWeek, setEndNextWeek] = useState(window?.endNextWeek ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -45,14 +47,22 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
     return () => globalThis.clearInterval(timer);
   }, []);
 
+  /**
+   * ¿"Cierra el miércoles" admite dos lecturas (mismo o siguiente semana)?
+   * Solo cuando el día de cierre va DESPUÉS del de apertura en la misma
+   * semana; si va antes o es el mismo, el cierre cae solo en la siguiente.
+   */
+  const spanBase = (Number(endDay) - Number(startDay) + 7) % 7;
+  const weekChoiceApplies = spanBase !== 0;
   const draft: Omit<CaptureWindow, 'updatedBy'> = useMemo(
     () => ({
       startDay: Number(startDay),
       startTime,
       endDay: Number(endDay),
       endTime,
+      endNextWeek: weekChoiceApplies ? endNextWeek : false,
     }),
-    [startDay, startTime, endDay, endTime],
+    [startDay, startTime, endDay, endTime, endNextWeek, weekChoiceApplies],
   );
 
   /** Cómo quedaría la ventana con lo capturado, medida en este instante. */
@@ -150,6 +160,21 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
           <div className="cwin-modal-field">
             <span>Closes on</span>
             <SearchableSelect value={endDay} options={DAY_OPTIONS} onChange={setEndDay} />
+            {weekChoiceApplies ? (
+              <SearchableSelect
+                value={endNextWeek ? 'next' : 'same'}
+                options={[
+                  { value: 'same', label: `${DAY_NAMES[Number(endDay)]} of that SAME week` },
+                  { value: 'next', label: `${DAY_NAMES[Number(endDay)]} of the FOLLOWING week` },
+                ]}
+                onChange={(v) => setEndNextWeek(v === 'next')}
+              />
+            ) : (
+              <small className="cwin-modal-hint">
+                {DAY_NAMES[Number(endDay)]} lands on the following week (it comes before the
+                opening day).
+              </small>
+            )}
           </div>
           <label className="cwin-modal-field">
             <span>At (Texas time)</span>
@@ -162,12 +187,34 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
           </label>
         </div>
         <p className={`cwin-modal-preview ${preview.status === 'unset' ? 'is-invalid' : ''}`}>
-          {preview.status === 'unset' || !preview.occurrence
-            ? 'Choose the opening and closing time.'
-            : preview.status === 'open'
-              ? `The window will repeat ${describeSchedule({ ...draft, updatedBy: null })}. Right now it would be OPEN, closing ${formatTexas(preview.occurrence.endAt)} (in ${formatDuration(new Date(preview.occurrence.endAt).getTime() - now, false)}).`
-              : `The window will repeat ${describeSchedule({ ...draft, updatedBy: null })}. Right now it would be CLOSED, opening ${formatTexas(preview.occurrence.startAt)} (in ${formatDuration(new Date(preview.occurrence.startAt).getTime() - now, false)}).`}
+          {preview.status === 'unset' || !preview.occurrence ? (
+            'Choose the opening and closing time.'
+          ) : (
+            <>
+              The window will repeat {describeSchedule({ ...draft, updatedBy: null })}.{' '}
+              <strong>
+                Each window lasts{' '}
+                {formatDuration(
+                  new Date(preview.occurrence.endAt).getTime() -
+                    new Date(preview.occurrence.startAt).getTime(),
+                  false,
+                )}
+              </strong>
+              : for example {formatTexas(preview.occurrence.startAt)} →{' '}
+              {formatTexas(preview.occurrence.endAt)}.{' '}
+              {preview.status === 'open'
+                ? `Right now it would be OPEN, closing in ${formatDuration(new Date(preview.occurrence.endAt).getTime() - now, false)}.`
+                : `Right now it would be CLOSED, opening in ${formatDuration(new Date(preview.occurrence.startAt).getTime() - now, false)}.`}
+            </>
+          )}
         </p>
+        {windowsOverlap({ ...draft, updatedBy: null }) ? (
+          <p className="cwin-modal-preview is-overlap">
+            Heads up: with more than 7 days, each week the next window opens BEFORE the previous
+            one closes, so capture never fully closes — each truck can still be added only once
+            per weekly cycle.
+          </p>
+        ) : null}
       </div>
 
       <ConfirmDialog

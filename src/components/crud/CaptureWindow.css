@@ -251,3 +251,12 @@
 .cwin-modal-clear {
   margin-right: auto;
 }
+
+.cwin-modal-hint {
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.cwin-modal-preview.is-overlap {
+  color: var(--warning);
+}
