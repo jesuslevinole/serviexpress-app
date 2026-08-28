@@ -16,6 +16,11 @@ interface DraftDetailRowsProps {
   rows: DraftRow[];
   refMaps: RefMaps;
   refLabels: (collection: string, id: string) => string;
+  /**
+   * Opciones que hoy no se pueden elegir (clave del campo -> id -> motivo):
+   * el camión que otro BC ya capturó en esta ventana, el que está en taller.
+   */
+  blockedRefs?: Record<string, Map<string, string>>;
   onChange: (rows: DraftRow[]) => void;
 }
 
@@ -29,6 +34,7 @@ export function DraftDetailRows({
   rows,
   refMaps,
   refLabels,
+  blockedRefs,
   onChange,
 }: DraftDetailRowsProps) {
   const fields = useMemo(
@@ -113,6 +119,19 @@ export function DraftDetailRows({
     if (!data) return [];
     let options = [...data.labels.entries()].map(([value, label]) => ({ value, label }));
 
+    // Bloqueadas por la ventana de captura (ya capturado, en taller…): fuera.
+    const blocked = blockedRefs?.[field.key];
+    if (blocked && blocked.size > 0) {
+      const chosen = draft[field.key];
+      options = options.filter((option) => !blocked.has(option.value) || option.value === chosen);
+    }
+    // Ya está en un renglón de esta misma captura: no se repite.
+    const unique = detail.uniqueRowKey;
+    if (unique && unique.key === field.key) {
+      const used = new Set(rows.map((row) => String(row[unique.key] ?? '')));
+      options = options.filter((option) => !used.has(option.value));
+    }
+
     // Prenda: solo las que tienen existencia en alguna talla.
     if (control && itemsWithStock && field.key === control.matchKeys[0]) {
       options = options.filter((option) => itemsWithStock.has(option.value));
@@ -149,6 +168,24 @@ export function DraftDetailRows({
     if (missing.length > 0) {
       setError(`Fill in ${missing.map((f) => f.label).join(', ')} before adding the line.`);
       return;
+    }
+    const unique = detail.uniqueRowKey;
+    if (unique) {
+      const chosen = draft[unique.key];
+      const uniqueField = detail.fields.find((f) => f.key === unique.key);
+      const name =
+        typeof chosen === 'string' && uniqueField?.refCollection
+          ? refLabels(uniqueField.refCollection, chosen)
+          : String(chosen ?? '');
+      if (rows.some((row) => row[unique.key] === chosen && chosen !== '' && chosen !== null)) {
+        setError(`The ${unique.label} "${name}" is already in this ${detail.title.toLowerCase()}. Each ${unique.label} goes only once.`);
+        return;
+      }
+      const reason = typeof chosen === 'string' ? blockedRefs?.[unique.key]?.get(chosen) : undefined;
+      if (reason) {
+        setError(`The ${unique.label} "${name}" can't be added: ${reason}.`);
+        return;
+      }
     }
     if (control && available !== null) {
       const value = draft[control.quantityKey];

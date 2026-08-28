@@ -513,6 +513,21 @@ const BC_TYPE_TO_UNIT: Record<string, string | null> = {
 const whenBcPreventive = { field: 'type', value: 'Preventive' } as const;
 
 const bcDetailFields: FieldConfig[] = [
+  /**
+   * Cada renglón nace preventivo (la revisión diaria del BC). "Add corrective"
+   * abre el mismo formulario con este valor ya puesto; las demás condiciones
+   * (visibleWhen) y el espejo en Maintenance se apoyan en este campo.
+   */
+  {
+    key: 'type',
+    label: 'Maintenance type',
+    type: 'enum',
+    enumValues: ['Preventive', 'Corrective'],
+    required: true,
+    defaultValue: 'Preventive',
+    badge: true,
+    badgeTones: { Preventive: 'warning', Corrective: 'negative' },
+  },
   {
     key: 'unitType',
     label: 'Type',
@@ -611,6 +626,42 @@ export const bcReportsModule: ModuleConfig = {
   autoUserField: 'idUsers',
   /** Solo los más recientes: la colección completa agota la cuota diaria. */
   listLimit: 500,
+  /**
+   * Los BC Reports solo se capturan dentro de la ventana que abre el admin
+   * (hora de Texas). En esa ventana cada camión entra UNA sola vez, lo
+   * capture quien lo capture; y un camión con orden de taller abierta o con
+   * correctivo pendiente queda fuera hasta que se cierre / marque Done.
+   */
+  captureWindow: {
+    id: 'bcReports',
+    label: 'BC Report window',
+    once: {
+      detailKey: 'idTruck',
+      sourceCollection: COLLECTIONS.trucks,
+      sourceStationKey: 'idStationActual',
+      sourceEntityKey: 'idEntityActual',
+      sourceActiveKey: 'status',
+      sourceLabel: 'truck',
+    },
+    blockedBy: [
+      {
+        collection: COLLECTIONS.shopOrders,
+        refKey: 'idTruck',
+        statusKey: 'status',
+        // ABIERTA / EN PROCESO bloquean; CERRADA y GARANTIA liberan el camión.
+        openValues: ['ABIERTA', 'EN PROCESO'],
+        label: 'in Shop (open order)',
+      },
+      {
+        collection: COLLECTIONS.maintenance,
+        refKey: 'idTruck',
+        statusKey: 'status',
+        openValues: ['Pending', 'In progress'],
+        match: (row) => row.type === 'Corrective',
+        label: 'corrective maintenance not Done',
+      },
+    ],
+  },
   fields: [
     { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
     ...contextFields(),
@@ -789,6 +840,8 @@ export const bcReportsModule: ModuleConfig = {
     collection: COLLECTIONS.bcReportDetails,
     parentKey: 'idBcReport',
     title: 'Maintenance',
+    /** El mismo camión no puede ir dos veces en un mismo reporte. */
+    uniqueRowKey: { key: 'idTruck', label: 'truck' },
     addLabel: 'Add preventive',
     // Atajo para el correctivo: abre el mismo formulario ya marcado, que es
     // lo que se necesita cuando el BC detecta una falla durante la revisión.

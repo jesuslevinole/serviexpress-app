@@ -132,55 +132,16 @@ textarea {
     font-size: 16px !important;
   }
 
-  /* --- Campos: relleno suave, esquinas amplias y foco evidente ---
-     El borde tenue sobre fondo relleno se lee mejor en pantalla chica que
-     una caja vacía con contorno, y da sensación de "toca aquí". */
   .field-input,
   .sselect-control {
-    min-height: 54px;
-    padding: 15px 16px;
-    border-radius: 14px;
+    min-height: 50px;
+    padding: 14px;
+    border-radius: 13px;
     font-size: 16px !important;
-    background: var(--surface-2);
-    border-color: transparent;
   }
 
-  .field-input:focus,
-  .sselect:focus-within .sselect-control {
-    background: var(--surface);
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-bg);
-  }
-
-  .field-invalid {
-    background: var(--danger-bg);
-    border-color: var(--danger);
-  }
-
-  textarea.field-input {
-    min-height: 110px;
-    line-height: 1.5;
-  }
-
-  /* Las etiquetas de los campos que flotan se colocan desde FormField.css;
-     esta solo aplica a las que siguen arriba (casillas Sí/No). */
   .field-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: 0;
-  }
-
-  .field {
-    gap: 7px;
-  }
-
-  /* Alineación vertical del contenido del selector con el input. */
-  .sselect-control {
-    min-height: 54px;
-    border-radius: 14px;
-    background: var(--surface-2);
-    border-color: transparent;
+    font-size: 13.5px;
   }
 
   .field-check input,
@@ -233,13 +194,8 @@ textarea {
   .crud-toolbar-actions {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-  }
-
-  /* Agregar es la acción frecuente: renglón propio y a lo ancho. */
-  .crud-toolbar-actions .btn-primary {
-    grid-column: 1 / -1;
   }
 
   .crud-toolbar-actions .btn {
@@ -263,17 +219,6 @@ textarea {
     font-size: 13.5px;
   }
 
-  /* --- Formularios: una columna con aire entre campos --- */
-  .crudform-grid {
-    gap: 20px;
-  }
-
-  /* El resumen del registro estorba en el alta móvil: lo que importa es el
-     campo que se está llenando, no un panel repitiendo lo ya escrito. */
-  .ssum {
-    display: none;
-  }
-
   /* --- Modales (bottom sheet): más aire y zona segura --- */
   .modal-header {
     padding: 16px 18px 12px;
@@ -293,21 +238,8 @@ textarea {
   }
 
   .modal-footer .btn {
-    flex: 1 1 45%;
+    flex: 1;
     justify-content: center;
-  }
-
-  /* La acción principal ocupa su propio renglón: es la que se busca al
-     terminar de capturar y no debe quedar apretada entre las secundarias. */
-  .modal-footer .btn-primary {
-    flex: 1 1 100%;
-    order: 2;
-  }
-
-  .modal-footer .crudform-error {
-    flex: 1 1 100%;
-    order: -1;
-    margin-right: 0;
   }
 
   /* --- Panel de filtros a pantalla completa --- */
@@ -335,6 +267,10 @@ textarea {
     font-size: 15px;
   }
 
+  .ssum {
+    max-height: 260px;
+  }
+
   /* --- Dashboard: números protagonistas --- */
   .dashboard-card {
     padding: 20px;
@@ -354,36 +290,6 @@ textarea {
   .login-bypass {
     min-height: 54px;
     border-radius: 13px;
-  }
-
-  /* --- Subtabla de renglones (uniformes) --- */
-  .draftrows-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .draftrows-bar-text span {
-    white-space: normal;
-  }
-
-  .draftrows-form {
-    grid-template-columns: 1fr;
-  }
-
-  .draftrows-avail-value {
-    height: 54px;
-    font-size: 16px;
-  }
-
-  .draftrows-add {
-    min-height: 54px;
-  }
-
-  /* --- Alta rápida de catálogo dentro de un formulario --- */
-  .modal-overlay.is-top .modal-card {
-    height: auto;
-    max-height: 90vh;
   }
 
   /* --- Catálogos: pestañas presionables --- */

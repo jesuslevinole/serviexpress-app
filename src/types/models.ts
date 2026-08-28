@@ -285,6 +285,13 @@ export interface DetailConfig {
   title: string;
   fields: FieldConfig[];
   /**
+   * Un mismo valor de este campo no puede repetirse entre los renglones de
+   * un mismo registro maestro (p. ej. un camión solo entra una vez en cada
+   * BC Report). Se valida al capturar, tanto en el alta como al agregar
+   * renglones a un registro ya guardado.
+   */
+  uniqueRowKey?: { key: string; label: string };
+  /**
    * El detalle solo se habilita cuando el campo indicado apunta a un registro
    * cuyo nombre está en la lista (p. ej. tipo de solicitud = "Uniforms").
    */
@@ -366,6 +373,52 @@ export interface CoverageConfig {
   missingLabel: string;
 }
 
+/**
+ * Ventana de captura: el módulo solo admite altas entre una fecha/hora de
+ * inicio y una de cierre que fija el administrador (en hora de Texas), y
+ * dentro de esa ventana cada registro del catálogo indicado (los camiones)
+ * solo se puede capturar UNA vez, sin importar quién lo capture.
+ */
+export interface CaptureWindowConfig {
+  /** Id del documento de configuración (settings_windows/<id>). */
+  id: string;
+  /** Nombre visible de la ventana en avisos ("BC Report window"). */
+  label: string;
+  /** Regla "una vez por ventana" sobre un campo de referencia del detalle. */
+  once: {
+    /** Campo del renglón de detalle que apunta al catálogo (idTruck). */
+    detailKey: string;
+    /** Catálogo que debe quedar cubierto en cada ventana (trucks). */
+    sourceCollection: string;
+    /** Campo del catálogo con su estación actual (para "los que faltan"). */
+    sourceStationKey: string;
+    /** Campo del catálogo con su entidad actual (opcional, para el alcance). */
+    sourceEntityKey?: string;
+    /** Campo bool/estatus del catálogo que marca si está activo. */
+    sourceActiveKey?: string;
+    /** Cómo se llama un registro del catálogo en los avisos ("truck"). */
+    sourceLabel: string;
+  };
+  /**
+   * Registros de otras colecciones que dejan fuera a un elemento del
+   * catálogo mientras sigan abiertos (una orden de taller, un correctivo
+   * pendiente). Se consultan en el servidor solo los que tienen alguno de
+   * los estatus abiertos, y `match` afina en el cliente (p. ej. solo los
+   * mantenimientos correctivos).
+   */
+  blockedBy: {
+    collection: string;
+    /** Campo de esa colección que apunta al catálogo (idTruck). */
+    refKey: string;
+    /** Campo de estatus y valores que se consideran "abierto". */
+    statusKey: string;
+    openValues: string[];
+    match?: (row: EntityData) => boolean;
+    /** Texto del motivo: "in Shop (open order)". */
+    label: string;
+  }[];
+}
+
 export interface ModuleConfig {
   /** Id estable del módulo (se usa en permisos y rutas). */
   id: string;
@@ -391,6 +444,8 @@ export interface ModuleConfig {
   listLimit?: number;
   /** Aviso de cobertura en la parte superior de la tabla. */
   coverage?: CoverageConfig;
+  /** Ventana de captura con "una vez por ventana" (p. ej. los BC Reports). */
+  captureWindow?: CaptureWindowConfig;
   /**
    * Impide dar de alta dos registros con el mismo valor en este campo. Al
    * intentarlo, se avisa quién capturó el que ya existe.

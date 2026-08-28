@@ -6,6 +6,7 @@ import { QuickAddRefModal } from '../ui/QuickAddRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
 import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
+import { texasToday } from '../../services/captureWindow';
 import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
 import type { SelectOption } from '../ui/SearchableSelect';
@@ -57,6 +58,14 @@ interface CrudFormProps {
   userScopes?: Record<string, { entity: string | null; station: string | null }>;
   /** Si el rol NO puede editar Entity/Station, esos campos se muestran bloqueados. */
   contextEditable?: boolean;
+  /**
+   * Opciones que hoy NO se pueden elegir en un campo de referencia, con el
+   * motivo (clave del campo -> id -> motivo). Salen del desplegable y, si de
+   * todos modos llegan al guardar (el valor ya estaba puesto), se rechazan
+   * mostrando el motivo. Sirve para el camión que ya entró en otro BC Report
+   * de la misma ventana, o el que está en taller.
+   */
+  blockedRefs?: Record<string, Map<string, string>>;
   onClose: () => void;
   onSubmit: (values: Record<string, FieldValue>, keepOpen: boolean) => void;
 }
@@ -71,7 +80,8 @@ function buildInitialValues(fields: FieldConfig[], initial: EntityData | null) {
     } else if (field.type === 'bool') {
       values[field.key] = false;
     } else if (field.type === 'date' && field.required) {
-      values[field.key] = new Date().toISOString().slice(0, 10);
+      // Las fechas del app son las de Texas, entre desde donde entre el usuario.
+      values[field.key] = texasToday();
     } else {
       values[field.key] = field.type === 'number' || field.type === 'currency' ? null : '';
     }
@@ -109,11 +119,14 @@ export function CrudForm({
   onConfigureSteps,
   renderBanner,
   contextEditable = true,
+  blockedRefs,
   onClose,
   onSubmit,
 }: CrudFormProps) {
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [touchedSubmit, setTouchedSubmit] = useState(false);
+  /** Motivo por el que no se dejó guardar (p. ej. camión ya capturado). */
+  const [blockedError, setBlockedError] = useState<string | null>(null);
 
   /** Campos que sí se capturan (los form:false los llena el sistema),
       más el capturista cuando el rol tiene permiso de editarlo. */
@@ -140,12 +153,9 @@ export function CrudForm({
     if (open) {
       setStepIndex(0);
       const base = buildInitialValues(valueFields, initial);
-      // Alta: las fechas de registro arrancan en el día de hoy.
+      // Alta: las fechas de registro arrancan en el día de hoy (hora de Texas).
       if (!initial) {
-        const today = new Date();
-        const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-          today.getDate(),
-        ).padStart(2, '0')}`;
+        const iso = texasToday();
         valueFields.forEach((field) => {
           if (field.defaultToday && (base[field.key] === null || base[field.key] === '')) {
             base[field.key] = iso;
@@ -183,6 +193,7 @@ export function CrudForm({
       }
       setValues(base);
       setTouchedSubmit(false);
+      setBlockedError(null);
     }
   }, [
     open,
@@ -273,12 +284,20 @@ export function CrudForm({
           );
         }
       }
+      // Opciones bloqueadas (ya capturadas en la ventana, en taller…): fuera
+      // del desplegable. La que ya estaba elegida se conserva para que el
+      // formulario la muestre y el guardado explique por qué no procede.
+      const blocked = blockedRefs?.[field.key];
+      if (blocked && blocked.size > 0) {
+        const chosen = values[field.key];
+        rows = rows.filter((r) => !blocked.has(r.id) || r.id === chosen);
+      }
       map[field.key] = rows
         .map((r) => ({ value: r.id, label: refData.labels.get(r.id) ?? r.id }))
         .sort((a, b) => a.label.localeCompare(b.label));
     });
     return map;
-  }, [formFields, fields, refMaps, values, scopeStations]);
+  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs]);
 
   /** Diferencia de millaje en vivo: Next mant − Actual Mileage. */
   const mileageDiff = useMemo(() => {
@@ -343,6 +362,7 @@ export function CrudForm({
   );
 
   const handleChange = (key: string, value: FieldValue) => {
+    setBlockedError(null);
     setValues((prev) => {
       const next = { ...prev, [key]: value };
       // Al elegir una referencia, se copian los datos que dependen de ella
@@ -448,6 +468,19 @@ export function CrudForm({
   const handleSubmit = (keepOpen: boolean) => {
     setTouchedSubmit(true);
     if (missing.length > 0) return;
+    // Un valor que hoy no se puede capturar (el camión ya está en otro BC
+    // Report de esta ventana, o está en taller): se explica y no se guarda.
+    if (blockedRefs) {
+      for (const field of visibleFields) {
+        const chosen = values[field.key];
+        const reason = typeof chosen === 'string' ? blockedRefs[field.key]?.get(chosen) : undefined;
+        if (reason) {
+          setBlockedError(`${field.label} "${refLabel(field.refCollection ?? '', chosen as string)}": ${reason}.`);
+          return;
+        }
+      }
+    }
+    setBlockedError(null);
     // Los campos de solo lectura los mantiene el sistema: no se reenvían para
     // no pisar un valor que pudo cambiar mientras el formulario estaba abierto.
     const payload = { ...values };
@@ -468,7 +501,9 @@ export function CrudForm({
       size="lg"
       footer={
         <>
-          {error ? <span className="crudform-error">{error}</span> : null}
+          {error || blockedError ? (
+            <span className="crudform-error">{error ?? blockedError}</span>
+          ) : null}
           {onConfigure ? (
             <button
               type="button"

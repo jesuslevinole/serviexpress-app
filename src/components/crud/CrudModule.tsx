@@ -32,6 +32,11 @@ import { CrudForm } from './CrudForm';
 import { DetailModal } from './DetailModal';
 import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
 import { CoverageBanner } from './CoverageBanner';
+import { CaptureWindowBanner } from './CaptureWindowBanner';
+import { CaptureWindowModal } from './CaptureWindowModal';
+import { useCaptureWindow } from '../../hooks/useCaptureWindow';
+import type { CaptureWindowStatus } from '../../services/captureWindow';
+import { formatTexas, texasToday, windowStatus } from '../../services/captureWindow';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
@@ -191,6 +196,43 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const refMaps = useRefMaps(config.fields);
 
   const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
+
+  /**
+   * Ventana de captura (BC Reports): abre y cierra a la hora de Texas que
+   * fija el admin; dentro de ella cada camión entra una sola vez. El admin
+   * real (sin "View as") no queda sujeto al horario, para poder corregir.
+   */
+  const captureInfo = useCaptureWindow(config, allRows);
+  const captureSpec = config.captureWindow ?? null;
+  const [windowOpen, setWindowOpen] = useState(false);
+  const lockMessageFor = (status: CaptureWindowStatus): string | null => {
+    if (!captureSpec || isAdminView) return null;
+    if (captureInfo.loading) return null;
+    switch (status) {
+      case 'unset':
+        return `${captureSpec.label}: no window is open. Ask the administrator to open one.`;
+      case 'before':
+        return captureInfo.window
+          ? `${captureSpec.label} opens ${formatTexas(captureInfo.window.startAt)}.`
+          : null;
+      case 'closed':
+        return captureInfo.window
+          ? `${captureSpec.label} closed ${formatTexas(captureInfo.window.endAt)}. Ask the administrator to open a new one.`
+          : null;
+      default:
+        return null;
+    }
+  };
+  /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
+  const captureLocked = lockMessageFor(captureInfo.status);
+  const lockedRightNow = (): string | null =>
+    lockMessageFor(windowStatus(captureInfo.window, Date.now()));
+
+  /** Estaciones/entidades que acotan la lista de "faltan por agregar". */
+  const effectiveUser = viewAs ?? profile;
+  const seesAllStations = isAdminView || effectiveUser?.isOffice === true;
+  const pendingStations = seesAllStations ? [] : (effectiveUser?.scopeStations ?? []);
+  const pendingEntities = seesAllStations ? [] : (effectiveUser?.scopeEntities ?? []);
   const detailRefLabel = (collection: string, id: string): string =>
     detailRefMaps[collection]?.labels.get(id) ?? refLabel(collection, id);
   const rowsOfParent = (parentId: string): EntityData[] =>
@@ -305,6 +347,93 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     return refMaps[name]?.labels.get(id) ?? '—';
   };
 
+  /** Campo de fecha principal del módulo (orden por defecto y avisos). */
+  const primaryDateKey = useMemo(() => {
+    const named = config.fields.find((f) => f.type === 'date' && f.key === 'date');
+    return named?.key ?? config.fields.find((f) => f.type === 'date')?.key ?? null;
+  }, [config.fields]);
+
+  /** "BC 2026-08-28 · Station 2 · by Ana": dónde y quién capturó el camión. */
+  const describeParent = (parent: EntityData | null): string => {
+    if (!parent) return `another ${config.title.replace(/s$/, '').toLowerCase()} of this window`;
+    const parts: string[] = [];
+    const date = parent[primaryDateKey ?? 'date'];
+    parts.push(typeof date === 'string' && date !== '' ? `${config.title.replace(/s$/, '')} ${date}` : config.title);
+    const stationField = config.fields.find(
+      (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
+    );
+    const station = stationField ? parent[stationField.key] : null;
+    if (typeof station === 'string' && station !== '') {
+      parts.push(refLabel(COLLECTIONS.stations, station));
+    }
+    const owner = config.autoUserField ? parent[config.autoUserField] : null;
+    if (typeof owner === 'string' && owner !== '') {
+      parts.push(`by ${refLabel(COLLECTIONS.users, owner)}`);
+    }
+    return parts.join(' · ');
+  };
+
+  /**
+   * Opciones que hoy no se pueden elegir en el renglón: el camión que ya
+   * entró en esta ventana (con quién y dónde) y el que está en taller o con
+   * correctivo pendiente. El renglón que se edita no se bloquea a sí mismo.
+   */
+  const blockedRefsFor = (excludeRowId: string | null): Record<string, Map<string, string>> => {
+    if (!captureSpec) return {};
+    const map = new Map<string, string>();
+    // "Una vez por ventana" aplica mientras la ventana está abierta (cuando
+    // ya cerró, solo el admin puede capturar, y no se le ata a la anterior).
+    if (windowStatus(captureInfo.window, Date.now()) === 'open') {
+      captureInfo.taken.forEach((info, id) => {
+        if (excludeRowId && info.rowId === excludeRowId) return;
+        map.set(id, `already added in this window: ${describeParent(info.parent)}`);
+      });
+    }
+    captureInfo.blocked.forEach((reason, id) => {
+      if (!map.has(id)) map.set(id, reason);
+    });
+    return { [captureSpec.once.detailKey]: map };
+  };
+
+  /** Aviso dentro del formulario: los camiones de su estación que no se pueden elegir. */
+  const renderBlockedNote = (excludeRowId: string | null): ReactNode => {
+    if (!captureSpec) return null;
+    const blocked = blockedRefsFor(excludeRowId)[captureSpec.once.detailKey];
+    if (!blocked || blocked.size === 0) return null;
+    const { once } = captureSpec;
+    const inScope = captureInfo.sourceRows.filter((row) => {
+      if (!blocked.has(row.id)) return false;
+      const station = row[once.sourceStationKey];
+      if (pendingStations.length > 0 && !(typeof station === 'string' && pendingStations.includes(station))) {
+        return false;
+      }
+      if (once.sourceEntityKey && pendingEntities.length > 0) {
+        const entity = row[once.sourceEntityKey];
+        if (!(typeof entity === 'string' && pendingEntities.includes(entity))) return false;
+      }
+      return true;
+    });
+    if (inScope.length === 0) return null;
+    const shown = inScope.slice(0, 40);
+    return (
+      <div className="cwin-note">
+        <strong>
+          {inScope.length} {once.sourceLabel}
+          {inScope.length === 1 ? '' : 's'} can't be added right now
+        </strong>{' '}
+        (they are out of the list):
+        <ul>
+          {shown.map((row) => (
+            <li key={row.id}>
+              {detailRefLabel(once.sourceCollection, row.id)} — {blocked.get(row.id)}
+            </li>
+          ))}
+          {inScope.length > shown.length ? <li>…and {inScope.length - shown.length} more</li> : null}
+        </ul>
+      </div>
+    );
+  };
+
   const tableFields = useMemo(
     () => allowedFields.filter((f) => f.table !== false),
     [allowedFields],
@@ -347,12 +476,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     setPage(1);
   };
-
-  /** Campo de fecha principal del módulo (para el orden por defecto). */
-  const primaryDateKey = useMemo(() => {
-    const named = config.fields.find((f) => f.type === 'date' && f.key === 'date');
-    return named?.key ?? config.fields.find((f) => f.type === 'date')?.key ?? null;
-  }, [config.fields]);
 
   const sortedRows = useMemo(() => {
     // Sin orden elegido: de la fecha más reciente a la más antigua.
@@ -441,6 +564,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   );
 
   const openCreate = () => {
+    // Fuera de la ventana de captura no se abre el alta.
+    if (captureLocked) return;
     setEditing(null);
     setFormError(null);
     // Un alta nueva nunca arrastra los renglones de la anterior.
@@ -506,7 +631,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             };
             await createDocument(config.changeLog.collection, {
               [config.changeLog.foreignKey]: editing.id,
-              date: new Date().toISOString().slice(0, 10),
+              date: texasToday(),
               field: key,
               fieldLabel: field?.label ?? key,
               fromLabel: asLabel(before),
@@ -516,6 +641,31 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
         }
       } else {
+        // La ventana de captura pudo cerrarse con el formulario abierto.
+        const lockedNow = lockedRightNow();
+        if (lockedNow) {
+          setFormError(lockedNow);
+          setBusy(false);
+          return;
+        }
+        // Renglones del alta: un camión que otro BC capturó mientras este
+        // formulario estaba abierto ya no puede entrar.
+        if (config.detail && draftRows.length > 0) {
+          const blockedNow = blockedRefsFor(null);
+          for (const row of draftRows) {
+            for (const [key, reasons] of Object.entries(blockedNow)) {
+              const value = row[key];
+              const reason = typeof value === 'string' ? reasons.get(value) : undefined;
+              if (reason) {
+                const field = config.detail.fields.find((f) => f.key === key);
+                const name = field?.refCollection ? detailRefLabel(field.refCollection, value as string) : value;
+                setFormError(`${field?.label ?? key} "${name}": ${reason}. Remove that line to continue.`);
+                setBusy(false);
+                return;
+              }
+            }
+          }
+        }
         // Un valor que debe ser único (el camión en Fleet): se avisa quién lo
         // registró para poder preguntarle, en vez de un error sin contexto.
         const unique = config.uniqueBy;
@@ -545,7 +695,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             // Fechas que fija el sistema al crear (p. ej. la de entrega).
             detail.fields.forEach((field) => {
               if (field.fixedOnCreate && field.defaultToday) {
-                rowPayload[field.key] = new Date().toISOString().slice(0, 10);
+                rowPayload[field.key] = texasToday();
               }
             });
             const rowId = await createDocument(detail.collection, rowPayload);
@@ -902,7 +1052,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             </button>
           ) : null}
           {canCreate ? (
-            <button type="button" className="btn btn-primary" onClick={openCreate}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              title={captureLocked ?? undefined}
+              disabled={captureLocked !== null}
+              onClick={openCreate}
+            >
               <Plus size={16} />
               <span className="crud-btn-text">Add</span>
             </button>
@@ -938,6 +1094,18 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             Showing the {config.listLimit} most recent records. Use Filters or the search box
             to work with older ones, or Export Excel for the full history.
           </p>
+        ) : null}
+        {captureSpec ? (
+          <CaptureWindowBanner
+            spec={captureSpec}
+            info={captureInfo}
+            refLabel={detailRefLabel}
+            describeParent={describeParent}
+            scopeStations={pendingStations}
+            scopeEntities={pendingEntities}
+            stationsCollection={COLLECTIONS.stations}
+            onConfigure={isAdminView ? () => setWindowOpen(true) : undefined}
+          />
         ) : null}
         {config.coverage ? (
           <CoverageBanner
@@ -1149,13 +1317,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           !editing && config.detail && canCreate
             ? (values) =>
                 detailEnabled({ id: '', ...values }) ? (
-                  <DraftDetailRows
-                    detail={config.detail!}
-                    rows={draftRows}
-                    refMaps={detailRefMaps}
-                    refLabels={detailRefLabel}
-                    onChange={setDraftRows}
-                  />
+                  <>
+                    <DraftDetailRows
+                      detail={config.detail!}
+                      rows={draftRows}
+                      refMaps={detailRefMaps}
+                      refLabels={detailRefLabel}
+                      blockedRefs={blockedRefsFor(null)}
+                      onChange={setDraftRows}
+                    />
+                    {renderBlockedNote(null)}
+                  </>
                 ) : null
             : undefined
         }
@@ -1227,7 +1399,21 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           parent={detailParent}
           parentTitle={config.title}
           refMaps={detailRefMaps}
+          captureLocked={captureLocked}
+          captureLockedNow={lockedRightNow}
+          blockedRefsFor={captureSpec ? blockedRefsFor : undefined}
+          formNoteFor={captureSpec ? renderBlockedNote : undefined}
           onClose={() => setDetailParent(null)}
+        />
+      ) : null}
+
+      {windowOpen && captureSpec ? (
+        <CaptureWindowModal
+          label={captureSpec.label}
+          window={captureInfo.window}
+          onSave={captureInfo.save}
+          onClear={captureInfo.clear}
+          onClose={() => setWindowOpen(false)}
         />
       ) : null}
     </section>

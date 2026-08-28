@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileUp, Pencil, Plus } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { FileDown, FileSpreadsheet, FileUp, Lock, Pencil, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import type { RefMaps } from '../../hooks/useRefMaps';
@@ -37,6 +37,22 @@ interface DetailModalProps {
   refMaps: RefMaps;
   /** Abre la captura del primer renglón de una vez (al venir de un alta nueva). */
   autoOpenForm?: boolean;
+  /**
+   * Si viene, hoy NO se pueden agregar renglones (la ventana de captura está
+   * cerrada para este usuario) y este es el motivo. Editar lo ya capturado
+   * sigue permitido.
+   */
+  captureLocked?: string | null;
+  /** Igual que captureLocked, pero medido en el momento de guardar. */
+  captureLockedNow?: () => string | null;
+  /**
+   * Opciones que no se pueden elegir en el formulario del renglón (camión ya
+   * capturado en la ventana por otro BC, en taller…), sin contar las que
+   * pertenecen al renglón que se está editando.
+   */
+  blockedRefsFor?: (editingRowId: string | null) => Record<string, Map<string, string>>;
+  /** Aviso dentro del formulario (los camiones no disponibles), según el renglón editado. */
+  formNoteFor?: (editingRowId: string | null) => ReactNode;
   onClose: () => void;
 }
 
@@ -51,6 +67,10 @@ export function DetailModal({
   parentTitle,
   refMaps,
   autoOpenForm = false,
+  captureLocked = null,
+  captureLockedNow,
+  blockedRefsFor,
+  formNoteFor,
   onClose,
 }: DetailModalProps) {
   const { can, firebaseUser, isAdminView, profile, viewAs } = useAuth();
@@ -149,6 +169,26 @@ export function DetailModal({
   const refLabel = (collection: string, id: string): string =>
     refMaps[collection]?.labels.get(id) ?? '—';
 
+  /**
+   * Lo que no se puede elegir en el renglón: lo bloqueado por la ventana de
+   * captura, más lo que YA está en este mismo registro (un camión entra una
+   * sola vez por reporte), sin contar el renglón que se está editando.
+   */
+  const blockedRefs = useMemo(() => {
+    const base = blockedRefsFor ? blockedRefsFor(editing?.id ?? null) : {};
+    const unique = detail.uniqueRowKey;
+    if (!unique) return base;
+    const merged = new Map(base[unique.key] ?? []);
+    rows.forEach((row) => {
+      if (editing && row.id === editing.id) return;
+      const value = row[unique.key];
+      if (typeof value === 'string' && value !== '' && !merged.has(value)) {
+        merged.set(value, `already in this ${detail.title.toLowerCase()} (each ${unique.label} goes only once)`);
+      }
+    });
+    return { ...base, [unique.key]: merged };
+  }, [blockedRefsFor, editing, rows, detail.uniqueRowKey, detail.title]);
+
   const columns: TableColumn[] = useMemo(
     () =>
       detailFields
@@ -226,6 +266,14 @@ export function DetailModal({
     setBusy(true);
     setFormError(null);
     try {
+      // Fuera de la ventana de captura no se agregan renglones nuevos (se
+      // mide otra vez: la ventana pudo cerrarse con el formulario abierto).
+      const lockedNow = captureLockedNow ? captureLockedNow() : captureLocked;
+      if (!editing && lockedNow) {
+        setFormError(lockedNow);
+        setBusy(false);
+        return;
+      }
       const stockError = await checkStock(values, editing?.id ?? null);
       if (stockError) {
         setFormError(stockError);
@@ -345,7 +393,8 @@ export function DetailModal({
           <button
             type="button"
             className="btn btn-outline"
-            title="Import rows from a CSV file into this record"
+            title={captureLocked ?? 'Import rows from a CSV file into this record'}
+            disabled={captureLocked !== null}
             onClick={() => setImportOpen(true)}
           >
             <FileUp size={16} />
@@ -360,6 +409,8 @@ export function DetailModal({
           <button
             type="button"
             className="btn btn-primary"
+            title={captureLocked ?? undefined}
+            disabled={captureLocked !== null}
             onClick={() => {
               setEditing(null);
               setPreset(undefined);
@@ -377,6 +428,8 @@ export function DetailModal({
                 key={extra.label}
                 type="button"
                 className={`btn ${extra.tone === 'negative' ? 'btn-danger' : 'btn-outline'}`}
+                title={captureLocked ?? undefined}
+                disabled={captureLocked !== null}
                 onClick={() => {
                   setEditing(null);
                   setPreset(extra.preset);
@@ -390,6 +443,13 @@ export function DetailModal({
             ))
           : null}
       </div>
+
+      {captureLocked && canCreate ? (
+        <p className="detail-locked">
+          <Lock size={14} />
+          {captureLocked}
+        </p>
+      ) : null}
 
       {loading ? (
         <Spinner />
@@ -461,6 +521,8 @@ export function DetailModal({
         busy={busy}
         error={formError}
         resetSignal={resetSignal}
+        blockedRefs={blockedRefs}
+        extraSection={formNoteFor ? formNoteFor(editing?.id ?? null) : undefined}
         renderBanner={
           detail.stockControl
             ? (values) => {

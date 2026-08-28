@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getCountFromServer,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -62,7 +63,18 @@ export interface CollectionOptions {
    * consumo: un módulo con 4.500 registros cuesta 4.500 lecturas por visita.
    */
   limit?: number;
+  /**
+   * Condiciones adicionales que se resuelven en el servidor (así solo viajan
+   * los documentos que interesan): "campo dentro de una lista" o "campo en
+   * un rango". Un rango solo puede ir sobre un campo por consulta.
+   */
+  clauses?: QueryClause[];
 }
+
+/** Condición de consulta que Firestore evalúa del lado del servidor. */
+export type QueryClause =
+  | { field: string; op: 'in'; values: FieldValue[] }
+  | { field: string; op: 'range'; from: string; to: string };
 
 export interface CollectionFilter {
   field: string;
@@ -100,7 +112,8 @@ export function subscribeToCollection(
   filter?: CollectionFilter,
   options?: CollectionOptions,
 ): Unsubscribe {
-  const key = `${subscriptionKey(collectionName, filter)}|${options?.limit ?? 'all'}`;
+  const clausesKey = options?.clauses ? JSON.stringify(options.clauses) : '';
+  const key = `${subscriptionKey(collectionName, filter)}|${options?.limit ?? 'all'}${clausesKey}`;
   let entry = shared.get(key);
 
   if (!entry) {
@@ -132,6 +145,15 @@ export function subscribeToCollection(
     if (filter) {
       constraints.push(where(filter.field, '==', filter.value));
     }
+    (options?.clauses ?? []).forEach((clause) => {
+      if (clause.op === 'in') {
+        // Firestore admite hasta 30 valores por "in"; las listas de estatus
+        // abiertos son mucho más cortas.
+        constraints.push(where(clause.field, 'in', clause.values));
+      } else {
+        constraints.push(where(clause.field, '>=', clause.from), where(clause.field, '<=', clause.to));
+      }
+    });
     if (options?.limit) {
       // Más recientes primero y solo los N necesarios. Los documentos sin
       // createdAt (migraciones antiguas) quedarían fuera de este orden, por
@@ -183,6 +205,13 @@ export async function countDocuments(
 export async function fetchCollection(collectionName: string): Promise<EntityData[]> {
   const snapshot = await getDocs(collection(db, collectionName));
   return snapshot.docs.map((d) => toEntity(d.id, d.data()));
+}
+
+/** Lectura puntual de UN documento (null si no existe). */
+export async function fetchDocument(collectionName: string, id: string): Promise<EntityData | null> {
+  const snapshot = await getDoc(doc(db, collectionName, id));
+  if (!snapshot.exists()) return null;
+  return toEntity(snapshot.id, snapshot.data());
 }
 
 export async function createDocument(
