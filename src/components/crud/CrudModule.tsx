@@ -42,7 +42,13 @@ import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
 import type { CaptureWindowStatus } from '../../services/captureWindow';
-import { describeSchedule, formatTexas, texasToday, windowStatus } from '../../services/captureWindow';
+import {
+  describeSchedule,
+  formatTexas,
+  plusOneWeekTexas,
+  texasToday,
+  windowStatus,
+} from '../../services/captureWindow';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
@@ -55,7 +61,7 @@ import { useScopeFilter } from '../../hooks/useScope';
 import { COLLECTIONS, REF_LABEL_DEPENDENCIES, buildRefLabel } from '../../config/collections';
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
-import { displayCell, displayValue, effectiveValue, scalar } from './displayValue';
+import {displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
 import type { EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
@@ -372,7 +378,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (!parent) return `another ${config.title.replace(/s$/, '').toLowerCase()} of this window`;
     const parts: string[] = [];
     const date = parent[primaryDateKey ?? 'date'];
-    parts.push(typeof date === 'string' && date !== '' ? `${config.title.replace(/s$/, '')} ${date}` : config.title);
+    parts.push(
+      typeof date === 'string' && date !== ''
+        ? `${config.title.replace(/s$/, '')} ${formatUsDate(date)}`
+        : config.title,
+    );
     const stationField = config.fields.find(
       (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
     );
@@ -438,19 +448,23 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * camiones en ese. Los exentos (admin, oficina con permiso) no aplican.
    */
   const oneReportLock = (): string | null => {
-    if (!captureSpec || exemptFromWindow || !firebaseUser) return null;
+    if (!captureSpec || exemptFromWindow) return null;
+    // El uid EFECTIVO: con "View as" se evalúa al usuario simulado, no a la
+    // sesión real del admin (si no, la regla no se ve en las pruebas).
+    const effectiveUid = effectiveUser?.id ?? firebaseUser?.uid ?? null;
+    if (effectiveUid === null) return null;
     const occ = captureInfo.occurrence;
     if (!occ || windowStatus(captureInfo.window, Date.now()) !== 'open') return null;
     const mine = allRows.find(
       (row) =>
         config.autoUserField !== undefined &&
-        row[config.autoUserField] === firebaseUser.uid &&
+        row[config.autoUserField] === effectiveUid &&
         typeof row.createdAt === 'string' &&
         row.createdAt >= occ.startAt &&
         row.createdAt <= occ.endAt,
     );
     if (!mine) return null;
-    return `You already created your BC Report for this window (${describeParent(mine)}). Open that report and keep adding your trucks there — only one report per BC per window.`;
+    return `No se puede cargar un nuevo BC Report esta semana. You already created yours (${describeParent(mine)}): open that report and keep adding your trucks there. The next window opens ${formatTexas(plusOneWeekTexas(occ.startAt))}.`;
   };
 
   /**
@@ -499,7 +513,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * estación del reporte ya entraron en esta ventana y cuáles faltan, porque
    * el BC debe capturar TODOS los de su estación antes de que cierre.
    */
-  const renderWindowSummary = (parent: EntityData): ReactNode => {
+  const renderWindowSummary = (parent: EntityData, parentRows: EntityData[] = []): ReactNode => {
     if (!captureSpec || captureInfo.status !== 'open') return null;
     const { once } = captureSpec;
     const stationField = config.fields.find(
@@ -538,6 +552,46 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         ) : (
           <> — all {once.sourceLabel}s of the station are in. Nothing missing.</>
         )}
+        {(() => {
+          // Desglose de LOS RENGLONES DE ESTE REPORTE frente a la ventana:
+          // explica por qué "27 en el reporte" puede ser "14 en la ventana"
+          // (camiones de otra estación, capturados fuera del rango, o
+          // camiones dados de baja).
+          if (parentRows.length === 0 || !captureInfo.occurrence) return null;
+          const activeIds = new Set(captureInfo.sourceRows.map((r) => r.id));
+          const truckRows = detailRefMaps[once.sourceCollection]?.rows ?? [];
+          const stationOfTruck = new Map(
+            truckRows.map((r) => [r.id, r[once.sourceStationKey]]),
+          );
+          let counted = 0;
+          let otherStation = 0;
+          let outsideWindow = 0;
+          let inactive = 0;
+          parentRows.forEach((row) => {
+            const truck = row[once.detailKey];
+            if (typeof truck !== 'string' || truck === '') return;
+            const created = typeof row.createdAt === 'string' ? row.createdAt : '';
+            const inWindow =
+              created >= (captureInfo.occurrence?.startAt ?? '') &&
+              created <= (captureInfo.occurrence?.endAt ?? '');
+            const sameStation = !hasStation || stationOfTruck.get(truck) === station;
+            if (!activeIds.has(truck)) inactive += 1;
+            else if (!inWindow) outsideWindow += 1;
+            else if (!sameStation) otherStation += 1;
+            else counted += 1;
+          });
+          const parts: string[] = [];
+          if (otherStation > 0) parts.push(`${otherStation} belong to another station`);
+          if (outsideWindow > 0) parts.push(`${outsideWindow} were captured outside this window's dates`);
+          if (inactive > 0) parts.push(`${inactive} are inactive ${once.sourceLabel}s`);
+          return (
+            <div className="cwin-note-breakdown">
+              This report holds {parentRows.length} {once.sourceLabel}
+              {parentRows.length === 1 ? '' : 's'}; {counted} count for this window and station
+              {parts.length > 0 ? ` (${parts.join(', ')})` : ''}.
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -792,9 +846,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   );
 
   const openCreate = () => {
-    // Fuera de la ventana de captura, o con su reporte de la semana ya
-    // creado, no se abre el alta.
-    if (captureLocked || oneReportLock()) return;
+    // Fuera de la ventana de captura no se abre el alta. (Con el candado de
+    // "uno por semana" SÍ se abre: el mensaje se muestra dentro del
+    // formulario, que es donde el BC lo va a leer.)
+    if (captureLocked) return;
     setEditing(null);
     setFormError(null);
     // Un alta nueva nunca arrastra los renglones de la anterior.
@@ -1324,7 +1379,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               type="button"
               className="btn btn-primary"
               title={captureLocked ?? oneReportLock() ?? undefined}
-              disabled={captureLocked !== null || oneReportLock() !== null}
+              disabled={captureLocked !== null}
               onClick={openCreate}
             >
               <Plus size={16} />
@@ -1621,6 +1676,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         error={formError}
         resetSignal={resetSignal}
         onConfigure={canConfigureForm || canCustomize ? () => setLayoutOpen(true) : undefined}
+        renderBanner={
+          !editing && captureSpec
+            ? () => {
+                const lock = oneReportLock();
+                if (!lock) return null;
+                return <div className="cwin-note is-danger">{lock}</div>;
+              }
+            : undefined
+        }
         renderExtra={
           !editing && config.detail && canCreate
             ? (values) =>
@@ -1743,7 +1807,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                   )
               : undefined
           }
-          windowSummary={renderWindowSummary(detailParent)}
+          windowSummaryFor={(rows) => renderWindowSummary(detailParent, rows)}
           onClose={() => setDetailParent(null)}
         />
       ) : null}

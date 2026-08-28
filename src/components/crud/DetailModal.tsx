@@ -54,8 +54,8 @@ interface DetailModalProps {
   blockedRefsFor?: (editingRowId: string | null) => Record<string, Map<string, string>>;
   /** Aviso dentro del formulario (los camiones no disponibles), según el renglón editado. */
   formNoteFor?: (editingRowId: string | null) => ReactNode;
-  /** Resumen de la ventana para ESTE registro (camiones de su estación que faltan). */
-  windowSummary?: ReactNode;
+  /** Resumen de la ventana para ESTE registro, con sus renglones a la mano. */
+  windowSummaryFor?: (rows: EntityData[]) => ReactNode;
   onClose: () => void;
 }
 
@@ -74,7 +74,7 @@ export function DetailModal({
   captureLockedNow,
   blockedRefsFor,
   formNoteFor,
-  windowSummary,
+  windowSummaryFor,
   onClose,
 }: DetailModalProps) {
   const { can, firebaseUser, isAdminView, profile, viewAs } = useAuth();
@@ -472,7 +472,7 @@ export function DetailModal({
         </p>
       ) : null}
 
-      {windowSummary}
+      {windowSummaryFor ? windowSummaryFor(rows) : null}
 
       {loading ? (
         <Spinner />

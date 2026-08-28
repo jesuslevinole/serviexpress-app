@@ -685,7 +685,18 @@ export const bcReportsModule: ModuleConfig = {
     },
   ],
   fields: [
-    { key: 'date', label: 'Date', type: 'date', defaultToday: true, required: true },
+    {
+      key: 'date',
+      label: 'Date',
+      type: 'date',
+      defaultToday: true,
+      required: true,
+      /**
+       * La fecha la pone el sistema (hoy, hora de Texas) y el BC NO puede
+       * cambiarla: solo el admin o un rol con "Edit locked fields".
+       */
+      editRequiresAction: true,
+    },
     {
       /**
        * Cuántos camiones (renglones) tiene el reporte. Lo mantiene el motor

@@ -117,6 +117,21 @@ export function isoToTexasLocal(iso: string): string {
   return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
 }
 
+/** El mismo instante de pared, una semana después (a prueba de horario de verano). */
+export function plusOneWeekTexas(iso: string): string {
+  const local = isoToTexasLocal(iso);
+  if (local === '') return iso;
+  const [date, time] = local.split('T');
+  const [y, m, d] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 7));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    texasLocalToIso(
+      `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}T${time}`,
+    ) ?? iso
+  );
+}
+
 /** Fecha de hoy en Texas ("YYYY-MM-DD"): la que deben tomar los registros. */
 export function texasToday(): string {
   return isoToTexasLocal(new Date().toISOString()).slice(0, 10);
