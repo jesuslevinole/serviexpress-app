@@ -1,0 +1,299 @@
+/* ── Aviso de la ventana de captura (arriba de la tabla) ─────────────── */
+.cwin {
+  margin-bottom: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.cwin.is-open {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.cwin.is-before {
+  border-color: var(--info);
+  background: var(--info-bg);
+}
+
+.cwin.is-closed,
+.cwin.is-unset {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.cwin-head,
+.cwin-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cwin.is-open .cwin-head {
+  color: var(--success);
+}
+
+.cwin.is-before .cwin-head {
+  color: var(--info);
+}
+
+.cwin.is-closed .cwin-head,
+.cwin.is-unset .cwin-head {
+  color: var(--danger);
+}
+
+.cwin-progress {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+}
+
+.cwin-text {
+  font-size: 13px;
+  margin-right: auto;
+  line-height: 1.45;
+}
+
+.cwin-countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.cwin-range {
+  margin-left: 6px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.cwin-config {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.cwin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cwin-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cwin-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cwin-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cwin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cwin-list li {
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 11px;
+}
+
+.cwin-list.is-blocked li {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.cwin-list.is-done li {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+/* ── Aviso dentro del formulario (camiones que ya no se pueden elegir) ── */
+.cwin-note {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.cwin-note.is-ok {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.cwin-note.is-ok strong {
+  color: var(--success);
+}
+
+.cwin-note.is-danger {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cwin-note strong {
+  color: var(--text);
+}
+
+.cwin-note ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+/* ── Modal del administrador ─────────────────────────────────────────── */
+.cwin-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cwin-modal-help {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.cwin-modal-now {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 12.5px;
+}
+
+.cwin-modal-now strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cwin-modal-now small {
+  color: var(--text-soft);
+}
+
+.cwin-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .cwin-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cwin-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.cwin-modal-preview {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.cwin-modal-preview.is-invalid {
+  color: var(--danger);
+}
+
+.cwin-modal-clear {
+  margin-right: auto;
+}
+
+.cwin-modal-hint {
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.cwin-modal-preview.is-overlap {
+  color: var(--warning);
+}
+
+.cwin-note-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cwin-note-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.cwin-note-search input {
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: 12.5px;
+  width: 170px;
+}
+
+.cwin-group-bcs {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.cwin-group-bcs strong {
+  color: var(--text);
+}
