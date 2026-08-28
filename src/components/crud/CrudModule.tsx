@@ -17,7 +17,7 @@ import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
   adjustCounter,
-  countDocuments,
+  countDocumentsSafe,
   createDocument,
   fetchCollection,
   setDocument,
@@ -35,6 +35,7 @@ import { DetailModal } from './DetailModal';
 import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
 import { CoverageBanner } from './CoverageBanner';
 import { CaptureWindowBanner } from './CaptureWindowBanner';
+import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
 import type { CaptureWindowStatus } from '../../services/captureWindow';
@@ -592,6 +593,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const detailCollection = config.detail?.collection ?? '';
   const detailParentKey = config.detail?.parentKey ?? '';
   const backfillRunning = useRef(false);
+  /** Registros que fallaron al contar (no se reintenta solo: botón Retry). */
+  const backfillFailed = useRef<Set<string>>(new Set());
+  const [backfillRetry, setBackfillRetry] = useState(0);
+  /** Progreso visible del conteo, para no depurar a ciegas si algo falla. */
+  const [backfillState, setBackfillState] = useState<{
+    done: number;
+    failed: number;
+    total: number;
+    running: boolean;
+    error: string | null;
+  } | null>(null);
   useEffect(() => {
     if (!countField || detailCollection === '' || loading || backfillRunning.current) return;
     const pending = allRows.filter(
@@ -599,28 +611,49 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     );
     if (pending.length === 0) return;
     backfillRunning.current = true;
+    setBackfillState({ done: 0, failed: 0, total: pending.length, running: true, error: null });
     void (async () => {
+      let done = 0;
+      let failed = 0;
+      let firstError: string | null = null;
       try {
         for (const row of pending) {
           if (backfilled.current.has(row.id)) continue;
           backfilled.current.add(row.id);
           try {
-            const total = await countDocuments(detailCollection, {
+            const total = await countDocumentsSafe(detailCollection, {
               field: detailParentKey,
               value: row.id,
             });
             await setDocument(config.collection, row.id, { [countField]: total }, true);
-          } catch {
-            // Sin permiso o sin red: se libera para reintentar en otra visita.
-            backfilled.current.delete(row.id);
-            return;
+            done += 1;
+          } catch (error) {
+            // Se sigue con el resto; el error exacto se muestra en pantalla.
+            failed += 1;
+            backfillFailed.current.add(row.id);
+            if (firstError === null) {
+              firstError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+              console.error('[trucks-count] first failure', row.id, error);
+            }
           }
+          setBackfillState({
+            done,
+            failed,
+            total: pending.length,
+            running: true,
+            error: firstError,
+          });
         }
       } finally {
         backfillRunning.current = false;
+        setBackfillState(
+          failed > 0
+            ? { done, failed, total: pending.length, running: false, error: firstError }
+            : null,
+        );
       }
     })();
-  }, [countField, detailCollection, detailParentKey, loading, allRows, config.collection]);
+  }, [countField, detailCollection, detailParentKey, loading, allRows, config.collection, backfillRetry]);
 
   const setColumnFilter = (key: string, filter: ColumnFilter | null) => {
     setPage(1);
@@ -1210,6 +1243,35 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           <p className="crud-limit-note">
             Showing the {config.listLimit} most recent records. Use Filters or the search box
             to work with older ones, or Export Excel for the full history.
+          </p>
+        ) : null}
+        {backfillState ? (
+          <p className={`crud-backfill-note ${!backfillState.running && backfillState.failed > 0 ? 'is-error' : ''}`}>
+            {backfillState.running ? (
+              <>
+                <Loader2 size={14} className="crud-backfill-spin" />
+                Counting trucks per report… {backfillState.done + backfillState.failed} /{' '}
+                {backfillState.total}
+                {backfillState.error ? ` · first error: ${backfillState.error}` : ''}
+              </>
+            ) : (
+              <>
+                {backfillState.failed} of {backfillState.total} reports could not be counted
+                {backfillState.error ? ` — ${backfillState.error}` : ''}.
+                <button
+                  type="button"
+                  className="crud-backfill-retry"
+                  onClick={() => {
+                    backfillFailed.current.forEach((id) => backfilled.current.delete(id));
+                    backfillFailed.current.clear();
+                    setBackfillState(null);
+                    setBackfillRetry((n) => n + 1);
+                  }}
+                >
+                  Retry
+                </button>
+              </>
+            )}
           </p>
         ) : null}
         {captureSpec ? (

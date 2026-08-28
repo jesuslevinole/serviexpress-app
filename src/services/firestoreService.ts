@@ -208,6 +208,31 @@ export async function fetchCollection(collectionName: string): Promise<EntityDat
   return snapshot.docs.map((d) => toEntity(d.id, d.data()));
 }
 
+/**
+ * Conteo con respaldo: primero la consulta de agregación (1 lectura); si el
+ * navegador o el entorno la rechazan, se cuenta trayendo los documentos con
+ * la MISMA consulta filtrada que usa la subtabla (que sí funciona en todos
+ * lados). Cuesta más lecturas, pero solo se usa como plan B y una sola vez
+ * por registro. Si ambas fallan, se propaga el error original.
+ */
+export async function countDocumentsSafe(
+  collectionName: string,
+  filter: CollectionFilter,
+): Promise<number> {
+  try {
+    return await countDocuments(collectionName, filter);
+  } catch (error) {
+    try {
+      const snapshot = await getDocs(
+        query(collection(db, collectionName), where(filter.field, '==', filter.value)),
+      );
+      return snapshot.size;
+    } catch {
+      throw error;
+    }
+  }
+}
+
 /** Lectura puntual de UN documento (null si no existe). */
 export async function fetchDocument(collectionName: string, id: string): Promise<EntityData | null> {
   const snapshot = await getDoc(doc(db, collectionName, id));
