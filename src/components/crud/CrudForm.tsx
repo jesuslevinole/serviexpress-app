@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
+import { QuickEditRefModal } from '../ui/QuickEditRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
 import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
@@ -406,6 +407,8 @@ export function CrudForm({
    * vez y de ahí sale tanto el bloqueo visual como la exclusión al guardar.
    */
   const [quickAdd, setQuickAdd] = useState<FieldConfig | null>(null);
+  /** Referencia cuyo registro seleccionado se está editando (el lápiz). */
+  const [quickEdit, setQuickEdit] = useState<FieldConfig | null>(null);
 
   /**
    * Módulo destino del botón "+" de un campo de referencia, o null si este
@@ -424,6 +427,21 @@ export function CrudForm({
     const moduleId = catalog ? 'catalogs' : target.id;
     if (isAdminView) return target;
     return canOr(moduleId, 'altaRapida', 'crear') ? target : null;
+  };
+
+  /**
+   * ¿Puede EDITAR el registro referenciado desde aquí (el lápiz)? Mismo
+   * destino que el alta rápida, pero con el permiso de editar: corrige el
+   * nombre de la persona de Team sin salir del formulario del driver.
+   */
+  const catalogEditFor = (field: FieldConfig) => {
+    if (field.type !== 'ref' || !field.refCollection) return null;
+    // Solo catálogos (Team, Stations…): editar un registro de un módulo
+    // grande se hace en su propio módulo, no en un modal chico.
+    const catalog = catalogModules.find((module) => module.collection === field.refCollection);
+    if (!catalog) return null;
+    if (isAdminView) return catalog;
+    return canOr('catalogs', 'editar', 'editar') ? catalog : null;
   };
 
   /**
@@ -647,6 +665,7 @@ export function CrudForm({
               invalid={touchedSubmit && missing.includes(field.key)}
               refOptions={refOptionsByField[field.key] ?? []}
               onQuickAdd={catalogFor(field) ? () => setQuickAdd(field) : undefined}
+              onQuickEdit={catalogEditFor(field) ? () => setQuickEdit(field) : undefined}
               onChange={handleChange}
             />
             );
@@ -672,6 +691,28 @@ export function CrudForm({
       {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
 
       {renderExtra ? <div className="crudform-extra">{renderExtra(values)}</div> : null}
+
+      {quickEdit
+        ? (() => {
+            const catalog = catalogEditFor(quickEdit);
+            const chosen = values[quickEdit.key];
+            const record =
+              catalog && typeof chosen === 'string' && chosen !== '' && quickEdit.refCollection
+                ? refMaps[quickEdit.refCollection]?.rows.find((r) => r.id === chosen)
+                : undefined;
+            if (!catalog || !record) return null;
+            return (
+              <QuickEditRefModal
+                collection={catalog.collection}
+                title={catalog.title}
+                fields={catalog.fields}
+                record={record}
+                onSaved={() => setQuickEdit(null)}
+                onClose={() => setQuickEdit(null)}
+              />
+            );
+          })()
+        : null}
 
       {quickAdd
         ? (() => {

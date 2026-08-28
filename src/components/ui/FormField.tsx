@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from './SearchableSelect';
 import type { FieldConfig, FieldValue } from '../../types/models';
 import './FormField.css';
@@ -13,6 +13,8 @@ interface FormFieldProps {
    * el registro del catálogo sin salir del formulario.
    */
   onQuickAdd?: () => void;
+  /** Edición rápida del registro referenciado seleccionado (lápiz). */
+  onQuickEdit?: () => void;
   onChange: (key: string, value: FieldValue) => void;
 }
 
@@ -26,6 +28,7 @@ export function FormField({
   invalid,
   refOptions,
   onQuickAdd,
+  onQuickEdit,
   onChange,
 }: FormFieldProps) {
   const inputClass = `field-input ${invalid ? 'field-invalid' : ''}`;
@@ -101,8 +104,10 @@ export function FormField({
             onChange={(v) => onChange(field.key, v)}
           />
         );
-      case 'ref':
-        if (onQuickAdd) {
+      case 'ref': {
+        // El lápiz solo aparece con un registro elegido: edita ESE registro.
+        const showEdit = onQuickEdit !== undefined && typeof value === 'string' && value !== '';
+        if (onQuickAdd || showEdit) {
           return (
             <div className="field-with-add">
               <SearchableSelect
@@ -111,15 +116,28 @@ export function FormField({
                 options={refOptions}
                 onChange={(v) => onChange(field.key, v)}
               />
-              <button
-                type="button"
-                className="field-add"
-                title={`Add a new ${field.label.toLowerCase()} without leaving this form`}
-                aria-label={`Add ${field.label}`}
-                onClick={onQuickAdd}
-              >
-                <Plus size={16} />
-              </button>
+              {showEdit ? (
+                <button
+                  type="button"
+                  className="field-add"
+                  title={`Edit the selected ${field.label.toLowerCase()} (name and details) without leaving this form`}
+                  aria-label={`Edit ${field.label}`}
+                  onClick={onQuickEdit}
+                >
+                  <Pencil size={15} />
+                </button>
+              ) : null}
+              {onQuickAdd ? (
+                <button
+                  type="button"
+                  className="field-add"
+                  title={`Add a new ${field.label.toLowerCase()} without leaving this form`}
+                  aria-label={`Add ${field.label}`}
+                  onClick={onQuickAdd}
+                >
+                  <Plus size={16} />
+                </button>
+              ) : null}
             </div>
           );
         }
@@ -131,6 +149,7 @@ export function FormField({
             onChange={(v) => onChange(field.key, v)}
           />
         );
+      }
       default:
         return (
           <input
