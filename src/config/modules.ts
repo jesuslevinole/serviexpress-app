@@ -879,6 +879,12 @@ export const bcReportsModule: ModuleConfig = {
     uniqueRowKey: { key: 'idTruck', label: 'truck' },
     /** El motor lleva la cuenta de renglones para marcar los reportes vacíos. */
     countField: 'rowsCount',
+    /**
+     * Se cuenta sobre el ESPEJO (maintenance): los reportes históricos
+     * migrados tienen sus renglones solo ahí, y los capturados en el app
+     * crean un espejo por renglón, así que ahí están todos.
+     */
+    countSource: { collection: COLLECTIONS.maintenance, parentKey: 'idBcReport' },
     addLabel: 'Add preventive',
     // Atajo para el correctivo: abre el mismo formulario ya marcado, que es
     // lo que se necesita cuando el BC detecta una falla durante la revisión.

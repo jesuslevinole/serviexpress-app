@@ -590,8 +590,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * registro y se detenía).
    */
   const countField = config.detail?.countField;
-  const detailCollection = config.detail?.collection ?? '';
-  const detailParentKey = config.detail?.parentKey ?? '';
+  /** Dónde contar (el espejo si está configurado; si no, el detalle mismo). */
+  const countCollection = config.detail?.countSource?.collection ?? config.detail?.collection ?? '';
+  const countParentKey = config.detail?.countSource?.parentKey ?? config.detail?.parentKey ?? '';
+  /** Marca de "ya verificado contra la fuente correcta" en el documento. */
+  const countOkField = countField ? `${countField}Ok` : '';
   const backfillRunning = useRef(false);
   /** Registros que fallaron al contar (no se reintenta solo: botón Retry). */
   const backfillFailed = useRef<Set<string>>(new Set());
@@ -605,9 +608,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     error: string | null;
   } | null>(null);
   useEffect(() => {
-    if (!countField || detailCollection === '' || loading || backfillRunning.current) return;
+    if (!countField || countCollection === '' || loading || backfillRunning.current) return;
+    // Se (re)cuenta todo lo que no tenga la marca de verificado: cubre los
+    // registros nunca contados Y los que la versión anterior contó sobre la
+    // colección equivocada (los históricos que salían EMPTY teniendo espejo).
     const pending = allRows.filter(
-      (row) => typeof row[countField] !== 'number' && !backfilled.current.has(row.id),
+      (row) => row[countOkField] !== true && !backfilled.current.has(row.id),
     );
     if (pending.length === 0) return;
     backfillRunning.current = true;
@@ -621,11 +627,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           if (backfilled.current.has(row.id)) continue;
           backfilled.current.add(row.id);
           try {
-            const total = await countDocumentsSafe(detailCollection, {
-              field: detailParentKey,
+            const total = await countDocumentsSafe(countCollection, {
+              field: countParentKey,
               value: row.id,
             });
-            await setDocument(config.collection, row.id, { [countField]: total }, true);
+            await setDocument(
+              config.collection,
+              row.id,
+              { [countField]: total, [countOkField]: true },
+              true,
+            );
             done += 1;
           } catch (error) {
             // Se sigue con el resto; el error exacto se muestra en pantalla.
@@ -653,7 +664,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         );
       }
     })();
-  }, [countField, detailCollection, detailParentKey, loading, allRows, config.collection, backfillRetry]);
+  }, [countField, countOkField, countCollection, countParentKey, loading, allRows, config.collection, backfillRetry]);
 
   const setColumnFilter = (key: string, filter: ColumnFilter | null) => {
     setPage(1);
@@ -822,6 +833,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         // se guardó vacío): así la tabla marca EMPTY desde el primer momento.
         if (config.detail?.countField) {
           payload[config.detail.countField] = draftRows.length;
+          payload[`${config.detail.countField}Ok`] = true;
         }
         const newId = await createDocument(config.collection, payload);
         // Los renglones capturados dentro del alta se guardan ya con el id
@@ -935,7 +947,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       const existing = allRows.find((row) =>
         bulk.groupBy.every((key) => String(row[key] ?? '') === String(headerValues[key] ?? '')),
       );
-      if (!existing && detail.countField) headerValues[detail.countField] = 0;
+      if (!existing && detail.countField) {
+        headerValues[detail.countField] = 0;
+        headerValues[`${detail.countField}Ok`] = true;
+      }
       headerId = existing ? existing.id : await createDocument(config.collection, headerValues);
       bulkHeaders.current.set(groupKey, headerId);
     }

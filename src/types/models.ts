@@ -311,6 +311,13 @@ export interface DetailConfig {
    */
   countField?: string;
   /**
+   * Dónde contar los renglones para countField. Por omisión se cuenta la
+   * colección del detalle, pero en BC Reports los renglones HISTÓRICOS
+   * (migrados) existen solo en el espejo (maintenance); como cada renglón
+   * capturado en el app también crea su espejo, contar ahí cubre ambos.
+   */
+  countSource?: { collection: string; parentKey: string };
+  /**
    * El detalle solo se habilita cuando el campo indicado apunta a un registro
    * cuyo nombre está en la lista (p. ej. tipo de solicitud = "Uniforms").
    */
