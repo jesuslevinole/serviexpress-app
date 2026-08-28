@@ -12,6 +12,16 @@ export function effectiveValue(field: FieldConfig, row: EntityData): FieldValue 
   return scalar(row[field.key]);
 }
 
+/**
+ * '2026-08-27' -> '08/27/2026'. El cliente pidió MES/DÍA/AÑO en toda la app;
+ * el dato guardado sigue siendo ISO (ordena y compara bien), solo cambia lo
+ * que se muestra. Un valor que no sea fecha ISO se deja tal cual.
+ */
+export function formatUsDate(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return match ? `${match[2]}/${match[3]}/${match[1]}` : iso;
+}
+
 function formatCurrency(value: number): string {
   return value.toLocaleString('es-MX', { style: 'currency', currency: 'USD' });
 }
@@ -36,6 +46,8 @@ export function displayValue(
       return value === true ? 'Yes' : 'No';
     case 'currency':
       return typeof value === 'number' ? formatCurrency(value) : String(value);
+    case 'date':
+      return typeof value === 'string' ? formatUsDate(value) : String(value);
     default:
       return String(value);
   }

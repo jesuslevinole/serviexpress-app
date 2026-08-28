@@ -262,6 +262,12 @@ export const driversModule: ModuleConfig = {
   title: 'Drivers',
   icon: 'Users',
   autoUserField: 'idUsers',
+  /**
+   * Import CSV puede ACTUALIZAR conductores existentes casando por el nombre
+   * (columna "Driver name"), sin crear ni duplicar: para cargar columnas
+   * faltantes del listado maestro sobre los drivers ya dados de alta.
+   */
+  importMatch: { key: 'idTeam', label: 'Driver name', textField: 'name' },
   fields: [
     {
       key: 'idTeam',

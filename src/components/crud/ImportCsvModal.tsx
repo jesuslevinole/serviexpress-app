@@ -15,7 +15,7 @@ import {
 } from '../../services/csv';
 import { COLLECTIONS, buildRefLabel } from '../../config/collections';
 import type { RefMaps } from '../../hooks/useRefMaps';
-import type { FieldConfig, FieldValue } from '../../types/models';
+import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
 import './ImportCsvModal.css';
 
 interface ImportCsvModalProps {
@@ -33,6 +33,14 @@ interface ImportCsvModalProps {
   writeRow?: (docId: string | null, values: Record<string, FieldValue>) => Promise<void>;
   /** Acción extra en la zona de selección de archivo (p. ej. descargar plantilla). */
   headerExtra?: ReactNode;
+  /**
+   * Habilita el modo "actualizar existentes casando por nombre": junto con
+   * `existingRows` permite palomear la opción que actualiza SOLO registros ya
+   * dados de alta (los que no casan se saltan; nunca se crea ni duplica).
+   */
+  matchField?: { key: string; label: string; textField?: string };
+  /** Registros actuales del módulo, para casar contra ellos. */
+  existingRows?: EntityData[];
   onClose: () => void;
 }
 
@@ -117,6 +125,8 @@ export function ImportCsvModal({
   currentUid,
   writeRow,
   headerExtra,
+  matchField,
+  existingRows,
   onClose,
 }: ImportCsvModalProps) {
   const [phase, setPhase] = useState<Phase>('pick');
@@ -130,6 +140,8 @@ export function ImportCsvModal({
   const [hasIdColumn, setHasIdColumn] = useState(false);
   /** true = actualiza solo las columnas del archivo y conserva el resto. */
   const [partialUpdate, setPartialUpdate] = useState(false);
+  /** true = casa por nombre contra los registros existentes; nunca crea. */
+  const [matchUpdate, setMatchUpdate] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refIndexes = useMemo(() => buildRefIndexes(refMaps), [refMaps]);
@@ -223,6 +235,19 @@ export function ImportCsvModal({
     }
   };
 
+  /**
+   * Forma canónica de un nombre para casar "ADAMS, Rayjohnal" con
+   * "Adams Rayjohnal" o "Rayjohnal Adams": minúsculas, sin acentos ni
+   * signos, espacios colapsados; la segunda forma ordena las palabras para
+   * ignorar el orden apellido/nombre.
+   */
+  const canonicalName = (value: string): string =>
+    normalizeText(value)
+      .replace(/[^a-z0-9ñ ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const sortedName = (value: string): string => canonicalName(value).split(' ').sort().join(' ');
+
   const handleFile = async (file: File) => {
     setFileError(null);
     setFileName(file.name);
@@ -245,9 +270,15 @@ export function ImportCsvModal({
     });
     const idColumnIndex = normalizedHeaders.findIndex((h) => h === 'id');
 
-    const missing = partialUpdate
-      ? []
-      : fields.filter((f) => f.required && !columnByField.has(f.key)).map((f) => f.label);
+    const matchMode = matchUpdate && matchField !== undefined && existingRows !== undefined;
+    if (matchMode && !columnByField.has(matchField.key)) {
+      setFileError(`To update by ${matchField.label} the file needs a "${matchField.label}" column`);
+      return;
+    }
+    const missing =
+      partialUpdate || matchMode
+        ? []
+        : fields.filter((f) => f.required && !columnByField.has(f.key)).map((f) => f.label);
     setMissingColumns(missing);
     if (missing.length > 0) {
       setFileError(null);
@@ -297,7 +328,7 @@ export function ImportCsvModal({
 
       fields.forEach((field) => {
         const columnIndex = columnByField.get(field.key);
-        if (columnIndex === undefined && partialUpdate) return;
+        if (columnIndex === undefined && (partialUpdate || matchMode)) return;
         const raw = columnIndex === undefined ? '' : (row[columnIndex] ?? '');
         const { value, error, warning } = convertCell(
           field,
@@ -349,6 +380,74 @@ export function ImportCsvModal({
             refMaps[field.refCollection]?.labels.get(chosen) ?? chosen;
         }
       });
+      // ── Modo "actualizar existentes": casar la fila con su registro ──
+      if (matchMode && matchField && existingRows) {
+        const rawName = (row[columnByField.get(matchField.key) ?? -1] ?? '').trim();
+        const resolved = values[matchField.key];
+        const refCatalog = fields.find((f) => f.key === matchField.key)?.refCollection;
+        const catalogIds = refCatalog ? refIndexes[refCatalog]?.ids : undefined;
+        const resolvedIsId =
+          typeof resolved === 'string' && resolved !== '' && catalogIds?.has(resolved) === true;
+
+        /** 1º por la referencia resuelta; 2º por el nombre guardado en texto. */
+        let matches = resolvedIsId
+          ? existingRows.filter((record) => record[matchField.key] === resolved)
+          : [];
+        if (matches.length === 0 && rawName !== '') {
+          const canonical = canonicalName(rawName);
+          const sorted = sortedName(rawName);
+          const nameOf = (record: EntityData): string => {
+            const viaRef =
+              refCatalog && typeof record[matchField.key] === 'string'
+                ? (refMaps[refCatalog]?.labels.get(record[matchField.key] as string) ?? '')
+                : '';
+            const viaText =
+              matchField.textField && typeof record[matchField.textField] === 'string'
+                ? (record[matchField.textField] as string)
+                : '';
+            return viaRef !== '' ? viaRef : viaText;
+          };
+          matches = existingRows.filter((record) => canonicalName(nameOf(record)) === canonical);
+          if (matches.length === 0) {
+            matches = existingRows.filter((record) => sortedName(nameOf(record)) === sorted);
+          }
+        }
+
+        if (matches.length === 1) {
+          docId = matches[0].id;
+          if (!resolvedIsId) {
+            // El nombre casó por texto pero la referencia no resolvió: se
+            // conserva la referencia y el nombre que el registro ya tiene.
+            delete values[matchField.key];
+            const copyTo = fields.find((f) => f.key === matchField.key)?.copyLabelTo;
+            if (copyTo) delete values[copyTo];
+          }
+          // Referencias de otras columnas que no resolvieron a catálogo: en
+          // modo actualización no se guarda texto crudo; esa columna se deja
+          // como está en el registro y se avisa.
+          fields.forEach((field) => {
+            if (field.type !== 'ref' || field.key === matchField.key) return;
+            const value = values[field.key];
+            if (typeof value !== 'string' || value === '') return;
+            const ids = field.refCollection ? refIndexes[field.refCollection]?.ids : undefined;
+            if (ids && !ids.has(value)) {
+              delete values[field.key];
+              warnings.push(
+                `"${field.label}": "${value}" is not in the catalog — that column was left unchanged for this row`,
+              );
+            }
+          });
+        } else if (matches.length > 1) {
+          errors.push(
+            `${matchField.label} "${rawName}" matches ${matches.length} existing records — update it manually`,
+          );
+        } else {
+          errors.push(
+            `${matchField.label} "${rawName}" was not found among the existing records — in update mode nothing is created, so this row is skipped`,
+          );
+        }
+      }
+
       return { index: rowIndex + 2, docId, values, display, errors, warnings };
     });
     setHasIdColumn(idColumnIndex !== -1);
@@ -361,18 +460,28 @@ export function ImportCsvModal({
     let count = 0;
     let processed = 0;
     const failed: { index: number; message: string }[] = [];
+    const matchMode = matchUpdate && matchField !== undefined && existingRows !== undefined;
     for (const row of validRows) {
       const payload = { ...row.values };
-      // El capturista de la sesión solo se usa cuando la fila no trae uno:
-      // si el CSV especifica el usuario, ese valor manda.
-      if (autoUserField && currentUid) {
+      // El capturista de la sesión solo se usa cuando la fila no trae uno —
+      // y nunca en modo actualización, donde se respeta el que ya quedó.
+      if (autoUserField && currentUid && !matchMode) {
         const provided = payload[autoUserField];
         if (typeof provided !== 'string' || provided === '') {
           payload[autoUserField] = currentUid;
         }
       }
       try {
-        if (writeRow) {
+        if (matchMode) {
+          // Solo actualiza lo casado; jamás crea un registro nuevo. Una celda
+          // VACÍA del archivo significa "sin dato": no borra lo que el
+          // registro ya tenga guardado en ese campo.
+          if (!row.docId) throw new Error('Row without a matched record');
+          Object.keys(payload).forEach((key) => {
+            if (payload[key] === null || payload[key] === '') delete payload[key];
+          });
+          await setDocument(collection, row.docId, payload, true);
+        } else if (writeRow) {
           await writeRow(row.docId, payload);
         } else if (row.docId) {
           await setDocument(collection, row.docId, payload, partialUpdate);
@@ -404,7 +513,7 @@ export function ImportCsvModal({
           <>
             <span className="imp-footer-info">
               {validRows.length} rows ready · {errorRows.length} with errors
-          {partialUpdate ? ' · partial update' : ''}
+          {matchUpdate ? ' · update by match (no new records)' : partialUpdate ? ' · partial update' : ''}
             </span>
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancel
@@ -447,6 +556,24 @@ export function ImportCsvModal({
                 </small>
               </span>
             </label>
+            {matchField && existingRows ? (
+              <label className="imp-partial" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={matchUpdate}
+                  onChange={(e) => setMatchUpdate(e.target.checked)}
+                />
+                <span>
+                  <strong>Update existing records by {matchField.label}</strong>
+                  <small>
+                    Rows are matched by the name in the &quot;{matchField.label}&quot; column
+                    (surname/first-name order and capitals don&apos;t matter). Only the columns in
+                    the file change; rows that don&apos;t match are skipped and{' '}
+                    <strong>nothing new is ever created or duplicated</strong>.
+                  </small>
+                </span>
+              </label>
+            ) : null}
             {fileName ? <em>{fileName}</em> : null}
           </button>
           <input

@@ -473,6 +473,15 @@ export interface ModuleConfig {
   /** Ventana de captura con "una vez por ventana" (p. ej. los BC Reports). */
   captureWindow?: CaptureWindowConfig;
   /**
+   * Habilita en Import CSV el modo "actualizar registros existentes casando
+   * por este campo" (sin crear ni duplicar nada). `key` es el campo de
+   * referencia que identifica al registro (idTeam en Drivers), `label` el
+   * nombre de la columna en el archivo y `textField` el campo de texto del
+   * registro donde quedó guardado el nombre (respaldo cuando la referencia
+   * no resuelve).
+   */
+  importMatch?: { key: string; label: string; textField?: string };
+  /**
    * Impide dar de alta dos registros con el mismo valor en este campo. Al
    * intentarlo, se avisa quién capturó el que ya existe.
    */

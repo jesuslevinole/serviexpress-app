@@ -1574,6 +1574,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
       {importOpen ? (
         <ImportCsvModal
+          matchField={config.importMatch}
+          existingRows={config.importMatch ? allRows : undefined}
           title={config.title}
           collection={config.collection}
           fields={config.fields.filter(
