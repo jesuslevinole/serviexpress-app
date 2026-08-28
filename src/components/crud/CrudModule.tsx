@@ -36,6 +36,8 @@ import { DraftDetailRows, type DraftRow } from './DraftDetailRows';
 import { CoverageBanner } from './CoverageBanner';
 import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { BlockedRefsNote } from './BlockedRefsNote';
+import { MergeDuplicatesModal } from './MergeDuplicatesModal';
+import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
@@ -209,6 +211,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const captureInfo = useCaptureWindow(config, allRows);
   const captureSpec = config.captureWindow ?? null;
   const [windowOpen, setWindowOpen] = useState(false);
+  const [dedupeOpen, setDedupeOpen] = useState(false);
   /**
    * Quién configura el horario y quién puede capturar fuera de él se decide
    * en la matriz de Roles (el admin real siempre puede, para corregir).
@@ -1305,6 +1308,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Export Excel</span>
             </button>
           ) : null}
+          {config.dedupe && isAdminView ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Find people written twice, keep one and repoint everything to it"
+              onClick={() => setDedupeOpen(true)}
+            >
+              <Merge size={16} />
+              <span className="crud-btn-text">Merge duplicates</span>
+            </button>
+          ) : null}
           {canCreate ? (
             <button
               type="button"
@@ -1732,6 +1746,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           windowSummary={renderWindowSummary(detailParent)}
           onClose={() => setDetailParent(null)}
         />
+      ) : null}
+
+      {dedupeOpen && config.dedupe ? (
+        <MergeDuplicatesModal config={config} rows={allRows} onClose={() => setDedupeOpen(false)} />
       ) : null}
 
       {windowOpen && captureSpec ? (

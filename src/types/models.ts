@@ -482,6 +482,23 @@ export interface ModuleConfig {
    */
   importMatch?: { key: string; label: string; textField?: string };
   /**
+   * Habilita "Merge duplicates" (solo admin): agrupa registros cuyo nombre
+   * es la misma persona escrita distinto ("ADAMS, Rayjohnal" y "Rayjohnal
+   * Adams"), conserva uno, reapunta hacia él las referencias listadas y
+   * elimina las copias.
+   */
+  dedupe?: {
+    /** Campo de texto con el nombre a comparar. */
+    labelKey: string;
+    /** Quiénes lo referencian y por qué campo (drivers.idTeam). */
+    references: {
+      collection: string;
+      key: string;
+      /** Campo de texto en el referenciador que guarda copia del nombre. */
+      alsoCopyLabelTo?: string;
+    }[];
+  };
+  /**
    * Impide dar de alta dos registros con el mismo valor en este campo. Al
    * intentarlo, se avisa quién capturó el que ya existe.
    */

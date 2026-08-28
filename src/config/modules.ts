@@ -1899,6 +1899,11 @@ export const catalogModules: ModuleConfig[] = [
      * "APELLIDOS, Nombres" en todo el catálogo.
      */
     importMatch: { key: 'name', label: 'Name', textField: 'name' },
+    /** Personas repetidas (carga original + altas rápidas): fusión con reapunte. */
+    dedupe: {
+      labelKey: 'name',
+      references: [{ collection: COLLECTIONS.drivers, key: 'idTeam', alsoCopyLabelTo: 'name' }],
+    },
   },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
   { id: 'stations', collection: COLLECTIONS.stations, title: 'Stations', icon: 'MapPin', fields: catalogFields },

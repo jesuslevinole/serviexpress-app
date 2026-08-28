@@ -233,6 +233,17 @@ export async function countDocumentsSafe(
   }
 }
 
+/** Lectura puntual de una colección FILTRADA (para reapuntar referencias). */
+export async function fetchDocumentsWhere(
+  collectionName: string,
+  filter: CollectionFilter,
+): Promise<EntityData[]> {
+  const snapshot = await getDocs(
+    query(collection(db, collectionName), where(filter.field, '==', filter.value)),
+  );
+  return snapshot.docs.map((d) => toEntity(d.id, d.data()));
+}
+
 /** Lectura puntual de UN documento (null si no existe). */
 export async function fetchDocument(collectionName: string, id: string): Promise<EntityData | null> {
   const snapshot = await getDoc(doc(db, collectionName, id));
