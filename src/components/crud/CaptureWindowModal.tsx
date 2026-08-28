@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { SearchableSelect } from '../ui/SearchableSelect';
 import {
   APP_TIME_ZONE,
+  DAY_NAMES,
+  describeSchedule,
+  formatDuration,
   formatTexas,
-  isoToTexasLocal,
-  texasLocalToIso,
+  resolveOccurrence,
   type CaptureWindow,
 } from '../../services/captureWindow';
 import './CaptureWindow.css';
@@ -13,46 +16,56 @@ import './CaptureWindow.css';
 interface CaptureWindowModalProps {
   label: string;
   window: CaptureWindow | null;
-  onSave: (startLocal: string, endLocal: string) => Promise<void>;
+  onSave: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
   onClear: () => Promise<void>;
   onClose: () => void;
 }
 
-/** Inicio propuesto: hoy a las 00:00 de Texas; cierre: hoy a las 23:59. */
-function defaultRange(): { start: string; end: string } {
-  const today = isoToTexasLocal(new Date().toISOString()).slice(0, 10);
-  return { start: `${today}T00:00`, end: `${today}T23:59` };
-}
+const DAY_OPTIONS = DAY_NAMES.map((name, index) => ({ value: String(index), label: name }));
 
 /**
- * Configuración de la ventana de captura (solo administradores). Las horas
- * se capturan y se guardan como hora de Texas: el reloj de la esquina
- * muestra la hora de Texas en este momento para que el admin no tenga que
- * convertir nada aunque esté en otra zona.
+ * Configuración de la ventana de captura semanal. Se elige el día de la
+ * semana y la hora (de Texas) en que abre y en que cierra, y se repite cada
+ * semana: p. ej. lunes 8:00 AM -> domingo 11:59 PM. El reloj muestra la hora
+ * de Texas en este momento para que quien configura no convierta nada.
  */
 export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: CaptureWindowModalProps) {
-  const initial = window ? { start: window.startLocal, end: window.endLocal } : defaultRange();
-  const [start, setStart] = useState(initial.start);
-  const [end, setEnd] = useState(initial.end);
+  // Por omisión, el horario del ejemplo del cliente: lunes 08:00 -> domingo 23:59.
+  const [startDay, setStartDay] = useState(String(window?.startDay ?? 1));
+  const [startTime, setStartTime] = useState(window?.startTime ?? '08:00');
+  const [endDay, setEndDay] = useState(String(window?.endDay ?? 0));
+  const [endTime, setEndTime] = useState(window?.endTime ?? '23:59');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [now, setNow] = useState(() => new Date().toISOString());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = globalThis.setInterval(() => setNow(new Date().toISOString()), 1000);
+    const timer = globalThis.setInterval(() => setNow(Date.now()), 1000);
     return () => globalThis.clearInterval(timer);
   }, []);
 
-  const startIso = texasLocalToIso(start);
-  const endIso = texasLocalToIso(end);
-  const rangeOk = startIso !== null && endIso !== null && new Date(endIso) > new Date(startIso);
+  const draft: Omit<CaptureWindow, 'updatedBy'> = useMemo(
+    () => ({
+      startDay: Number(startDay),
+      startTime,
+      endDay: Number(endDay),
+      endTime,
+    }),
+    [startDay, startTime, endDay, endTime],
+  );
+
+  /** Cómo quedaría la ventana con lo capturado, medida en este instante. */
+  const preview = useMemo(
+    () => resolveOccurrence({ ...draft, updatedBy: null }, now),
+    [draft, now],
+  );
 
   const handleSave = async () => {
     setBusy(true);
     setError(null);
     try {
-      await onSave(start, end);
+      await onSave(draft);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The window could not be saved');
@@ -101,7 +114,7 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
             type="button"
             className="btn btn-primary"
             onClick={() => void handleSave()}
-            disabled={busy || !rangeOk}
+            disabled={busy || preview.status === 'unset'}
           >
             {busy ? 'Saving…' : window ? 'Update window' : 'Open window'}
           </button>
@@ -110,46 +123,57 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
     >
       <div className="cwin-modal">
         <p className="cwin-modal-help">
-          Between these two moments everyone can add records; outside of them nobody can
-          (administrators are not restricted). Times are <strong>Texas time (Central)</strong> for
-          all users, whatever their own time zone.
+          Pick the day of the week and the time the window opens and closes;{' '}
+          <strong>it repeats every week</strong>. Between those two moments everyone can add
+          records; outside of them only the roles with "Add outside window" can. Times are{' '}
+          <strong>Texas time (Central)</strong> for all users, whatever their own time zone.
         </p>
         <div className="cwin-modal-now">
           <span>Texas time now</span>
-          <strong>{formatTexas(now, true)}</strong>
+          <strong>{formatTexas(new Date(now).toISOString(), true)}</strong>
           <small>{APP_TIME_ZONE}</small>
         </div>
         <div className="cwin-modal-grid">
+          <div className="cwin-modal-field">
+            <span>Opens on (every week)</span>
+            <SearchableSelect value={startDay} options={DAY_OPTIONS} onChange={setStartDay} />
+          </div>
           <label className="cwin-modal-field">
-            <span>Opens (Texas time)</span>
+            <span>At (Texas time)</span>
             <input
               className="field-input"
-              type="datetime-local"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
             />
           </label>
+          <div className="cwin-modal-field">
+            <span>Closes on</span>
+            <SearchableSelect value={endDay} options={DAY_OPTIONS} onChange={setEndDay} />
+          </div>
           <label className="cwin-modal-field">
-            <span>Closes (Texas time)</span>
+            <span>At (Texas time)</span>
             <input
               className="field-input"
-              type="datetime-local"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
             />
           </label>
         </div>
-        <p className={`cwin-modal-preview ${rangeOk ? '' : 'is-invalid'}`}>
-          {rangeOk && startIso && endIso
-            ? `The window will run from ${formatTexas(startIso)} to ${formatTexas(endIso)}.`
-            : 'Choose a start and an end; the end must be after the start.'}
+        <p className={`cwin-modal-preview ${preview.status === 'unset' ? 'is-invalid' : ''}`}>
+          {preview.status === 'unset' || !preview.occurrence
+            ? 'Choose the opening and closing time.'
+            : preview.status === 'open'
+              ? `The window will repeat ${describeSchedule({ ...draft, updatedBy: null })}. Right now it would be OPEN, closing ${formatTexas(preview.occurrence.endAt)} (in ${formatDuration(new Date(preview.occurrence.endAt).getTime() - now, false)}).`
+              : `The window will repeat ${describeSchedule({ ...draft, updatedBy: null })}. Right now it would be CLOSED, opening ${formatTexas(preview.occurrence.startAt)} (in ${formatDuration(new Date(preview.occurrence.startAt).getTime() - now, false)}).`}
         </p>
       </div>
 
       <ConfirmDialog
         open={confirmClear}
         title="Remove window"
-        message="Without a window nobody (except administrators) will be able to add records. Remove it?"
+        message="Without a window, only the roles with the 'Add outside window' permission (and administrators) will be able to add records. Remove it?"
         busy={busy}
         onCancel={() => setConfirmClear(false)}
         onConfirm={() => void handleClear()}

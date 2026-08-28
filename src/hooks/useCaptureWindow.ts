@@ -3,11 +3,12 @@ import { useAuth } from './useAuth';
 import { fetchDocument, subscribeToCollection } from '../services/firestoreService';
 import {
   clearCaptureWindow,
+  resolveOccurrence,
   saveCaptureWindow,
   subscribeToCaptureWindow,
-  windowStatus,
   type CaptureWindow,
   type CaptureWindowStatus,
+  type WindowOccurrence,
 } from '../services/captureWindow';
 import type { EntityData, ModuleConfig } from '../types/models';
 
@@ -26,13 +27,15 @@ export interface CaptureWindowInfo {
   /** Reloj compartido (se actualiza cada pocos segundos, no cada segundo). */
   now: number;
   status: CaptureWindowStatus;
+  /** Aparición semanal vigente: la abierta ahora o, si no, la próxima. */
+  occurrence: WindowOccurrence | null;
   /** id del catálogo -> renglón que ya lo capturó en ESTA ventana. */
   taken: Map<string, TakenInfo>;
   /** id del catálogo -> motivo por el que hoy no se puede capturar (taller, correctivo). */
   blocked: Map<string, string>;
   /** Registros activos del catálogo a cubrir (los camiones). */
   sourceRows: EntityData[];
-  save: (startLocal: string, endLocal: string) => Promise<void>;
+  save: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
   clear: () => Promise<void>;
 }
 
@@ -92,11 +95,18 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
     );
   }, [windowId]);
 
-  // Renglones capturados dentro de la ventana: se piden al servidor por su
-  // fecha de creación, así solo viajan los de esta ventana y no todo el histórico.
+  /** Aparición vigente (o próxima) de la ventana semanal, según el reloj. */
+  const { status, occurrence } = useMemo(
+    () => (spec ? resolveOccurrence(window, now) : { status: 'unset' as const, occurrence: null }),
+    [spec, window, now],
+  );
+
+  // Renglones capturados dentro de la aparición vigente: se piden al servidor
+  // por su fecha de creación, así solo viajan los de esta semana y no todo el
+  // histórico.
   const detailCollection = detail?.collection ?? '';
-  const startAt = window?.startAt ?? '';
-  const endAt = window?.endAt ?? '';
+  const startAt = occurrence?.startAt ?? '';
+  const endAt = occurrence?.endAt ?? '';
   useEffect(() => {
     if (!spec || detailCollection === '' || startAt === '' || endAt === '') {
       setWindowRows([]);
@@ -223,9 +233,9 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
   }, [spec, blockedRows]);
 
   const save = useCallback(
-    async (startLocal: string, endLocal: string) => {
+    async (next: Omit<CaptureWindow, 'updatedBy'>) => {
       if (!spec) return;
-      await saveCaptureWindow(spec.id, startLocal, endLocal, firebaseUser?.uid ?? null);
+      await saveCaptureWindow(spec.id, next, firebaseUser?.uid ?? null);
     },
     [spec, firebaseUser],
   );
@@ -239,7 +249,8 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
     window: spec ? window : null,
     loading: spec ? loading : false,
     now,
-    status: spec ? windowStatus(window, now) : 'unset',
+    status,
+    occurrence,
     taken,
     blocked,
     sourceRows,

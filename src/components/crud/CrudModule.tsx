@@ -36,7 +36,7 @@ import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
 import type { CaptureWindowStatus } from '../../services/captureWindow';
-import { formatTexas, texasToday, windowStatus } from '../../services/captureWindow';
+import { describeSchedule, formatTexas, texasToday, windowStatus } from '../../services/captureWindow';
 import { ImportCsvModal } from './ImportCsvModal';
 import { ExportExcelModal } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
@@ -205,19 +205,24 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const captureInfo = useCaptureWindow(config, allRows);
   const captureSpec = config.captureWindow ?? null;
   const [windowOpen, setWindowOpen] = useState(false);
+  /**
+   * Quién configura el horario y quién puede capturar fuera de él se decide
+   * en la matriz de Roles (el admin real siempre puede, para corregir).
+   */
+  const canConfigureWindow =
+    captureSpec !== null && (isAdminView || can(config.id, 'ventanaCaptura'));
+  const exemptFromWindow = isAdminView || can(config.id, 'capturarFueraVentana');
   const lockMessageFor = (status: CaptureWindowStatus): string | null => {
-    if (!captureSpec || isAdminView) return null;
+    if (!captureSpec || exemptFromWindow) return null;
     if (captureInfo.loading) return null;
     switch (status) {
       case 'unset':
-        return `${captureSpec.label}: no window is open. Ask the administrator to open one.`;
+        return `${captureSpec.label}: no weekly schedule is set. Ask the administrator to open one.`;
       case 'before':
-        return captureInfo.window
-          ? `${captureSpec.label} opens ${formatTexas(captureInfo.window.startAt)}.`
-          : null;
-      case 'closed':
-        return captureInfo.window
-          ? `${captureSpec.label} closed ${formatTexas(captureInfo.window.endAt)}. Ask the administrator to open a new one.`
+        return captureInfo.occurrence && captureInfo.window
+          ? `${captureSpec.label} is closed right now. It opens again ${formatTexas(
+              captureInfo.occurrence.startAt,
+            )} (${describeSchedule(captureInfo.window)}).`
           : null;
       default:
         return null;
@@ -1104,7 +1109,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             scopeStations={pendingStations}
             scopeEntities={pendingEntities}
             stationsCollection={COLLECTIONS.stations}
-            onConfigure={isAdminView ? () => setWindowOpen(true) : undefined}
+            onConfigure={canConfigureWindow ? () => setWindowOpen(true) : undefined}
           />
         ) : null}
         {config.coverage ? (

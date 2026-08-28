@@ -13,27 +13,52 @@ export const APP_TIME_ZONE = 'America/Chicago';
 /** Colección donde viven las ventanas de captura (un documento por módulo). */
 const WINDOWS_COLLECTION = 'settings_windows';
 
-/** Ventana de captura tal como se guarda en Firestore. */
+/**
+ * Ventana de captura SEMANAL tal como se guarda en Firestore: se elige el
+ * día de la semana y la hora (de Texas) en que abre y en que cierra, y se
+ * repite cada semana. Ej.: lunes 08:00 -> domingo 23:59.
+ */
 export interface CaptureWindow {
-  /** Instante de inicio en UTC (ISO). Es lo que se compara con el reloj. */
-  startAt: string;
-  /** Instante de cierre en UTC (ISO). */
-  endAt: string;
-  /** Inicio tal como lo tecleó el admin, en hora de Texas: "YYYY-MM-DDTHH:MM". */
-  startLocal: string;
-  /** Cierre tal como lo tecleó el admin, en hora de Texas. */
-  endLocal: string;
+  /** Día en que abre: 0=domingo … 6=sábado. */
+  startDay: number;
+  /** Hora de Texas en que abre, "HH:MM". */
+  startTime: string;
+  /** Día en que cierra. */
+  endDay: number;
+  /** Hora de Texas en que cierra, "HH:MM". */
+  endTime: string;
   /** Uid de quien la configuró. */
   updatedBy: string | null;
 }
 
-export type CaptureWindowStatus = 'unset' | 'before' | 'open' | 'closed';
+/**
+ * Aparición concreta de la ventana semanal: la que está abierta ahora o,
+ * si estamos entre semanas, la próxima. En instantes UTC para comparar.
+ */
+export interface WindowOccurrence {
+  startAt: string;
+  endAt: string;
+}
+
+/** Con ventana semanal no hay "cerrada para siempre": tras cerrar, espera la próxima. */
+export type CaptureWindowStatus = 'unset' | 'before' | 'open';
+
+export const DAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
 
 /** Partes de la fecha/hora de un instante, vistas en la zona del app. */
 function zonedParts(date: Date): Record<string, number> {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: APP_TIME_ZONE,
     hourCycle: 'h23',
+    weekday: 'short',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -43,7 +68,11 @@ function zonedParts(date: Date): Record<string, number> {
   }).formatToParts(date);
   const out: Record<string, number> = {};
   parts.forEach((part) => {
-    if (part.type !== 'literal') out[part.type] = Number(part.value);
+    if (part.type === 'weekday') {
+      out.weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(part.value);
+    } else if (part.type !== 'literal') {
+      out[part.type] = Number(part.value);
+    }
   });
   return out;
 }
@@ -117,15 +146,88 @@ export function formatDuration(ms: number, withSeconds = true): string {
   return parts.join(' ');
 }
 
-/** Estado de la ventana en un instante dado. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** "YYYY-MM-DD" de un día contado en un calendario "de pared" (sin zona). */
+function fakeDateIso(fakeUtcMs: number): string {
+  return new Date(fakeUtcMs).toISOString().slice(0, 10);
+}
+
+/** ¿"HH:MM" válida? */
+function isTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+/** "08:00" -> "8:00 AM", para los avisos. */
+export function formatClock(time: string): string {
+  if (!isTime(time)) return time;
+  const [hh, mm] = time.split(':').map(Number);
+  const suffix = hh < 12 ? 'AM' : 'PM';
+  const hour12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${hour12}:${String(mm).padStart(2, '0')} ${suffix}`;
+}
+
+/** "Every week from Monday 8:00 AM to Sunday 11:59 PM (Texas time)". */
+export function describeSchedule(window: CaptureWindow): string {
+  return `every week from ${DAY_NAMES[window.startDay]} ${formatClock(window.startTime)} to ${
+    DAY_NAMES[window.endDay]
+  } ${formatClock(window.endTime)} (Texas time)`;
+}
+
+/**
+ * Aparición vigente de la ventana semanal en el instante dado: si estamos
+ * dentro de una, esa (estado "open"); si no, la próxima (estado "before").
+ * Todo el cálculo se hace sobre el calendario de pared de Texas y solo al
+ * final se convierte a UTC, para que el cambio de horario de verano no
+ * recorra la hora que el admin eligió.
+ */
+export function resolveOccurrence(
+  window: CaptureWindow | null,
+  nowMs: number,
+): { status: CaptureWindowStatus; occurrence: WindowOccurrence | null } {
+  if (!window || !isTime(window.startTime) || !isTime(window.endTime)) {
+    return { status: 'unset', occurrence: null };
+  }
+  const wall = zonedParts(new Date(nowMs));
+  const todayFake = Date.UTC(wall.year, wall.month - 1, wall.day);
+
+  /** Cuántos días dura la ventana (cierra el mismo día u otro de la semana). */
+  let spanDays = (window.endDay - window.startDay + 7) % 7;
+  // Mismo día con hora de cierre no posterior: la ventana da la vuelta a la
+  // semana completa (lunes 08:00 -> lunes 07:59 de la siguiente).
+  if (spanDays === 0 && window.endTime <= window.startTime) spanDays = 7;
+
+  const occurrenceFrom = (startFake: number): WindowOccurrence | null => {
+    const startAt = texasLocalToIso(`${fakeDateIso(startFake)}T${window.startTime}`);
+    const endAt = texasLocalToIso(`${fakeDateIso(startFake + spanDays * DAY_MS)}T${window.endTime}`);
+    return startAt && endAt ? { startAt, endAt } : null;
+  };
+
+  // Aparición cuyo inicio es el más reciente que ya pasó.
+  let startFake = todayFake - ((((wall.weekday - window.startDay) % 7) + 7) % 7) * DAY_MS;
+  let occurrence = occurrenceFrom(startFake);
+  if (!occurrence) return { status: 'unset', occurrence: null };
+  if (new Date(occurrence.startAt).getTime() > nowMs) {
+    startFake -= 7 * DAY_MS;
+    occurrence = occurrenceFrom(startFake);
+    if (!occurrence) return { status: 'unset', occurrence: null };
+  }
+
+  // ¿Ya cerró? Entonces lo que aplica es la PRÓXIMA aparición.
+  if (nowMs > new Date(occurrence.endAt).getTime()) {
+    occurrence = occurrenceFrom(startFake + 7 * DAY_MS);
+    if (!occurrence) return { status: 'unset', occurrence: null };
+    return { status: 'before', occurrence };
+  }
+  if (nowMs < new Date(occurrence.startAt).getTime()) {
+    return { status: 'before', occurrence };
+  }
+  return { status: 'open', occurrence };
+}
+
+/** Solo el estado, para quien no necesita las fechas de la aparición. */
 export function windowStatus(window: CaptureWindow | null, nowMs: number): CaptureWindowStatus {
-  if (!window) return 'unset';
-  const start = new Date(window.startAt).getTime();
-  const end = new Date(window.endAt).getTime();
-  if (Number.isNaN(start) || Number.isNaN(end)) return 'unset';
-  if (nowMs < start) return 'before';
-  if (nowMs > end) return 'closed';
-  return 'open';
+  return resolveOccurrence(window, nowMs).status;
 }
 
 /** Suscripción en vivo a la ventana de un módulo (null = no configurada). */
@@ -142,18 +244,26 @@ export function subscribeToCaptureWindow(
         return;
       }
       const data = snapshot.data();
+      const day = (value: unknown): number | null =>
+        typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 6
+          ? value
+          : null;
       const text = (value: unknown): string => (typeof value === 'string' ? value : '');
-      const startAt = text(data.startAt);
-      const endAt = text(data.endAt);
-      if (startAt === '' || endAt === '') {
+      const startDay = day(data.startDay);
+      const endDay = day(data.endDay);
+      const startTime = text(data.startTime);
+      const endTime = text(data.endTime);
+      // Documentos de la versión anterior (fechas fijas) o incompletos: se
+      // tratan como "sin ventana" para que el admin la vuelva a abrir semanal.
+      if (startDay === null || endDay === null || startTime === '' || endTime === '') {
         onData(null);
         return;
       }
       onData({
-        startAt,
-        endAt,
-        startLocal: text(data.startLocal) || isoToTexasLocal(startAt),
-        endLocal: text(data.endLocal) || isoToTexasLocal(endAt),
+        startDay,
+        startTime,
+        endDay,
+        endTime,
         updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null,
       });
     },
@@ -161,24 +271,20 @@ export function subscribeToCaptureWindow(
   );
 }
 
-/** Guarda la ventana a partir de las horas de pared de Texas. */
+/** Guarda la ventana semanal (día de la semana + hora de Texas). */
 export async function saveCaptureWindow(
   id: string,
-  startLocal: string,
-  endLocal: string,
+  window: Omit<CaptureWindow, 'updatedBy'>,
   updatedBy: string | null,
 ): Promise<void> {
-  const startAt = texasLocalToIso(startLocal);
-  const endAt = texasLocalToIso(endLocal);
-  if (!startAt || !endAt) throw new Error('Both the start and the end date/time are required');
-  if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
-    throw new Error('The end must be after the start');
+  if (!isTime(window.startTime) || !isTime(window.endTime)) {
+    throw new Error('Both the opening and the closing time are required');
   }
   await setDocument(WINDOWS_COLLECTION, id, {
-    startAt,
-    endAt,
-    startLocal,
-    endLocal,
+    startDay: window.startDay,
+    startTime: window.startTime,
+    endDay: window.endDay,
+    endTime: window.endTime,
     timeZone: APP_TIME_ZONE,
     updatedBy,
   });

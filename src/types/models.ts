@@ -43,7 +43,18 @@ export type PermissionAction =
   /** Abrir los editores del formulario: campos, encabezados y pestañas. */
   | 'configurarForm'
   /** Modificar los campos protegidos del módulo (los marcados como tales). */
-  | 'editarProtegidos';
+  | 'editarProtegidos'
+  /**
+   * Configurar la ventana de captura del módulo (el horario semanal, hora de
+   * Texas, en que se permite capturar). Pensada para BC Reports.
+   */
+  | 'ventanaCaptura'
+  /**
+   * Capturar aunque la ventana esté cerrada. Para supervisores u oficina que
+   * corrigen datos fuera del horario; el resto de las reglas (un camión por
+   * ventana, camión en taller) siguen aplicando.
+   */
+  | 'capturarFueraVentana';
 
 /** Visibilidad de registros por módulo, definida por rol. */
 export type ViewScope = 'all' | 'own' | 'station' | 'entity_station';

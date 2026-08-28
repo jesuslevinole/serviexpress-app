@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarClock, ChevronDown, ChevronUp, Clock, Lock, Settings2 } from 'lucide-react';
-import { formatDuration, formatTexas, windowStatus } from '../../services/captureWindow';
+import {
+  describeSchedule,
+  formatDuration,
+  formatTexas,
+  resolveOccurrence,
+} from '../../services/captureWindow';
 import type { CaptureWindowInfo } from '../../hooks/useCaptureWindow';
 import type { CaptureWindowConfig, EntityData } from '../../types/models';
 import './CaptureWindow.css';
@@ -49,7 +54,8 @@ export function CaptureWindowBanner({
     return () => globalThis.clearInterval(timer);
   }, [info.window]);
 
-  const status = windowStatus(info.window, tick);
+  /** Estado y aparición (la abierta o la próxima) medidos cada segundo. */
+  const { status, occurrence } = resolveOccurrence(info.window, tick);
 
   /** Camiones dentro del alcance del usuario (su estación/entidad), clasificados. */
   const items = useMemo(() => {
@@ -102,8 +108,8 @@ export function CaptureWindowBanner({
         .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
     : [];
 
-  const startMs = info.window ? new Date(info.window.startAt).getTime() : 0;
-  const endMs = info.window ? new Date(info.window.endAt).getTime() : 0;
+  const startMs = occurrence ? new Date(occurrence.startAt).getTime() : 0;
+  const endMs = occurrence ? new Date(occurrence.endAt).getTime() : 0;
 
   const configureButton = onConfigure ? (
     <button type="button" className="btn btn-outline cwin-config" onClick={onConfigure}>
@@ -114,14 +120,14 @@ export function CaptureWindowBanner({
 
   if (info.loading) return null;
 
-  if (!info.window) {
+  if (!info.window || !occurrence || status === 'unset') {
     return (
       <section className="cwin is-unset">
         <div className="cwin-head">
           <Lock size={16} />
           <span className="cwin-text">
-            <strong>{spec.label}:</strong> no window is open. New records can only be added between
-            the start and end date/time set by the administrator (Texas time).
+            <strong>{spec.label}:</strong> no weekly schedule is set. New records can only be added
+            in the weekly window (day and Texas time) configured here.
           </span>
           {configureButton}
         </div>
@@ -132,28 +138,23 @@ export function CaptureWindowBanner({
   return (
     <section className={`cwin is-${status}`}>
       <div className="cwin-head">
-        {status === 'open' ? <Clock size={16} /> : status === 'before' ? <CalendarClock size={16} /> : <Lock size={16} />}
+        {status === 'open' ? <Clock size={16} /> : <CalendarClock size={16} />}
         <span className="cwin-text">
           {status === 'open' ? (
             <>
               <strong>Time left to add your {spec.label.replace(' window', '')}:</strong>{' '}
               <span className="cwin-countdown">{formatDuration(endMs - tick)}</span>
               <span className="cwin-range">
-                · closes {formatTexas(info.window.endAt)}
-              </span>
-            </>
-          ) : status === 'before' ? (
-            <>
-              <strong>{spec.label} opens in</strong>{' '}
-              <span className="cwin-countdown">{formatDuration(startMs - tick)}</span>
-              <span className="cwin-range">
-                · {formatTexas(info.window.startAt)} to {formatTexas(info.window.endAt)}
+                · closes {formatTexas(occurrence.endAt)} · {describeSchedule(info.window)}
               </span>
             </>
           ) : (
             <>
-              <strong>{spec.label} closed</strong> {formatTexas(info.window.endAt)}. New records can't be
-              added until the administrator opens a new window.
+              <strong>{spec.label} is closed. It opens again in</strong>{' '}
+              <span className="cwin-countdown">{formatDuration(startMs - tick)}</span>
+              <span className="cwin-range">
+                · {formatTexas(occurrence.startAt)} · {describeSchedule(info.window)}
+              </span>
             </>
           )}
         </span>

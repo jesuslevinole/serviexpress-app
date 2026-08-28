@@ -48,6 +48,8 @@ const ACTIONS: PermissionAction[] = [
   'eliminarMasivo',
   'configurarForm',
   'editarProtegidos',
+  'ventanaCaptura',
+  'capturarFueraVentana',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -66,6 +68,8 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   eliminarMasivo: 'Bulk delete',
   configurarForm: 'Configure form',
   editarProtegidos: 'Edit locked fields',
+  ventanaCaptura: 'Capture window (set schedule)',
+  capturarFueraVentana: 'Add outside window',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */
