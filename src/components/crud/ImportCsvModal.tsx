@@ -413,6 +413,10 @@ export function ImportCsvModal({
           }
         }
 
+        // El aviso genérico "does not exist yet" del campo de nombre no aplica
+        // en este modo (aquí se casa contra los registros existentes): fuera.
+        const stale = warnings.findIndex((w) => w.startsWith(`"${matchField.label}"`));
+        if (stale !== -1) warnings.splice(stale, 1);
         if (matches.length === 1) {
           docId = matches[0].id;
           if (!resolvedIsId) {
