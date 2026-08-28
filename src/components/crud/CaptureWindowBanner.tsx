@@ -17,15 +17,21 @@ interface CaptureWindowBannerProps {
   refLabel: (collection: string, id: string) => string;
   /** Texto que describe dónde y quién capturó un renglón ("BC 2026-08-28 · Station 2 · by Ana"). */
   describeParent: (parent: EntityData | null) => string;
-  /** Estaciones y entidades del usuario: acotan la lista de "faltan por agregar". */
+  /** Estaciones del usuario: acotan la lista de "faltan por agregar". */
   scopeStations: string[];
-  scopeEntities: string[];
   /** Nombre de la colección de estaciones, para etiquetar los grupos. */
   stationsCollection: string;
   /** Si se define, el admin puede abrir/ajustar la ventana desde aquí. */
   onConfigure?: () => void;
   /** Nombres de los BC asignados a una estación (para el grupo de faltantes). */
   stationBcs?: (stationId: string) => string[];
+  /**
+   * Camiones capturados esta ventana en reportes de la estación del usuario
+   * pero que HOY no cuentan para ella (el catálogo los tiene en otra
+   * estación, de baja o ya no existen): cierran la aritmética entre "el
+   * reporte tiene 28" y "17 of 20 added".
+   */
+  extraTaken?: { id: string; label: string; reason: string }[];
 }
 
 type PendingKind = 'missing' | 'done' | 'blocked';
@@ -42,10 +48,10 @@ export function CaptureWindowBanner({
   refLabel,
   describeParent,
   scopeStations,
-  scopeEntities,
   stationsCollection,
   onConfigure,
   stationBcs,
+  extraTaken = [],
 }: CaptureWindowBannerProps) {
   const [open, setOpen] = useState(false);
   const [showDone, setShowDone] = useState(false);
@@ -65,15 +71,13 @@ export function CaptureWindowBanner({
     const { once } = spec;
     return info.sourceRows
       .filter((row) => {
+        // Manda SOLO la Current station del camión: en una estación conviven
+        // camiones de varias entidades y el BC los cubre todos.
         const station = row[once.sourceStationKey];
-        if (scopeStations.length > 0 && !(typeof station === 'string' && scopeStations.includes(station))) {
-          return false;
-        }
-        if (once.sourceEntityKey && scopeEntities.length > 0) {
-          const entity = row[once.sourceEntityKey];
-          if (!(typeof entity === 'string' && scopeEntities.includes(entity))) return false;
-        }
-        return true;
+        return (
+          scopeStations.length === 0 ||
+          (typeof station === 'string' && scopeStations.includes(station))
+        );
       })
       .map((row) => {
         const station = row[once.sourceStationKey];
@@ -90,7 +94,7 @@ export function CaptureWindowBanner({
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
-  }, [spec, info.sourceRows, info.taken, info.blocked, scopeStations, scopeEntities, refLabel]);
+  }, [spec, info.sourceRows, info.taken, info.blocked, scopeStations, refLabel]);
 
   const missing = items.filter((item) => item.kind === 'missing');
   const done = items.filter((item) => item.kind === 'done');
@@ -187,8 +191,14 @@ export function CaptureWindowBanner({
                 · {blocked.length} not required (in shop / corrective)
               </>
             ) : null}
+            {extraTaken.length > 0 ? (
+              <>
+                {' '}
+                · {extraTaken.length} added in your reports but not counted (moved / inactive)
+              </>
+            ) : null}
           </span>
-          {missing.length > 0 || blocked.length > 0 ? (
+          {missing.length > 0 || blocked.length > 0 || extraTaken.length > 0 ? (
             <button type="button" className="cwin-toggle" onClick={() => setOpen((v) => !v)}>
               {open ? 'Hide list' : 'See which ones'}
               {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -241,6 +251,21 @@ export function CaptureWindowBanner({
                 {blocked.map((item) => (
                   <li key={item.row.id} title={info.blocked.get(item.row.id)}>
                     {item.label} — {info.blocked.get(item.row.id)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {extraTaken.length > 0 ? (
+            <div className="cwin-group">
+              <span className="cwin-group-title">
+                Added in your station&apos;s reports but NOT counted for it
+              </span>
+              <ul className="cwin-list is-blocked">
+                {extraTaken.map((item) => (
+                  <li key={item.id} title={item.reason}>
+                    {item.label} — {item.reason}
                   </li>
                 ))}
               </ul>

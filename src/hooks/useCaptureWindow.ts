@@ -35,6 +35,8 @@ export interface CaptureWindowInfo {
   blocked: Map<string, string>;
   /** Registros activos del catálogo a cubrir (los camiones). */
   sourceRows: EntityData[];
+  /** TODOS los registros del catálogo, incluidos inactivos (para explicar motivos). */
+  sourceRowsAll: EntityData[];
   save: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
   clear: () => Promise<void>;
 }
@@ -254,6 +256,7 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
     taken,
     blocked,
     sourceRows,
+    sourceRowsAll: sourceAll,
     save,
     clear,
   };

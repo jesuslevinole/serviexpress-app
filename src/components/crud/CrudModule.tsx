@@ -250,7 +250,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const effectiveUser = viewAs ?? profile;
   const seesAllStations = isAdminView || effectiveUser?.isOffice === true;
   const pendingStations = seesAllStations ? [] : (effectiveUser?.scopeStations ?? []);
-  const pendingEntities = seesAllStations ? [] : (effectiveUser?.scopeEntities ?? []);
   const detailRefLabel = (collection: string, id: string): string =>
     detailRefMaps[collection]?.labels.get(id) ?? refLabel(collection, id);
   const rowsOfParent = (parentId: string): EntityData[] =>
@@ -483,14 +482,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       .filter((row) => {
         if (!blocked.has(row.id)) return false;
         const station = row[once.sourceStationKey];
-        if (stations.length > 0 && !(typeof station === 'string' && stations.includes(station))) {
-          return false;
-        }
-        if (once.sourceEntityKey && pendingEntities.length > 0) {
-          const entity = row[once.sourceEntityKey];
-          if (!(typeof entity === 'string' && pendingEntities.includes(entity))) return false;
-        }
-        return true;
+        return (
+          stations.length === 0 ||
+          (typeof station === 'string' && stations.includes(station))
+        );
       })
       .map((row) => ({
         id: row.id,
@@ -1451,10 +1446,58 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           <CaptureWindowBanner
             spec={captureSpec}
             info={captureInfo}
+            extraTaken={(() => {
+              /**
+               * Camiones capturados EN ESTA VENTANA en reportes de las
+               * estaciones del usuario, pero que HOY no cuentan para su
+               * estación (el catálogo los tiene en otra estación, de baja o
+               * ya no existen). Sin esta lista, "el reporte tiene 28" y
+               * "17 of 20" parecen no cuadrar; con ella, 17 + 11 = 28 se ve
+               * ahí mismo.
+               */
+              if (pendingStations.length === 0) return [];
+              const { once } = captureSpec;
+              const countedIds = new Set(
+                captureInfo.sourceRows
+                  .filter((row) => {
+                    const st = row[once.sourceStationKey];
+                    return typeof st === 'string' && pendingStations.includes(st);
+                  })
+                  .map((row) => row.id),
+              );
+              const activeIds = new Set(captureInfo.sourceRows.map((row) => row.id));
+              const byId = new Map(captureInfo.sourceRowsAll.map((row) => [row.id, row]));
+              const out: { id: string; label: string; reason: string }[] = [];
+              captureInfo.taken.forEach((infoTaken, truckId) => {
+                if (countedIds.has(truckId)) return;
+                const parent = infoTaken.parent;
+                const parentStation =
+                  parent && reportStationKey ? parent[reportStationKey] : null;
+                if (!(typeof parentStation === 'string' && pendingStations.includes(parentStation))) {
+                  return;
+                }
+                const truck = byId.get(truckId);
+                let reason: string;
+                if (!truck) reason = 'no longer in the Trucks catalog';
+                else if (!activeIds.has(truckId)) reason = 'inactive truck';
+                else {
+                  const st = truck[once.sourceStationKey];
+                  reason =
+                    typeof st === 'string' && st !== ''
+                      ? `the catalog places it at ${detailRefLabel(COLLECTIONS.stations, st)} today`
+                      : 'it has no station assigned in the catalog';
+                }
+                out.push({
+                  id: truckId,
+                  label: detailRefLabel(once.sourceCollection, truckId),
+                  reason,
+                });
+              });
+              return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+            })()}
             refLabel={detailRefLabel}
             describeParent={describeParent}
             scopeStations={pendingStations}
-            scopeEntities={pendingEntities}
             stationsCollection={COLLECTIONS.stations}
             onConfigure={canConfigureWindow ? () => setWindowOpen(true) : undefined}
             stationBcs={(stationId) =>

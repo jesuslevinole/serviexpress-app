@@ -416,10 +416,13 @@ export interface CaptureWindowConfig {
     detailKey: string;
     /** Catálogo que debe quedar cubierto en cada ventana (trucks). */
     sourceCollection: string;
-    /** Campo del catálogo con su estación actual (para "los que faltan"). */
+    /**
+     * Campo del catálogo con su ESTACIÓN ACTUAL ("Current station"): es el
+     * único criterio de pertenencia — un camión cuenta para la estación en
+     * la que está hoy, sin importar la entidad (varias entidades comparten
+     * estación).
+     */
     sourceStationKey: string;
-    /** Campo del catálogo con su entidad actual (opcional, para el alcance). */
-    sourceEntityKey?: string;
     /** Campo bool/estatus del catálogo que marca si está activo. */
     sourceActiveKey?: string;
     /** Cómo se llama un registro del catálogo en los avisos ("truck"). */

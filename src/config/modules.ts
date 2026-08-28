@@ -645,7 +645,6 @@ export const bcReportsModule: ModuleConfig = {
       detailKey: 'idTruck',
       sourceCollection: COLLECTIONS.trucks,
       sourceStationKey: 'idStationActual',
-      sourceEntityKey: 'idEntityActual',
       sourceActiveKey: 'status',
       sourceLabel: 'truck',
     },
