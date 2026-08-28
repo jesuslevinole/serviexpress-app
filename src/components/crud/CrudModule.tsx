@@ -577,43 +577,50 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
   /**
    * Autocompletado del contador de renglones: los registros de ANTES de esta
-   * versión no traen rowsCount. Para los que están a la vista se hace UNA
-   * consulta de conteo (1 lectura cada una, no una por renglón) y se guarda
-   * en el documento, de modo que solo cuesta la primera vez en la vida de
-   * cada registro; después la tabla ya sabe cuáles están vacíos.
+   * versión no traen rowsCount. Se recorren TODOS los del módulo (no solo la
+   * página visible, para que las pestañas Empty / With trucks cuenten bien)
+   * con UNA consulta de conteo cada uno (1 lectura, no una por renglón) y el
+   * resultado se guarda en el documento: solo cuesta la primera vez en la
+   * vida de cada registro.
+   *
+   * Importante: el ciclo corre aparte del render y NO se cancela cuando la
+   * tabla se refresca — cada escritura del propio backfill dispara un
+   * refresco, y cancelarse ahí era lo que lo dejaba a medias (clasificaba un
+   * registro y se detenía).
    */
   const countField = config.detail?.countField;
   const detailCollection = config.detail?.collection ?? '';
   const detailParentKey = config.detail?.parentKey ?? '';
+  const backfillRunning = useRef(false);
   useEffect(() => {
-    if (!countField || detailCollection === '' || loading) return;
-    const pending = pageRows.filter(
+    if (!countField || detailCollection === '' || loading || backfillRunning.current) return;
+    const pending = allRows.filter(
       (row) => typeof row[countField] !== 'number' && !backfilled.current.has(row.id),
     );
     if (pending.length === 0) return;
-    pending.forEach((row) => backfilled.current.add(row.id));
-    let cancelled = false;
+    backfillRunning.current = true;
     void (async () => {
-      for (const row of pending) {
-        if (cancelled) return;
-        try {
-          const total = await countDocuments(detailCollection, {
-            field: detailParentKey,
-            value: row.id,
-          });
-          await setDocument(config.collection, row.id, { [countField]: total }, true);
-        } catch {
-          // Sin permiso o sin red: se reintenta en otra visita.
-          backfilled.current.delete(row.id);
-          return;
+      try {
+        for (const row of pending) {
+          if (backfilled.current.has(row.id)) continue;
+          backfilled.current.add(row.id);
+          try {
+            const total = await countDocuments(detailCollection, {
+              field: detailParentKey,
+              value: row.id,
+            });
+            await setDocument(config.collection, row.id, { [countField]: total }, true);
+          } catch {
+            // Sin permiso o sin red: se libera para reintentar en otra visita.
+            backfilled.current.delete(row.id);
+            return;
+          }
         }
+      } finally {
+        backfillRunning.current = false;
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countField, detailCollection, detailParentKey, loading, pageRows]);
+  }, [countField, detailCollection, detailParentKey, loading, allRows, config.collection]);
 
   const setColumnFilter = (key: string, filter: ColumnFilter | null) => {
     setPage(1);

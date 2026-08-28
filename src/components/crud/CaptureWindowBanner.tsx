@@ -55,7 +55,7 @@ export function CaptureWindowBanner({
   }, [info.window]);
 
   /** Estado y aparición (la abierta o la próxima) medidos cada segundo. */
-  const { status, occurrence } = resolveOccurrence(info.window, tick);
+  const { status, occurrence, previousEnd } = resolveOccurrence(info.window, tick);
 
   /** Camiones dentro del alcance del usuario (su estación/entidad), clasificados. */
   const items = useMemo(() => {
@@ -150,7 +150,10 @@ export function CaptureWindowBanner({
             </>
           ) : (
             <>
-              <strong>{spec.label} is closed. It opens again in</strong>{' '}
+              <strong>
+                {spec.label} is closed
+                {previousEnd ? ` since ${formatTexas(previousEnd)}` : ''}. It opens again in
+              </strong>{' '}
               <span className="cwin-countdown">{formatDuration(startMs - tick)}</span>
               <span className="cwin-range">
                 · {formatTexas(occurrence.startAt)} · {describeSchedule(info.window)}

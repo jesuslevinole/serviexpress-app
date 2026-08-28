@@ -184,9 +184,14 @@ export function describeSchedule(window: CaptureWindow): string {
 export function resolveOccurrence(
   window: CaptureWindow | null,
   nowMs: number,
-): { status: CaptureWindowStatus; occurrence: WindowOccurrence | null } {
+): {
+  status: CaptureWindowStatus;
+  occurrence: WindowOccurrence | null;
+  /** Cierre de la aparición anterior (para "closed since …" entre semanas). */
+  previousEnd: string | null;
+} {
   if (!window || !isTime(window.startTime) || !isTime(window.endTime)) {
-    return { status: 'unset', occurrence: null };
+    return { status: 'unset', occurrence: null, previousEnd: null };
   }
   const wall = zonedParts(new Date(nowMs));
   const todayFake = Date.UTC(wall.year, wall.month - 1, wall.day);
@@ -206,23 +211,25 @@ export function resolveOccurrence(
   // Aparición cuyo inicio es el más reciente que ya pasó.
   let startFake = todayFake - ((((wall.weekday - window.startDay) % 7) + 7) % 7) * DAY_MS;
   let occurrence = occurrenceFrom(startFake);
-  if (!occurrence) return { status: 'unset', occurrence: null };
+  if (!occurrence) return { status: 'unset', occurrence: null, previousEnd: null };
   if (new Date(occurrence.startAt).getTime() > nowMs) {
     startFake -= 7 * DAY_MS;
     occurrence = occurrenceFrom(startFake);
-    if (!occurrence) return { status: 'unset', occurrence: null };
+    if (!occurrence) return { status: 'unset', occurrence: null, previousEnd: null };
   }
 
-  // ¿Ya cerró? Entonces lo que aplica es la PRÓXIMA aparición.
+  // ¿Ya cerró? Entonces lo que aplica es la PRÓXIMA aparición, y el cierre
+  // de esta queda como referencia ("closed since Wednesday 11:59 PM").
   if (nowMs > new Date(occurrence.endAt).getTime()) {
+    const previousEnd = occurrence.endAt;
     occurrence = occurrenceFrom(startFake + 7 * DAY_MS);
-    if (!occurrence) return { status: 'unset', occurrence: null };
-    return { status: 'before', occurrence };
+    if (!occurrence) return { status: 'unset', occurrence: null, previousEnd: null };
+    return { status: 'before', occurrence, previousEnd };
   }
   if (nowMs < new Date(occurrence.startAt).getTime()) {
-    return { status: 'before', occurrence };
+    return { status: 'before', occurrence, previousEnd: null };
   }
-  return { status: 'open', occurrence };
+  return { status: 'open', occurrence, previousEnd: null };
 }
 
 /** Solo el estado, para quien no necesita las fechas de la aparición. */
