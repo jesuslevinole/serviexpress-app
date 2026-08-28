@@ -144,6 +144,11 @@ export function ImportCsvModal({
   const [partialUpdate, setPartialUpdate] = useState(false);
   /** true = casa por nombre contra los registros existentes; nunca crea. */
   const [matchUpdate, setMatchUpdate] = useState(false);
+  /**
+   * En modo casado: true = las columnas del archivo REEMPLAZAN el valor
+   * actual (renombrar en lote); false (por omisión) = solo llenan vacíos.
+   */
+  const [replaceValues, setReplaceValues] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const refIndexes = useMemo(() => buildRefIndexes(refMaps), [refMaps]);
@@ -421,18 +426,22 @@ export function ImportCsvModal({
         if (stale !== -1) warnings.splice(stale, 1);
         if (matches.length === 1) {
           docId = matches[0].id;
-          // Solo se LLENAN campos vacíos: lo que el registro ya tiene
-          // capturado en el app no se toca (Entity, Station, o cualquier
-          // otro valor ya trabajado ahí manda sobre el archivo).
-          const existing = matches[0];
-          Object.keys(values).forEach((key) => {
-            const current = existing[key];
-            const isEmpty = current === null || current === undefined || current === '';
-            if (!isEmpty) delete values[key];
-          });
-          if (!resolvedIsId) {
+          if (!replaceValues) {
+            // Solo se LLENAN campos vacíos: lo que el registro ya tiene
+            // capturado en el app no se toca (Entity, Station, o cualquier
+            // otro valor ya trabajado ahí manda sobre el archivo).
+            const existing = matches[0];
+            Object.keys(values).forEach((key) => {
+              const current = existing[key];
+              const isEmpty = current === null || current === undefined || current === '';
+              if (!isEmpty) delete values[key];
+            });
+          }
+          if (!resolvedIsId && (refCatalog !== undefined || !replaceValues)) {
             // El nombre casó por texto pero la referencia no resolvió: se
             // conserva la referencia y el nombre que el registro ya tiene.
+            // (Con "replace" y un campo de TEXTO, el valor del archivo es
+            // justamente el nombre nuevo: sí se escribe — renombrado.)
             delete values[matchField.key];
             const copyTo = fields.find((f) => f.key === matchField.key)?.copyLabelTo;
             if (copyTo) delete values[copyTo];
@@ -533,7 +542,7 @@ export function ImportCsvModal({
           <>
             <span className="imp-footer-info">
               {validRows.length} rows ready · {errorRows.length} with errors
-          {matchUpdate ? ' · update by match (no new records)' : partialUpdate ? ' · partial update' : ''}
+          {matchUpdate ? ` · update by match (${replaceValues ? 'REPLACING values' : 'fill empty only'}, no new records)` : partialUpdate ? ' · partial update' : ''}
             </span>
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancel
@@ -591,6 +600,22 @@ export function ImportCsvModal({
                     fields that are currently empty in the app — values already captured are
                     never replaced — rows that don&apos;t match are skipped, and{' '}
                     <strong>nothing new is ever created or duplicated</strong>.
+                  </small>
+                </span>
+              </label>
+            ) : null}
+            {matchField && existingRows && matchUpdate ? (
+              <label className="imp-partial imp-sub" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={replaceValues}
+                  onChange={(e) => setReplaceValues(e.target.checked)}
+                />
+                <span>
+                  <strong>Also REPLACE values that already exist</strong>
+                  <small>
+                    The columns in the file overwrite the current value (used to fix names in
+                    bulk). Empty cells still never erase anything, and nothing new is created.
                   </small>
                 </span>
               </label>

@@ -1887,7 +1887,19 @@ export const uniformEntriesModule: ModuleConfig = {
 };
 
 export const catalogModules: ModuleConfig[] = [
-  { id: 'team', collection: COLLECTIONS.team, title: 'Team', icon: 'UsersRound', fields: teamFields },
+  {
+    id: 'team',
+    collection: COLLECTIONS.team,
+    title: 'Team',
+    icon: 'UsersRound',
+    fields: teamFields,
+    /**
+     * Permite corregir nombres en lote por CSV casando por el propio nombre
+     * (con "replace" palomeado): se usó para dejar el formato oficial
+     * "APELLIDOS, Nombres" en todo el catálogo.
+     */
+    importMatch: { key: 'name', label: 'Name', textField: 'name' },
+  },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
   { id: 'stations', collection: COLLECTIONS.stations, title: 'Stations', icon: 'MapPin', fields: catalogFields },
   {

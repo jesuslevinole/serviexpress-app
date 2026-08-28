@@ -206,3 +206,7 @@
   color: var(--text-muted);
   line-height: 1.45;
 }
+/* Sub-opción del modo casado (reemplazar valores). */
+.imp-partial.imp-sub {
+  margin-left: 26px;
+}
