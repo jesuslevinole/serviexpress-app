@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Columns3, Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
+import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
 import { QuickEditRefModal } from '../ui/QuickEditRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
@@ -232,6 +233,13 @@ export function CrudForm({
         return;
       }
       let rows = refData.rows;
+      // Los registros INACTIVOS no se ofrecen; si el registro que se edita
+      // ya apuntaba a uno, ese se conserva para no vaciar el campo.
+      const activeFlag = ACTIVE_FLAG_BY_COLLECTION[field.refCollection];
+      if (activeFlag) {
+        const current = values[field.key];
+        rows = rows.filter((row) => isActiveRecord(row, activeFlag) || row.id === current);
+      }
       // Filtro fijo, o dependiente del valor actual de otro campo del formulario.
       let filter = field.refFilter;
       if (field.refFilterFromField) {

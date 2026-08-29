@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { FormField } from './FormField';
 import { useRefMaps } from '../../hooks/useRefMaps';
+import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
 import { updateDocument } from '../../services/firestoreService';
 import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
 import type { SelectOption } from './SearchableSelect';
@@ -60,8 +61,14 @@ export function QuickEditRefModal({
     formFields.forEach((field) => {
       if (field.type !== 'ref' || !field.refCollection) return;
       const data = refMaps[field.refCollection];
+      const flag = ACTIVE_FLAG_BY_COLLECTION[field.refCollection];
+      const activeIds =
+        data && flag !== undefined
+          ? new Set(data.rows.filter((r) => isActiveRecord(r, flag)).map((r) => r.id))
+          : null;
       map[field.key] = data
         ? [...data.labels.entries()]
+            .filter(([value]) => activeIds === null || activeIds.has(value))
             .map(([value, label]) => ({ value, label }))
             .sort((a, b) => a.label.localeCompare(b.label))
         : [];

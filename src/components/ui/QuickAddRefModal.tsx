@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { FormField } from './FormField';
 import { useRefMaps } from '../../hooks/useRefMaps';
+import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
 import { catalogModules } from '../../config/modules';
 import { createDocument } from '../../services/firestoreService';
 import type { FieldConfig, FieldValue } from '../../types/models';
@@ -85,7 +86,13 @@ export function QuickAddRefModal({
     if (field.type !== 'ref' || !field.refCollection) return [];
     const data = refMaps[field.refCollection];
     if (!data) return [];
+    const flag = field.refCollection ? ACTIVE_FLAG_BY_COLLECTION[field.refCollection] : undefined;
+    const activeIds =
+      flag === undefined
+        ? null
+        : new Set(data.rows.filter((r) => isActiveRecord(r, flag)).map((r) => r.id));
     return [...data.labels.entries()]
+      .filter(([value]) => activeIds === null || activeIds.has(value))
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
   };

@@ -44,15 +44,7 @@ export interface CaptureWindowInfo {
 /** Cada cuánto se refresca el reloj compartido del módulo. */
 const TICK_MS = 15 * 1000;
 
-/** ¿El registro del catálogo sigue activo? Acepta bool o los textos migrados. */
-function isActive(row: EntityData, key: string | undefined): boolean {
-  if (!key) return true;
-  const value = row[key];
-  if (value === null || value === undefined || value === '') return true;
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') return !['INACTIVO', 'INACTIVE', 'BAJA', 'NO'].includes(value.toUpperCase());
-  return true;
-}
+import { isActiveRecord as isActive } from '../services/activeStatus';
 
 /**
  * Resuelve todo lo que la ventana de captura necesita saber: si está abierta,

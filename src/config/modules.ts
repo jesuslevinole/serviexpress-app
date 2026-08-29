@@ -73,6 +73,8 @@ const contextFields = (
 /** Módulo BD_TRUCK — Camiones. */
 export const trucksModule: ModuleConfig = {
   id: 'trucks',
+  /** Botón activar/desactivar; los inactivos salen de los desplegables. */
+  activeToggle: 'status',
   collection: COLLECTIONS.trucks,
   title: 'Trucks',
   icon: 'Truck',
@@ -258,6 +260,8 @@ export const trucksModule: ModuleConfig = {
 /** Módulo BD_DRIVER — Drivers. */
 export const driversModule: ModuleConfig = {
   id: 'drivers',
+  /** Botón activar/desactivar; los inactivos salen de los desplegables. */
+  activeToggle: 'status',
   collection: COLLECTIONS.drivers,
   title: 'Drivers',
   icon: 'Users',
@@ -342,6 +346,8 @@ export const driversModule: ModuleConfig = {
 /** Módulo BD_ASSET — Assets. */
 export const assetsModule: ModuleConfig = {
   id: 'assets',
+  /** Botón activar/desactivar; los inactivos salen de los desplegables. */
+  activeToggle: 'status',
   collection: COLLECTIONS.assets,
   title: 'Assets',
   icon: 'ScanLine',

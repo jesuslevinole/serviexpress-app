@@ -485,6 +485,11 @@ export interface ModuleConfig {
    */
   importMatch?: { key: string; label: string; textField?: string };
   /**
+   * Campo bool/texto de activo del módulo: pinta el botón de la tabla para
+   * marcar activo/inactivo. Los inactivos salen de todos los desplegables.
+   */
+  activeToggle?: string;
+  /**
    * Habilita "Merge duplicates" (solo admin): agrupa registros cuyo nombre
    * es la misma persona escrita distinto ("ADAMS, Rayjohnal" y "Rayjohnal
    * Adams"), conserva uno, reapunta hacia él las referencias listadas y

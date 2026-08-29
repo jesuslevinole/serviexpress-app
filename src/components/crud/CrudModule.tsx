@@ -61,7 +61,8 @@ import { useScopeFilter } from '../../hooks/useScope';
 import { COLLECTIONS, REF_LABEL_DEPENDENCIES, buildRefLabel } from '../../config/collections';
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
-import {displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
+import { displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
+import { isActiveRecord } from '../../services/activeStatus';
 import type { EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
@@ -1547,6 +1548,26 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           canDelete={canDelete}
           onEdit={openEdit}
           onDelete={(row) => setDeleting(row)}
+          isRowActive={
+            config.activeToggle ? (row) => isActiveRecord(row, config.activeToggle) : undefined
+          }
+          onToggleActive={
+            config.activeToggle && canEdit
+              ? (row) => {
+                  /**
+                   * Activar/desactivar de un clic. Respeta el tipo del campo:
+                   * bool escribe true/false; texto (datos migrados) escribe
+                   * ACTIVE/INACTIVE, que el lector ya entiende.
+                   */
+                  const key = config.activeToggle!;
+                  const field = config.fields.find((f) => f.key === key);
+                  const nowActive = isActiveRecord(row, key);
+                  const next: FieldValue =
+                    field?.type === 'bool' ? !nowActive : nowActive ? 'INACTIVE' : 'ACTIVE';
+                  void updateDocument(config.collection, row.id, { [key]: next });
+                }
+              : undefined
+          }
           detailLabel={config.detail ? config.detail.title : undefined}
           onDetail={config.detail ? (row) => setDetailParent(row) : undefined}
           canDetail={detailEnabled}

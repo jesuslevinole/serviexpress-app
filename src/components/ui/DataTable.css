@@ -113,3 +113,12 @@
 .dtable tbody tr.is-selected td {
   background: var(--primary-bg);
 }
+
+/* Filas marcadas como inactivas (botón de activar/desactivar). */
+.dtable tbody tr.is-inactive td {
+  opacity: 0.5;
+}
+
+.dtable-power-off {
+  color: var(--danger);
+}

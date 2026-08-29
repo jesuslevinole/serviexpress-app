@@ -6,6 +6,7 @@ import {
   History,
   Pencil,
   PlusCircle,
+  Power,
   Trash2,
 } from 'lucide-react';
 import './DataTable.css';
@@ -40,6 +41,10 @@ interface DataTableProps<T extends { id: string }> {
   /** Acción extra por fila (historial / registros relacionados). */
   historyLabel?: string;
   onHistory?: (row: T) => void;
+  /** Botón activar/desactivar: presente solo en módulos con esa marca. */
+  onToggleActive?: (row: T) => void;
+  /** ¿La fila está activa? (pinta el botón y atenúa las inactivas). */
+  isRowActive?: (row: T) => boolean;
   /**
    * Selección múltiple. Si se define, aparece una casilla por fila y otra en
    * el encabezado para marcar o desmarcar todo lo que se está viendo.
@@ -67,12 +72,14 @@ export function DataTable<T extends { id: string }>({
   onRowClick,
   historyLabel,
   onHistory,
+  onToggleActive,
+  isRowActive,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
 }: DataTableProps<T>) {
   const showActions =
-    (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory;
+    (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory || onToggleActive;
   const showSelect = selectedIds !== undefined && onToggleSelect !== undefined;
   const allSelected =
     showSelect && rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
@@ -136,7 +143,7 @@ export function DataTable<T extends { id: string }>({
                   showSelect && selectedIds.has(row.id) ? 'is-selected' : '',
                 ]
                   .filter(Boolean)
-                  .join(' ')}
+                  .join(' ') + (isRowActive && !isRowActive(row) ? ' is-inactive' : '')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {showSelect ? (
@@ -169,6 +176,23 @@ export function DataTable<T extends { id: string }>({
                         onClick={() => onHistory(row)}
                       >
                         <History size={16} />
+                      </button>
+                    ) : null}
+                    {onToggleActive ? (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={
+                          isRowActive && !isRowActive(row)
+                            ? 'Mark as ACTIVE (it will show again in the lists)'
+                            : 'Mark as INACTIVE (it disappears from every dropdown)'
+                        }
+                        onClick={() => onToggleActive(row)}
+                      >
+                        <Power
+                          size={16}
+                          className={isRowActive && !isRowActive(row) ? 'dtable-power-off' : undefined}
+                        />
                       </button>
                     ) : null}
                     {canEdit && onEdit ? (

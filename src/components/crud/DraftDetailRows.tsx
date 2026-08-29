@@ -4,6 +4,7 @@ import { FormField } from '../ui/FormField';
 import { Modal } from '../ui/Modal';
 import { displayCell } from './displayValue';
 import { useCollection } from '../../hooks/useCollection';
+import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
 import type { SelectOption } from '../ui/SearchableSelect';
 import type { RefMaps } from '../../hooks/useRefMaps';
 import type { DetailConfig, EntityData, FieldConfig, FieldValue } from '../../types/models';
@@ -117,7 +118,17 @@ export function DraftDetailRows({
     if (field.type !== 'ref' || !field.refCollection) return [];
     const data = refMaps[field.refCollection];
     if (!data) return [];
-    let options = [...data.labels.entries()].map(([value, label]) => ({ value, label }));
+    // Sin inactivos en el desplegable (el ya elegido en la fila se conserva).
+    const activeFlag = ACTIVE_FLAG_BY_COLLECTION[field.refCollection];
+    const activeIds =
+      activeFlag === undefined
+        ? null
+        : new Set(data.rows.filter((r) => isActiveRecord(r, activeFlag)).map((r) => r.id));
+    let options = [...data.labels.entries()]
+      .filter(
+        ([value]) => activeIds === null || activeIds.has(value) || value === draft[field.key],
+      )
+      .map(([value, label]) => ({ value, label }));
 
     // Bloqueadas por la ventana de captura (ya capturado, en taller…): fuera.
     const blocked = blockedRefs?.[field.key];
