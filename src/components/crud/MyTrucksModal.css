@@ -1,0 +1,126 @@
+/* ── "My trucks": la estación del BC de un vistazo ─────────────────── */
+.mytrucks-alert {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 12.5px;
+}
+
+.mytrucks-alert ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.mytrucks-alert li {
+  margin-top: 2px;
+}
+
+.mytrucks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.mytrucks-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.mytrucks-search input {
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--text);
+  font-size: 12.5px;
+  width: 170px;
+}
+
+.mytrucks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.mytrucks-list li {
+  display: grid;
+  grid-template-columns: 150px 110px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  font-size: 12.5px;
+}
+
+.mytrucks-label {
+  font-weight: 700;
+}
+
+.mytrucks-state {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.mytrucks-list li.is-added .mytrucks-state {
+  color: var(--success);
+}
+
+.mytrucks-list li.is-pending .mytrucks-state {
+  color: var(--warning);
+}
+
+.mytrucks-list li.is-blocked .mytrucks-state {
+  color: var(--text-soft);
+}
+
+.mytrucks-detail {
+  color: var(--text-soft);
+}
+
+.mytrucks-empty {
+  justify-content: center;
+  color: var(--text-soft);
+}
+
+/* Botón con globo de notificación en la barra del módulo. */
+.mytrucks-btn {
+  position: relative;
+}
+
+.mytrucks-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -80,6 +80,9 @@ export const trucksModule: ModuleConfig = {
   icon: 'Truck',
   autoUserField: 'idUsers',
   coverage: {
+    /** Alcance por BC: su Current station y lo agregado por él. */
+    sourceStationKey: 'idStationActual',
+    targetOwnerKey: 'idUsers',
     sourceCollection: COLLECTIONS.trucks,
     targetCollection: COLLECTIONS.fleet,
     targetKey: 'idTruck',
@@ -379,6 +382,9 @@ export const fleetModule: ModuleConfig = {
   icon: 'Route',
   autoUserField: 'idUsers',
   coverage: {
+    /** Alcance por BC: su Current station y lo agregado por él. */
+    sourceStationKey: 'idStationActual',
+    targetOwnerKey: 'idUsers',
     sourceCollection: COLLECTIONS.trucks,
     targetCollection: COLLECTIONS.fleet,
     targetKey: 'idTruck',

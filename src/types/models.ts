@@ -397,6 +397,10 @@ export interface CoverageConfig {
   sourceLabel: string;
   coveredLabel: string;
   missingLabel: string;
+  /** Campo de estación del registro de referencia (Current station del camión). */
+  sourceStationKey?: string;
+  /** Campo "agregado por" (uid) en la colección destino, para el conteo personal. */
+  targetOwnerKey?: string;
 }
 
 /**

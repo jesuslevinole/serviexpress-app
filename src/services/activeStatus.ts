@@ -26,3 +26,12 @@ export const ACTIVE_FLAG_BY_COLLECTION: Record<string, string> = {
   [COLLECTIONS.trucks]: 'status',
   [COLLECTIONS.assets]: 'status',
 };
+
+/**
+ * Colecciones cuyos desplegables se acotan a las estaciones del usuario
+ * (Current station): un BC de la 770 solo ve camiones de la 770 en BC
+ * Reports, Fleet, Maintenance y cualquier otro selector.
+ */
+export const STATION_KEY_BY_COLLECTION: Record<string, string> = {
+  [COLLECTIONS.trucks]: 'idStationActual',
+};

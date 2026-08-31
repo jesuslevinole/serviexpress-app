@@ -37,6 +37,8 @@ import { CoverageBanner } from './CoverageBanner';
 import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
+import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
+import { Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
@@ -240,6 +242,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const captureSpec = config.captureWindow ?? null;
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);
+  const [myTrucksOpen, setMyTrucksOpen] = useState(false);
   /**
    * Quién configura el horario y quién puede capturar fuera de él se decide
    * en la matriz de Roles (el admin real siempre puede, para corregir).
@@ -487,6 +490,51 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (!mine) return null;
     return `No se puede cargar un nuevo BC Report esta semana. You already created yours (${describeParent(mine)}): open that report and keep adding your trucks there. The next window opens ${formatTexas(plusOneWeekTexas(occ.startAt))}.`;
   };
+
+  /**
+   * Camiones capturados EN ESTA VENTANA en reportes de las estaciones del
+   * usuario, pero que HOY no cuentan para su estación (el catálogo los tiene
+   * en otra estación, de baja o ya no existen). Alimenta el aviso del módulo
+   * y la vista "My trucks": es la notificación de "te movieron un camión".
+   */
+  const extraTakenList = useMemo(() => {
+    if (!captureSpec || pendingStations.length === 0) return [];
+    const { once } = captureSpec;
+    const countedIds = new Set(
+      captureInfo.sourceRows
+        .filter((row) => {
+          const st = row[once.sourceStationKey];
+          return typeof st === 'string' && pendingStations.includes(st);
+        })
+        .map((row) => row.id),
+    );
+    const activeIds = new Set(captureInfo.sourceRows.map((row) => row.id));
+    const byId = new Map(captureInfo.sourceRowsAll.map((row) => [row.id, row]));
+    const out: { id: string; label: string; reason: string }[] = [];
+    captureInfo.taken.forEach((infoTaken, truckId) => {
+      if (countedIds.has(truckId)) return;
+      const parent = infoTaken.parent;
+      const parentStation = parent && reportStationKey ? parent[reportStationKey] : null;
+      if (!(typeof parentStation === 'string' && pendingStations.includes(parentStation))) {
+        return;
+      }
+      const truck = byId.get(truckId);
+      let reason: string;
+      if (!truck) reason = 'no longer in the Trucks catalog';
+      else if (!activeIds.has(truckId)) reason = 'inactive truck';
+      else {
+        const st = truck[once.sourceStationKey];
+        reason =
+          typeof st === 'string' && st !== ''
+            ? `the catalog places it at ${detailRefLabel(COLLECTIONS.stations, st)} today`
+            : 'it has no station assigned in the catalog';
+      }
+      out.push({ id: truckId, label: detailRefLabel(once.sourceCollection, truckId), reason });
+    });
+    return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailRefLabel es estable en la práctica
+  }, [captureSpec, pendingStations, captureInfo.sourceRows, captureInfo.sourceRowsAll, captureInfo.taken, reportStationKey]);
+
 
   /**
    * Aviso dentro del formulario: los camiones que no se pueden elegir, con
@@ -1385,6 +1433,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Export Excel</span>
             </button>
           ) : null}
+          {captureSpec && pendingStations.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn-outline mytrucks-btn"
+              title="Your station's trucks: added, pending, in shop, and the ones that were moved away"
+              onClick={() => setMyTrucksOpen(true)}
+            >
+              <Truck size={16} />
+              <span className="crud-btn-text">My trucks</span>
+              {extraTakenList.length > 0 ? (
+                <span className="mytrucks-badge">{extraTakenList.length}</span>
+              ) : null}
+            </button>
+          ) : null}
           {config.dedupe && isAdminView ? (
             <button
               type="button"
@@ -1473,55 +1535,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           <CaptureWindowBanner
             spec={captureSpec}
             info={captureInfo}
-            extraTaken={(() => {
-              /**
-               * Camiones capturados EN ESTA VENTANA en reportes de las
-               * estaciones del usuario, pero que HOY no cuentan para su
-               * estación (el catálogo los tiene en otra estación, de baja o
-               * ya no existen). Sin esta lista, "el reporte tiene 28" y
-               * "17 of 20" parecen no cuadrar; con ella, 17 + 11 = 28 se ve
-               * ahí mismo.
-               */
-              if (pendingStations.length === 0) return [];
-              const { once } = captureSpec;
-              const countedIds = new Set(
-                captureInfo.sourceRows
-                  .filter((row) => {
-                    const st = row[once.sourceStationKey];
-                    return typeof st === 'string' && pendingStations.includes(st);
-                  })
-                  .map((row) => row.id),
-              );
-              const activeIds = new Set(captureInfo.sourceRows.map((row) => row.id));
-              const byId = new Map(captureInfo.sourceRowsAll.map((row) => [row.id, row]));
-              const out: { id: string; label: string; reason: string }[] = [];
-              captureInfo.taken.forEach((infoTaken, truckId) => {
-                if (countedIds.has(truckId)) return;
-                const parent = infoTaken.parent;
-                const parentStation =
-                  parent && reportStationKey ? parent[reportStationKey] : null;
-                if (!(typeof parentStation === 'string' && pendingStations.includes(parentStation))) {
-                  return;
-                }
-                const truck = byId.get(truckId);
-                let reason: string;
-                if (!truck) reason = 'no longer in the Trucks catalog';
-                else if (!activeIds.has(truckId)) reason = 'inactive truck';
-                else {
-                  const st = truck[once.sourceStationKey];
-                  reason =
-                    typeof st === 'string' && st !== ''
-                      ? `the catalog places it at ${detailRefLabel(COLLECTIONS.stations, st)} today`
-                      : 'it has no station assigned in the catalog';
-                }
-                out.push({
-                  id: truckId,
-                  label: detailRefLabel(once.sourceCollection, truckId),
-                  reason,
-                });
-              });
-              return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
-            })()}
+            extraTaken={extraTakenList}
             refLabel={detailRefLabel}
             describeParent={describeParent}
             scopeStations={pendingStations}
@@ -1545,6 +1559,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             config={config.coverage}
             rows={rows}
             rowsAreSource={config.collection === config.coverage.sourceCollection}
+            scopeStations={pendingStations}
+            ownUid={effectiveUser?.id ?? firebaseUser?.uid ?? null}
           />
         ) : null}
         {canBulkDelete && selectedIds.size > 0 ? (
@@ -1899,6 +1915,42 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
           windowSummaryFor={(rows) => renderWindowSummary(detailParent, rows)}
           onClose={() => setDetailParent(null)}
+        />
+      ) : null}
+
+      {myTrucksOpen && captureSpec ? (
+        <MyTrucksModal
+          stationNames={pendingStations
+            .map((st) => detailRefLabel(COLLECTIONS.stations, st))
+            .join(', ')}
+          trucks={((): MyTruckRow[] => {
+            const { once } = captureSpec;
+            return captureInfo.sourceRows
+              .filter((row) => {
+                const st = row[once.sourceStationKey];
+                return typeof st === 'string' && pendingStations.includes(st);
+              })
+              .map((row) => {
+                const takenInfo = captureInfo.taken.get(row.id);
+                const blockedReason = captureInfo.blocked.get(row.id);
+                const state: MyTruckRow['state'] = takenInfo
+                  ? 'added'
+                  : blockedReason
+                    ? 'blocked'
+                    : 'pending';
+                return {
+                  id: row.id,
+                  label: detailRefLabel(once.sourceCollection, row.id),
+                  state,
+                  detail: takenInfo
+                    ? `in ${describeParent(takenInfo.parent)}`
+                    : (blockedReason ?? 'not yet added in this window'),
+                };
+              })
+              .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+          })()}
+          moved={extraTakenList}
+          onClose={() => setMyTrucksOpen(false)}
         />
       ) : null}
 

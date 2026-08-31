@@ -2,7 +2,11 @@ import { ChevronLeft, ChevronRight, Columns3, Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
-import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
+import {
+  ACTIVE_FLAG_BY_COLLECTION,
+  STATION_KEY_BY_COLLECTION,
+  isActiveRecord,
+} from '../../services/activeStatus';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
 import { QuickEditRefModal } from '../ui/QuickEditRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
@@ -209,7 +213,17 @@ export function CrudForm({
     userScopes,
   ]);
 
-  const { can, canOr, isAdminView, profile, role } = useAuth();
+  const { can, canOr, isAdminView, profile, role, viewAs } = useAuth();
+  /**
+   * Estaciones del usuario EFECTIVO (el simulado en View as): acotan los
+   * desplegables de camiones a su Current station. Admin y oficina ven todo.
+   */
+  const effectiveScope = viewAs ?? profile;
+  const optionScopeStations = useMemo(
+    () =>
+      isAdminView || effectiveScope?.isOffice === true ? [] : (effectiveScope?.scopeStations ?? []),
+    [isAdminView, effectiveScope],
+  );
 
   /**
    * Estaciones a las que el usuario está limitado. Vacío = sin límite (admin,
@@ -239,6 +253,18 @@ export function CrudForm({
       if (activeFlag) {
         const current = values[field.key];
         rows = rows.filter((row) => isActiveRecord(row, activeFlag) || row.id === current);
+      }
+      // Camiones: solo los de la Current station del usuario (el ya elegido
+      // en un registro viejo se conserva para no vaciar el campo).
+      const stationKey = STATION_KEY_BY_COLLECTION[field.refCollection];
+      if (stationKey && optionScopeStations.length > 0) {
+        const current = values[field.key];
+        rows = rows.filter((row) => {
+          const st = row[stationKey];
+          return (
+            (typeof st === 'string' && optionScopeStations.includes(st)) || row.id === current
+          );
+        });
       }
       // Filtro fijo, o dependiente del valor actual de otro campo del formulario.
       let filter = field.refFilter;
@@ -306,7 +332,7 @@ export function CrudForm({
         .sort((a, b) => a.label.localeCompare(b.label));
     });
     return map;
-  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs]);
+  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs, optionScopeStations]);
 
   /** Diferencia de millaje en vivo: Next mant − Actual Mileage. */
   const mileageDiff = useMemo(() => {
