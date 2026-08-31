@@ -490,6 +490,11 @@ export interface ModuleConfig {
    */
   activeToggle?: string;
   /**
+   * Los usuarios acotados a estaciones se suscriben SOLO a los registros de
+   * sus estaciones (cláusula "in" por servidor): menos lecturas por sesión.
+   */
+  scopeServerSide?: boolean;
+  /**
    * Habilita "Merge duplicates" (solo admin): agrupa registros cuyo nombre
    * es la misma persona escrita distinto ("ADAMS, Rayjohnal" y "Rayjohnal
    * Adams"), conserva uno, reapunta hacia él las referencias listadas y

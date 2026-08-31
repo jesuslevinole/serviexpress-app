@@ -165,6 +165,12 @@ export function subscribeToCollection(
     current.unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        // Solo los cambios que vienen del servidor cuestan lecturas.
+        let fresh = 0;
+        snapshot.docChanges().forEach((change) => {
+          if (!change.doc.metadata.fromCache) fresh += 1;
+        });
+        trackReads(collectionName, fresh);
         const rows = snapshot.docs.map((d) => toEntity(d.id, d.data()));
         rows.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
         current.rows = rows;
@@ -186,6 +192,24 @@ export function subscribeToCollection(
   };
 }
 
+/* ── Monitor de lecturas de la sesión ─────────────────────────────────
+ * Cuenta los documentos ENTREGADOS POR EL SERVIDOR (los que Firestore
+ * factura; los servidos por el caché local no cuestan). Sirve para ver en
+ * vivo qué colección está gastando las lecturas del plan. */
+const readTally = new Map<string, number>();
+
+function trackReads(source: string, count: number) {
+  if (count <= 0) return;
+  readTally.set(source, (readTally.get(source) ?? 0) + count);
+}
+
+export function getReadTally(): { total: number; entries: { source: string; reads: number }[] } {
+  const entries = [...readTally.entries()]
+    .map(([source, reads]) => ({ source, reads }))
+    .sort((a, b) => b.reads - a.reads);
+  return { total: entries.reduce((acc, e) => acc + e.reads, 0), entries };
+}
+
 /** Conteo de documentos sin traerlos: 1 lectura en vez de N. */
 export async function countDocuments(
   collectionName: string,
@@ -198,6 +222,7 @@ export async function countDocuments(
   const snapshot = await getCountFromServer(
     query(collection(db, collectionName), ...constraints),
   );
+  trackReads(`${collectionName} (aggregate)`, 1);
   return snapshot.data().count;
 }
 
@@ -205,6 +230,7 @@ export async function countDocuments(
 /** Lectura puntual de una colección (para reportes; no deja listener abierto). */
 export async function fetchCollection(collectionName: string): Promise<EntityData[]> {
   const snapshot = await getDocs(collection(db, collectionName));
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (fetch)`, snapshot.size);
   return snapshot.docs.map((d) => toEntity(d.id, d.data()));
 }
 
@@ -226,6 +252,7 @@ export async function countDocumentsSafe(
       const snapshot = await getDocs(
         query(collection(db, collectionName), where(filter.field, '==', filter.value)),
       );
+      if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (count fallback)`, snapshot.size);
       return snapshot.size;
     } catch {
       throw error;
@@ -241,6 +268,7 @@ export async function fetchDocumentsWhere(
   const snapshot = await getDocs(
     query(collection(db, collectionName), where(filter.field, '==', filter.value)),
   );
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (fetch)`, snapshot.size);
   return snapshot.docs.map((d) => toEntity(d.id, d.data()));
 }
 

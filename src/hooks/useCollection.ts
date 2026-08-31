@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { subscribeToCollection, type CollectionFilter } from '../services/firestoreService';
+import {
+  subscribeToCollection,
+  type CollectionFilter,
+  type QueryClause,
+} from '../services/firestoreService';
 import type { EntityData } from '../types/models';
 
 interface UseCollectionResult {
@@ -14,6 +18,8 @@ export function useCollection(
   filter?: CollectionFilter,
   /** Tope de documentos (los más recientes). Sin él se lee todo. */
   limit?: number,
+  /** Cláusulas extra por servidor (alcance por estaciones, rangos). */
+  clauses?: QueryClause[],
 ): UseCollectionResult {
   const [rows, setRows] = useState<EntityData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,10 +51,11 @@ export function useCollection(
         setLoading(false);
       },
       activeFilter,
-      limit !== undefined ? { limit } : undefined,
+      limit !== undefined || clauses !== undefined ? { limit, clauses } : undefined,
     );
     return unsubscribe;
-  }, [collectionName, filterField, filterValue, limit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clausesKey representa a clauses
+  }, [collectionName, filterField, filterValue, limit, JSON.stringify(clauses ?? null)]);
 
   return { rows, loading, error };
 }

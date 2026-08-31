@@ -17,7 +17,7 @@ import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
   adjustCounter,
-  countDocumentsSafe,
+  countDocuments,
   createDocument,
   fetchCollection,
   setDocument,
@@ -184,10 +184,31 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       ),
     [config.fields, profile],
   );
+  /**
+   * Alcance POR SERVIDOR: un usuario acotado a estaciones (los BC) solo
+   * descarga los registros de SUS estaciones, no los 500 del módulo. Baja el
+   * consumo de lecturas por sesión y por reconexión. Solo en módulos que lo
+   * declaran (scopeServerSide) y con la cláusula "in" simple (sin orderBy,
+   * para no requerir índice compuesto); el orden lo pone el cliente.
+   */
+  const scopeClauses = useMemo(() => {
+    if (config.scopeServerSide !== true) return undefined;
+    if (isAdminView || (viewAs === null && profile?.isOffice === true)) return undefined;
+    const scoped = viewAs ?? profile;
+    if (scoped?.isOffice === true) return undefined;
+    const stations = scoped?.scopeStations ?? [];
+    if (stations.length === 0 || stations.length > 30) return undefined;
+    const stationKey = config.fields.find(
+      (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
+    )?.key;
+    if (!stationKey) return undefined;
+    return [{ op: 'in' as const, field: stationKey, values: stations }];
+  }, [config.scopeServerSide, config.fields, isAdminView, viewAs, profile]);
   const { rows: allRows, loading, error } = useCollection(
     config.collection,
     undefined,
-    config.listLimit,
+    scopeClauses ? undefined : config.listLimit,
+    scopeClauses,
   );
   const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
   const scopeFilter = useScopeFilter();
@@ -717,6 +738,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    */
   const COUNT_OK_VERSION = 2;
   useEffect(() => {
+    // Candados de consumo: SOLO el admin real dispara la verificación (los
+    // BC no deben pagar lecturas por mantenimiento de datos), y el conteo
+    // usa exclusivamente la consulta de AGREGACIÓN (1 lectura por reporte);
+    // el respaldo que descargaba los documentos queda fuera de este ciclo.
+    if (!isAdminView) return;
     if (!countField || countCollection === '' || loading || backfillRunning.current) return;
     // Se (re)cuenta todo lo que no tenga la marca de verificado: cubre los
     // registros nunca contados Y los que la versión anterior contó sobre la
@@ -747,14 +773,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           if (backfilled.current.has(row.id)) continue;
           backfilled.current.add(row.id);
           try {
-            let total = await countDocumentsSafe(countCollection, {
+            let total = await countDocuments(countCollection, {
               field: countParentKey,
               value: row.id,
             });
             // Datos migrados con enlaces mixtos: si el espejo dice 0, se
             // verifica también la colección de renglones y se toma el mayor.
             if (total === 0 && fallbackCollection !== '') {
-              total = await countDocumentsSafe(fallbackCollection, {
+              total = await countDocuments(fallbackCollection, {
                 field: fallbackKey,
                 value: row.id,
               });

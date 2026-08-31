@@ -632,6 +632,8 @@ const bcDetailFields: FieldConfig[] = [
 /** Módulo BD_BCREPORT + BD_BCREPORTDETAIL — maestro-detalle. */
 export const bcReportsModule: ModuleConfig = {
   id: 'bcReports',
+  /** Los BC solo descargan los reportes de SUS estaciones (ahorro de lecturas). */
+  scopeServerSide: true,
   collection: COLLECTIONS.bcReports,
   title: 'BC Reports',
   icon: 'ClipboardCheck',
