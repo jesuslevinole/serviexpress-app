@@ -19,6 +19,7 @@ import { COLLECTIONS } from '../config/collections';
 import { CRUD_MODULES } from '../config/modules';
 import { countDocuments, type CollectionFilter } from '../services/firestoreService';
 import { exportReportsWorkbook } from '../services/reportsExport';
+import { useAlertThresholds } from '../hooks/useAlertThresholds';
 import { Spinner } from '../components/ui/Spinner';
 import './DashboardPage.css';
 
@@ -37,6 +38,7 @@ interface StatCard {
 }
 
 export function DashboardPage() {
+  const alertThresholds = useAlertThresholds();
   const { can, profile, viewAs, isAdminView, effectiveRole } = useAuth();
   const { moduleTitle } = useUiConfig();
 
@@ -188,7 +190,7 @@ export function DashboardPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const result = await exportReportsWorkbook(chosen, from, to);
+      const result = await exportReportsWorkbook(chosen, from, to, alertThresholds);
       setNotice(`Done: ${result.rows} records across ${result.sheets} sheets.`);
     } catch {
       setNotice('The report could not be generated. Try again.');

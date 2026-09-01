@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { saveAlertThresholds, DEFAULT_THRESHOLDS } from '../../services/alertThresholds';
+import {
+  saveAlertThresholds,
+  ALERT_EXEMPT_KEYS,
+  DEFAULT_THRESHOLDS,
+} from '../../services/alertThresholds';
 import type { AlertThresholds } from '../../services/alertThresholds';
 import type { FieldConfig, ModuleConfig } from '../../types/models';
 import './AlertThresholdsModal.css';
@@ -18,6 +22,7 @@ function numericFields(config: ModuleConfig): FieldConfig[] {
   const out: FieldConfig[] = [];
   [...config.fields, ...(config.detail?.fields ?? [])].forEach((field) => {
     if (field.type !== 'number' || field.compute !== undefined) return;
+    if (ALERT_EXEMPT_KEYS.has(field.key)) return;
     if (seen.has(field.key)) return;
     seen.add(field.key);
     out.push(field);

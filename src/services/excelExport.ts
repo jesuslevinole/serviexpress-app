@@ -1,6 +1,8 @@
 export interface ExcelColumn {
   header: string;
   values: string[];
+  /** Paralelo a values: true = esa celda va en ROJO (umbral de alerta). */
+  alerts?: boolean[];
 }
 
 /**
@@ -117,13 +119,15 @@ async function writeWorkbook(
       const value = col.values[r] ?? '';
       cell.value = value;
       const statusColor = STATUS_COLORS[value];
-      // Alerta: diferencia de millaje agotada (<= 0) se marca en rojo.
+      // Alerta: la marca viene calculada con los umbrales configurados
+      // (Alerts), o del modo heredado "<= 0 por encabezado".
       const numeric = Number(String(value).replace(/,/g, ''));
       const isAlert =
-        (options.alertWhenNotPositive ?? []).includes(col.header) &&
-        value !== '' &&
-        Number.isFinite(numeric) &&
-        numeric <= 0;
+        col.alerts?.[r] === true ||
+        ((options.alertWhenNotPositive ?? []).includes(col.header) &&
+          value !== '' &&
+          Number.isFinite(numeric) &&
+          numeric <= 0);
 
       if (isAlert) {
         cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFD93025' } };

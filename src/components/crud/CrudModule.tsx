@@ -1447,6 +1447,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             column.from === 'parent' ? parentById.get(String(row[spec.parentKey] ?? '')) : row;
           return source ? displayCell(column.field, source, exportLabel) : '';
         }),
+        // El rojo del app viaja al Excel: misma regla de umbrales.
+        alerts: linked.map((row) => {
+          const source =
+            column.from === 'parent' ? parentById.get(String(row[spec.parentKey] ?? '')) : row;
+          return source
+            ? isAlertValue(column.field, effectiveValue(column.field, source), alertThresholds)
+            : false;
+        }),
       })),
       {
         generatedBy: profile?.name ?? undefined,
@@ -1477,6 +1485,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         .map((field) => ({
           header: field.label,
           values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
+          alerts: rowsForExport.map((row) =>
+            isAlertValue(field, effectiveValue(field, row), alertThresholds),
+          ),
         })),
       { generatedBy: profile?.name ?? undefined },
     );

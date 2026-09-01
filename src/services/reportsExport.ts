@@ -2,6 +2,8 @@ import { fetchCollection } from './firestoreService';
 import { exportWorkbook, type ExcelSheet } from './excelExport';
 import { REF_LABEL_DEPENDENCIES, buildRefLabel } from '../config/collections';
 import { displayCell } from '../components/crud/displayValue';
+import { effectiveValue } from '../components/crud/displayValue';
+import { isAlertValue } from '../hooks/useAlertThresholds';
 import type { EntityData, ModuleConfig } from '../types/models';
 
 /** Campo por el que se filtra el rango: la fecha del registro o la de captura. */
@@ -26,6 +28,8 @@ export async function exportReportsWorkbook(
   modules: ModuleConfig[],
   from: string,
   to: string,
+  /** Umbrales de alerta: las celdas en o bajo su umbral salen en ROJO. */
+  thresholds: Record<string, number> = {},
 ): Promise<{ sheets: number; rows: number }> {
   // 1. Catálogos referenciados por los módulos elegidos (para resolver nombres).
   const refCollections = new Set<string>();
@@ -79,6 +83,7 @@ export async function exportReportsWorkbook(
       columns: config.fields.map((field) => ({
         header: field.label,
         values: filtered.map((row) => displayCell(field, row, refLabel)),
+        alerts: filtered.map((row) => isAlertValue(field, effectiveValue(field, row), thresholds)),
       })),
     });
   }

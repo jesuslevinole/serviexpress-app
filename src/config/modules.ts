@@ -180,20 +180,6 @@ export const trucksModule: ModuleConfig = {
   },
   relatedViews: [
     {
-      id: 'moves',
-      title: 'Station & Entity changes',
-      collection: COLLECTIONS.truckHistory,
-      foreignKey: 'idTruck',
-      emptyMessage: 'No station or entity changes recorded for this truck yet',
-      fields: [
-        { key: 'date', label: 'Date', type: 'date' },
-        { key: 'fieldLabel', label: 'Change', type: 'text' },
-        { key: 'fromLabel', label: 'From', type: 'text' },
-        { key: 'toLabel', label: 'To', type: 'text' },
-        { key: 'idUsers', label: 'By', type: 'ref', refCollection: COLLECTIONS.users },
-      ],
-    },
-    {
       id: 'shop',
       title: 'Shop',
       collection: COLLECTIONS.shopOrders,
@@ -283,7 +269,7 @@ export const trucksModule: ModuleConfig = {
     },
     {
       id: 'moves',
-      title: 'Entity / Station history',
+      title: 'Station & Entity changes',
       collection: COLLECTIONS.truckHistory,
       foreignKey: 'idTruck',
       emptyMessage: 'This truck has not changed entity or station yet',

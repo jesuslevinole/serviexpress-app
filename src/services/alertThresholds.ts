@@ -16,6 +16,12 @@ export const DEFAULT_THRESHOLDS: Record<string, number> = {
 
 export type AlertThresholds = Record<string, number>;
 
+/**
+ * Campos numéricos SIN alerta configurable (decisión del cliente): millaje
+ * actual, next mant heredado del camión, dolly y baterías no se pintan.
+ */
+export const ALERT_EXEMPT_KEYS = new Set(['mileage', 'nextMant', 'dolly', 'batteries']);
+
 export function subscribeAlertThresholds(
   onData: (thresholds: AlertThresholds) => void,
 ): () => void {

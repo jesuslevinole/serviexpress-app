@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, FileText, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
+import { Camera, FileText, Image as ImageIcon, RefreshCw, Trash2, Upload } from 'lucide-react';
 import {
   deleteAttachment,
+  kindOf,
   listAttachments,
   uploadAttachment,
   type AttachmentListing,
@@ -60,7 +61,15 @@ export function AttachmentsPanel({ folder, canEdit }: AttachmentsPanelProps) {
     setError(null);
     try {
       for (const file of Array.from(files)) {
-        await uploadAttachment(folder, file);
+        const uploaded = await uploadAttachment(folder, file);
+        // Lo recién subido se ve DE INMEDIATO, sin esperar el re-listado.
+        const kind = kindOf(file);
+        setListing((prev) => ({
+          images:
+            kind === 'imagen' ? [uploaded, ...(prev?.images ?? [])] : (prev?.images ?? []),
+          documents:
+            kind === 'documento' ? [uploaded, ...(prev?.documents ?? [])] : (prev?.documents ?? []),
+        }));
       }
       refresh();
     } catch (err) {
@@ -91,14 +100,11 @@ export function AttachmentsPanel({ folder, canEdit }: AttachmentsPanelProps) {
 
   return (
     <div className="attach">
-      <p className="attach-folder">
-        Saved in <code>{folder}/imagen|documento/</code>
-      </p>
       {canEdit ? (
         <div className="attach-actions">
           <button
             type="button"
-            className="btn btn-outline"
+            className="btn btn-primary"
             disabled={busy}
             onClick={() => cameraInput.current?.click()}
           >
@@ -107,12 +113,21 @@ export function AttachmentsPanel({ folder, canEdit }: AttachmentsPanelProps) {
           </button>
           <button
             type="button"
-            className="btn btn-outline"
+            className="btn btn-primary"
             disabled={busy}
             onClick={() => fileInput.current?.click()}
           >
             <Upload size={15} />
             Upload photo / PDF
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            title="Refresh the file list"
+            disabled={busy}
+            onClick={refresh}
+          >
+            <RefreshCw size={15} />
           </button>
           {busy ? <span className="attach-busy">Working…</span> : null}
           <input
@@ -133,6 +148,9 @@ export function AttachmentsPanel({ folder, canEdit }: AttachmentsPanelProps) {
           />
         </div>
       ) : null}
+      <p className="attach-folder">
+        Saved in <code>{folder}/imagen|documento/</code>
+      </p>
       {error ? <p className="attach-error">{error}</p> : null}
       {listing === null && error === null ? <p className="attach-empty">Loading files…</p> : null}
       {listing !== null ? (

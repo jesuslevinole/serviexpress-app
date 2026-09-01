@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  ALERT_EXEMPT_KEYS,
   DEFAULT_THRESHOLDS,
   subscribeAlertThresholds,
   type AlertThresholds,
@@ -20,6 +21,7 @@ export function isAlertValue(
   thresholds: AlertThresholds,
 ): boolean {
   if (field.type !== 'number') return false;
+  if (ALERT_EXEMPT_KEYS.has(field.key)) return false;
   const limit = thresholds[field.key];
   if (limit === undefined) return false;
   const numeric = typeof value === 'number' ? value : Number(value);

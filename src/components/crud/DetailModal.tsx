@@ -389,6 +389,7 @@ export function DetailModal({
       detailFields.map((field) => ({
         header: field.label,
         values: rows.map((row) => displayValue(field, scalar(row[field.key]), refLabel)),
+        alerts: rows.map((row) => isAlertValue(field, scalar(row[field.key]), alertThresholds)),
       })),
     );
   };
