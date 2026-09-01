@@ -39,6 +39,9 @@ import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
 import { RecordPeekModal } from './RecordPeekModal';
+import { DetailTabs } from './DetailTabs';
+import { ChangeHistoryList } from './ChangeHistoryList';
+import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
 import { Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
@@ -305,6 +308,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         return null;
     }
   };
+  /** Nombre auditables del usuario REAL (con "(as X)" cuando simula). */
+  const auditName = (): string => {
+    const real = profile?.name ?? firebaseUser?.email ?? 'unknown';
+    return viewAs ? `${real} (as ${viewAs.name ?? viewAs.id})` : real;
+  };
+  /** Etiqueta legible de un registro para la bitácora. */
+  const auditLabel = (record: EntityData): string =>
+    displayValue(config.fields[0], effectiveValue(config.fields[0], record), refLabel);
+
   /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
   const captureLocked = lockMessageFor(captureInfo.status);
   const lockedRightNow = (): string | null =>
@@ -888,11 +900,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               message.toLowerCase().includes('quota') ||
               (error as { code?: string }).code === 'resource-exhausted'
             ) {
-              firstError =
-                "Firestore's FREE daily quota is exhausted — counting is paused and will resume another day (upgrading to the Blaze plan removes this limit)";
-              failed += 1;
-              backfillFailed.current.add(row.id);
-              console.error('[trucks-count] quota exhausted, aborting', error);
+              // Se libera el registro para que la cuenta se reanude SOLA en
+              // otra sesión, y el aviso baja de rojo a informativo.
+              firstError = 'QUOTA_PAUSE';
+              backfilled.current.delete(row.id);
+              console.warn('[trucks-count] daily quota exhausted, pausing');
               break;
             }
             // Se sigue con el resto; el error exacto se muestra en pantalla.
@@ -914,11 +926,23 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
       } finally {
         backfillRunning.current = false;
-        setBackfillState(
-          failed > 0
-            ? { module: owner, done, failed, total: pending.length, running: false, error: firstError }
-            : null,
-        );
+        if (firstError === 'QUOTA_PAUSE') {
+          setBackfillState({
+            module: owner,
+            done,
+            failed: 0,
+            total: pending.length,
+            running: false,
+            error:
+              'Counting is paused: the FREE Firestore daily quota ran out. It resumes by itself another day — nothing to do (the Blaze plan removes this limit).',
+          });
+        } else {
+          setBackfillState(
+            failed > 0
+              ? { module: owner, done, failed, total: pending.length, running: false, error: firstError }
+              : null,
+          );
+        }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- config es estable por módulo; el loop captura sus valores al arrancar
@@ -1026,6 +1050,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }
       if (editing) {
         await updateDocument(config.collection, editing.id, payload);
+        // Auditoría universal: cada campo cambiado, con valores legibles.
+        void logRecordChange({
+          collection: config.collection,
+          recordId: editing.id,
+          action: 'update',
+          moduleTitle: config.title,
+          recordLabel: auditLabel(editing),
+          byUid: firebaseUser?.uid ?? '',
+          byName: auditName(),
+          changes: buildFieldChanges(config.fields, editing, payload, (field, value) =>
+            displayValue(field, value, refLabel),
+          ),
+        });
         // Bitácora: deja constancia de los cambios en los campos vigilados.
         if (config.changeLog) {
           for (const key of config.changeLog.watch) {
@@ -1107,6 +1144,22 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           payload[`${config.detail.countField}Ok`] = true;
         }
         const newId = await createDocument(config.collection, payload);
+        void logRecordChange({
+          collection: config.collection,
+          recordId: newId,
+          action: 'create',
+          moduleTitle: config.title,
+          recordLabel: displayValue(
+            config.fields[0],
+            payload[config.fields[0].key] ?? null,
+            refLabel,
+          ),
+          byUid: firebaseUser?.uid ?? '',
+          byName: auditName(),
+          changes: buildFieldChanges(config.fields, null, payload, (field, value) =>
+            displayValue(field, value, refLabel),
+          ),
+        });
         // Los renglones capturados dentro del alta se guardan ya con el id
         // del maestro recién creado: así el uniforme se pide de una sola vez.
         if (config.detail && draftRows.length > 0) {
@@ -1167,6 +1220,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setBusy(true);
     try {
       await deleteDocument(config.collection, deleting.id);
+      void logRecordChange({
+        collection: config.collection,
+        recordId: deleting.id,
+        action: 'delete',
+        moduleTitle: config.title,
+        recordLabel: auditLabel(deleting),
+        byUid: firebaseUser?.uid ?? '',
+        byName: auditName(),
+        changes: [],
+      });
       setDeleting(null);
     } catch {
       setDeleting(null);
@@ -1557,7 +1620,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           </p>
         ) : null}
         {backfillState && backfillState.module === config.id ? (
-          <p className={`crud-backfill-note ${!backfillState.running && backfillState.failed > 0 ? 'is-error' : ''}`}>
+          <p
+            className={`crud-backfill-note ${
+              !backfillState.running && backfillState.failed > 0
+                ? 'is-error'
+                : !backfillState.running
+                  ? 'is-paused'
+                  : ''
+            }`}
+          >
             {backfillState.running ? (
               <>
                 <Loader2 size={14} className="crud-backfill-spin" />
@@ -1565,6 +1636,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                 {backfillState.total}
                 {backfillState.error ? ` · first error: ${backfillState.error}` : ''}
               </>
+            ) : backfillState.failed === 0 ? (
+              <>{backfillState.error}</>
             ) : (
               <>
                 {backfillState.failed} of {backfillState.total} reports could not be counted
@@ -1770,12 +1843,29 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           refLabels={refLabel}
           extra={
             <>
-              {config.relatedViews?.map((view) => (
-                <section key={view.id} className="crud-related">
-                  <h3>{view.title}</h3>
-                  <RelatedList view={view} recordId={viewing.id} />
+              {config.relatedViews && config.relatedViews.length > 0 ? (
+                <section className="crud-related">
+                  <DetailTabs
+                    tabs={[
+                      ...config.relatedViews.map((view) => ({
+                        id: view.id,
+                        title: view.title,
+                        content: <RelatedList view={view} recordId={viewing.id} />,
+                      })),
+                      {
+                        id: '__changes',
+                        title: 'All changes',
+                        content: <ChangeHistoryList recordId={viewing.id} />,
+                      },
+                    ]}
+                  />
                 </section>
-              ))}
+              ) : (
+                <section className="crud-related">
+                  <h3>Changes</h3>
+                  <ChangeHistoryList recordId={viewing.id} />
+                </section>
+              )}
               {config.detail && detailEnabled(viewing) ? (
                 <DetailSummary
                 detail={config.detail}

@@ -260,3 +260,9 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+.crud-backfill-note.is-paused {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
