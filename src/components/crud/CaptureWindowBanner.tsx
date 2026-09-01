@@ -154,6 +154,22 @@ export function CaptureWindowBanner({
   if (info.loading) return null;
 
   if (!info.window || !occurrence || status === 'unset') {
+    // El horario no se pudo LEER (cuota diaria agotada, sin conexión): es un
+    // problema temporal, no de configuración — el aviso debe decir la verdad.
+    if (info.loadError !== null) {
+      return (
+        <section className="cwin is-unset">
+          <div className="cwin-head">
+            <Lock size={16} />
+            <span className="cwin-text">
+              <strong>{spec.label}:</strong> the weekly schedule could not be loaded right now (no
+              connection, or the daily Firestore quota ran out). The schedule is still set — try
+              again in a while.
+            </span>
+          </div>
+        </section>
+      );
+    }
     return (
       <section className="cwin is-unset">
         <div className="cwin-head">

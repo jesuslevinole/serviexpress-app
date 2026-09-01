@@ -254,16 +254,32 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       config.viewTabs.map((tab) => [tab.id, tab.match ? inScope.filter(tab.match).length : inScope.length]),
     );
   }, [allRows, scopeFilter, config]);
-  const refMaps = useRefMaps(config.fields);
+  /**
+   * Estaciones del usuario EFECTIVO para acotar catálogos (camiones/drivers
+   * de SU estación): las cargas frías del teléfono de un BC dejan de
+   * descargar los catálogos completos. Admin y oficina: sin recorte.
+   */
+  const refScopeStations = useMemo(() => {
+    if (isAdminView || (viewAs === null && profile?.isOffice === true)) return [];
+    const scoped = viewAs ?? profile;
+    if (scoped?.isOffice === true) return [];
+    return scoped?.scopeStations ?? [];
+  }, [isAdminView, viewAs, profile]);
+  const refMaps = useRefMaps(config.fields, refScopeStations);
 
-  const detailRefMaps = useRefMaps(config.detail?.fields ?? []);
+  // El detalle de módulos CON ventana conserva el catálogo completo: las
+  // etiquetas de camiones de otras estaciones (movidos) salen de aquí.
+  const detailRefMaps = useRefMaps(
+    config.detail?.fields ?? [],
+    config.captureWindow ? [] : refScopeStations,
+  );
 
   /**
    * Ventana de captura (BC Reports): abre y cierra a la hora de Texas que
    * fija el admin; dentro de ella cada camión entra una sola vez. El admin
    * real (sin "View as") no queda sujeto al horario, para poder corregir.
    */
-  const captureInfo = useCaptureWindow(config, allRows);
+  const captureInfo = useCaptureWindow(config, allRows, refScopeStations);
   const captureSpec = config.captureWindow ?? null;
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);
@@ -304,6 +320,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (captureInfo.loading) return null;
     switch (status) {
       case 'unset':
+        // Si el horario no se pudo LEER (cuota diaria agotada, sin conexión),
+        // el problema es temporal y el mensaje debe decirlo, no culpar a la
+        // configuración: el horario sigue existiendo.
+        if (captureInfo.loadError !== null) {
+          return `${captureSpec.label}: the weekly schedule could not be loaded right now (no connection, or the daily Firestore quota ran out). The schedule is still set — try again in a while.`;
+        }
         return `${captureSpec.label}: no weekly schedule is set. Ask the administrator to open one.`;
       case 'before':
         return captureInfo.occurrence && captureInfo.window

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { subscribeToCollection } from '../services/firestoreService';
+import { subscribeToCollection, type QueryClause } from '../services/firestoreService';
+import { STATION_KEY_BY_COLLECTION } from '../services/activeStatus';
 import { REF_LABEL_DEPENDENCIES, buildRefLabel } from '../config/collections';
 import type { EntityData, FieldConfig } from '../types/models';
 
@@ -16,7 +17,16 @@ export type RefMaps = Record<string, RefData>;
  * Se suscribe una sola vez a cada colección referenciada por los campos
  * de un módulo y devuelve mapas id -> nombre para mostrar y para los selects.
  */
-export function useRefMaps(fields: FieldConfig[]): RefMaps {
+export function useRefMaps(
+  fields: FieldConfig[],
+  /**
+   * Estaciones del usuario acotado: los catálogos CON estación (camiones,
+   * drivers) se suscriben SOLO a esas estaciones — un teléfono de BC en
+   * carga fría deja de descargar 600+ documentos que no le tocan. Vacío o
+   * ausente = catálogos completos (admin/oficina).
+   */
+  scopeStations: string[] = [],
+): RefMaps {
   const collections = useMemo(() => {
     const set = new Set<string>();
     fields.forEach((f) => {
@@ -29,7 +39,8 @@ export function useRefMaps(fields: FieldConfig[]): RefMaps {
     return Array.from(set).sort();
   }, [fields]);
 
-  const collectionsKey = collections.join('|');
+  const scopeKey = scopeStations.length > 0 && scopeStations.length <= 30 ? scopeStations.join(',') : '';
+  const collectionsKey = `${collections.join('|')}#${scopeKey}`;
   const [maps, setMaps] = useState<RefMaps>({});
 
   useEffect(() => {
@@ -46,8 +57,13 @@ export function useRefMaps(fields: FieldConfig[]): RefMaps {
       return typeof name === 'string' && name !== '' ? name : undefined;
     };
 
-    const unsubscribers = collections.map((collectionName) =>
-      subscribeToCollection(
+    const unsubscribers = collections.map((collectionName) => {
+      const stationKey = STATION_KEY_BY_COLLECTION[collectionName];
+      const clauses: QueryClause[] | undefined =
+        stationKey !== undefined && scopeKey !== ''
+          ? [{ op: 'in', field: stationKey, values: scopeKey.split(',') }]
+          : undefined;
+      return subscribeToCollection(
         collectionName,
         (rows) => {
           rowsByCollection.set(collectionName, rows);
@@ -69,8 +85,10 @@ export function useRefMaps(fields: FieldConfig[]): RefMaps {
         () => {
           setMaps((prev) => ({ ...prev, [collectionName]: { labels: new Map(), rows: [] } }));
         },
-      ),
-    );
+        undefined,
+        clauses !== undefined ? { clauses } : undefined,
+      );
+    });
     return () => unsubscribers.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionsKey]);

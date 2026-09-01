@@ -73,6 +73,8 @@ const contextFields = (
 /** Módulo BD_TRUCK — Camiones. */
 export const trucksModule: ModuleConfig = {
   id: 'trucks',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */
   activeToggle: 'status',
   collection: COLLECTIONS.trucks,
@@ -292,6 +294,8 @@ export const trucksModule: ModuleConfig = {
 /** Módulo BD_DRIVER — Drivers. */
 export const driversModule: ModuleConfig = {
   id: 'drivers',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */
   activeToggle: 'status',
   collection: COLLECTIONS.drivers,
@@ -378,6 +382,8 @@ export const driversModule: ModuleConfig = {
 /** Módulo BD_ASSET — Assets. */
 export const assetsModule: ModuleConfig = {
   id: 'assets',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */
   activeToggle: 'status',
   collection: COLLECTIONS.assets,
@@ -406,6 +412,8 @@ export const assetsModule: ModuleConfig = {
 /** Módulo BD_FLEET — Asignación diaria de rutas. */
 export const fleetModule: ModuleConfig = {
   id: 'fleet',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   collection: COLLECTIONS.fleet,
   title: 'Fleet',
   icon: 'Route',
@@ -971,6 +979,8 @@ export const bcReportsModule: ModuleConfig = {
 /** Módulo BD_RENTAL — Rentas. */
 export const rentalsModule: ModuleConfig = {
   id: 'rentals',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   collection: COLLECTIONS.rentals,
   title: 'Rentals',
   icon: 'KeySquare',
@@ -1898,6 +1908,8 @@ const teamFields: FieldConfig[] = [
 /** Entradas de uniformes al inventario (los ingresos que luego se dan de baja). */
 export const uniformEntriesModule: ModuleConfig = {
   id: 'uniformInventory',
+  /** Tope de seguridad: nunca descargar la colección completa sin límite. */
+  listLimit: 500,
   collection: COLLECTIONS.uniformEntries,
   title: 'Uniform entries',
   icon: 'Shirt',

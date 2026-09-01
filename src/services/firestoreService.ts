@@ -198,10 +198,64 @@ export function subscribeToCollection(
  * factura; los servidos por el caché local no cuestan). Sirve para ver en
  * vivo qué colección está gastando las lecturas del plan. */
 const readTally = new Map<string, number>();
+const TALLY_KEY = 'sx_read_tally_v1';
+let tallyDirty = false;
+
+/** Acumulado ENTRE sesiones (localStorage): permite revisar el consumo real
+ * de un dispositivo (el teléfono de un BC) después de un día de uso. */
+function loadStoredTally(): { since: string; values: Record<string, number> } {
+  try {
+    const raw = globalThis.localStorage?.getItem(TALLY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { since?: string; values?: Record<string, number> };
+      if (parsed && typeof parsed === 'object' && parsed.values) {
+        return { since: parsed.since ?? new Date().toISOString(), values: parsed.values };
+      }
+    }
+  } catch {
+    /* almacenamiento no disponible: solo memoria */
+  }
+  return { since: new Date().toISOString(), values: {} };
+}
+const storedTally = loadStoredTally();
+
+function persistTally() {
+  if (!tallyDirty) return;
+  tallyDirty = false;
+  try {
+    globalThis.localStorage?.setItem(TALLY_KEY, JSON.stringify(storedTally));
+  } catch {
+    /* sin espacio o sin permiso: no pasa nada */
+  }
+}
+if (typeof globalThis.setInterval === 'function') {
+  globalThis.setInterval(persistTally, 10_000);
+}
 
 function trackReads(source: string, count: number) {
   if (count <= 0) return;
   readTally.set(source, (readTally.get(source) ?? 0) + count);
+  storedTally.values[source] = (storedTally.values[source] ?? 0) + count;
+  tallyDirty = true;
+}
+
+/** Acumulado del dispositivo desde la última puesta a cero. */
+export function getStoredReadTally(): {
+  since: string;
+  total: number;
+  entries: { source: string; reads: number }[];
+} {
+  const entries = Object.entries(storedTally.values)
+    .map(([source, reads]) => ({ source, reads }))
+    .sort((a, b) => b.reads - a.reads);
+  return { since: storedTally.since, total: entries.reduce((acc, e) => acc + e.reads, 0), entries };
+}
+
+export function resetStoredReadTally(): void {
+  storedTally.since = new Date().toISOString();
+  storedTally.values = {};
+  tallyDirty = true;
+  persistTally();
 }
 
 export function getReadTally(): { total: number; entries: { source: string; reads: number }[] } {

@@ -34,4 +34,5 @@ export const ACTIVE_FLAG_BY_COLLECTION: Record<string, string> = {
  */
 export const STATION_KEY_BY_COLLECTION: Record<string, string> = {
   [COLLECTIONS.trucks]: 'idStationActual',
+  [COLLECTIONS.drivers]: 'idStation',
 };

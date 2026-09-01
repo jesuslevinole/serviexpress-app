@@ -27,6 +27,8 @@ export interface CaptureWindowInfo {
   /** Reloj compartido (se actualiza cada pocos segundos, no cada segundo). */
   now: number;
   status: CaptureWindowStatus;
+  /** Mensaje si el horario no se pudo LEER (cuota/conexión); null si cargó. */
+  loadError: string | null;
   /** Aparición semanal vigente: la abierta ahora o, si no, la próxima. */
   occurrence: WindowOccurrence | null;
   /** id del catálogo -> renglón que ya lo capturó en ESTA ventana. */
@@ -52,13 +54,24 @@ import { isActiveRecord as isActive } from '../services/activeStatus';
  * y cuáles están bloqueados por otras colecciones. Un solo hook alimenta el
  * aviso del módulo, el formulario del alta y el detalle.
  */
-export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): CaptureWindowInfo {
+export function useCaptureWindow(
+  config: ModuleConfig,
+  parents: EntityData[],
+  /**
+   * Estaciones del usuario acotado: los renglones de la semana se piden al
+   * servidor SOLO de esas estaciones (con índice compuesto); si el índice no
+   * existe aún, se cae solo al modo completo sin romper nada.
+   */
+  scopeStations: string[] = [],
+): CaptureWindowInfo {
   const spec = config.captureWindow ?? null;
   const detail = config.detail ?? null;
   const { firebaseUser } = useAuth();
 
   const [window, setWindow] = useState<CaptureWindow | null>(null);
   const [loading, setLoading] = useState(spec !== null);
+  /** Error al LEER el horario (cuota agotada, sin conexión): no es "sin ventana". */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [windowRows, setWindowRows] = useState<EntityData[]>([]);
   const [blockedRows, setBlockedRows] = useState<Record<string, EntityData[]>>({});
@@ -83,9 +96,13 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
       windowId,
       (data) => {
         setWindow(data);
+        setLoadError(null);
         setLoading(false);
       },
-      () => setLoading(false),
+      (error) => {
+        setLoadError(error.message);
+        setLoading(false);
+      },
     );
   }, [windowId]);
 
@@ -101,19 +118,39 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
   const detailCollection = detail?.collection ?? '';
   const startAt = occurrence?.startAt ?? '';
   const endAt = occurrence?.endAt ?? '';
+  /** true = el índice compuesto no existe; usar el modo completo. */
+  const [scopedDetailFailed, setScopedDetailFailed] = useState(false);
+  const scopeKey =
+    scopeStations.length > 0 && scopeStations.length <= 30 ? scopeStations.join(',') : '';
   useEffect(() => {
     if (!spec || detailCollection === '' || startAt === '' || endAt === '') {
       setWindowRows([]);
       return;
     }
+    const useScoped = scopeKey !== '' && !scopedDetailFailed;
     return subscribeToCollection(
       detailCollection,
       setWindowRows,
-      () => setWindowRows([]),
+      (error) => {
+        // Sin índice compuesto (failed-precondition): reintentar sin alcance.
+        if (useScoped && /index|precondition/i.test(error.message)) {
+          console.warn('[capture] scoped detail query needs an index, falling back', error.message);
+          setScopedDetailFailed(true);
+          return;
+        }
+        setWindowRows([]);
+      },
       undefined,
-      { clauses: [{ field: 'createdAt', op: 'range', from: startAt, to: endAt }] },
+      {
+        clauses: [
+          ...(useScoped
+            ? [{ field: 'idStation', op: 'in' as const, values: scopeKey.split(',') }]
+            : []),
+          { field: 'createdAt', op: 'range' as const, from: startAt, to: endAt },
+        ],
+      },
     );
-  }, [spec, detailCollection, startAt, endAt]);
+  }, [spec, detailCollection, startAt, endAt, scopeKey, scopedDetailFailed]);
 
   // Colecciones que bloquean (taller abierto, correctivo pendiente): solo los
   // documentos con estatus abierto, que son pocos.
@@ -244,6 +281,7 @@ export function useCaptureWindow(config: ModuleConfig, parents: EntityData[]): C
     loading: spec ? loading : false,
     now,
     status,
+    loadError,
     occurrence,
     taken,
     blocked,

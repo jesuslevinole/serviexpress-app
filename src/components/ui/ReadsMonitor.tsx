@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Activity } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { getReadTally } from '../../services/firestoreService';
+import {
+  getReadTally,
+  getStoredReadTally,
+  resetStoredReadTally,
+} from '../../services/firestoreService';
 import './ReadsMonitor.css';
 
 function compact(n: number): string {
@@ -65,6 +69,28 @@ export function ReadsMonitor() {
               ))}
             </ul>
           )}
+          {(() => {
+            const stored = getStoredReadTally();
+            return (
+              <p className="readsmon-since">
+                This device since {new Date(stored.since).toLocaleDateString('en-US')}:{' '}
+                <strong>{compact(stored.total)}</strong> total
+                {stored.entries[0]
+                  ? ` · top: ${stored.entries[0].source} ${compact(stored.entries[0].reads)}`
+                  : ''}
+                <button
+                  type="button"
+                  className="readsmon-reset"
+                  onClick={() => {
+                    resetStoredReadTally();
+                    setTally(getReadTally());
+                  }}
+                >
+                  reset
+                </button>
+              </p>
+            );
+          })()}
         </div>
       ) : null}
     </div>
