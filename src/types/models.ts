@@ -50,6 +50,12 @@ export type PermissionAction =
    */
   | 'ventanaCaptura'
   /**
+   * Ver el monitor de lecturas de Firestore (burbuja "Reads"). Herramienta
+   * de diagnóstico: OCULTA de fábrica para todos; se enciende por rol (basta
+   * concederla en cualquier módulo) cuando se quiere vigilar el consumo.
+   */
+  | 'monitorLecturas'
+  /**
    * Capturar aunque la ventana esté cerrada. Para supervisores u oficina que
    * corrigen datos fuera del horario; el resto de las reglas (un camión por
    * ventana, camión en taller) siguen aplicando.

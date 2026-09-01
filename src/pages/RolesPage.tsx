@@ -50,6 +50,7 @@ const ACTIONS: PermissionAction[] = [
   'editarProtegidos',
   'ventanaCaptura',
   'capturarFueraVentana',
+  'monitorLecturas',
 ];
 
 /** Encabezado legible de cada acción en la matriz. */
@@ -70,6 +71,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   editarProtegidos: 'Edit locked fields',
   ventanaCaptura: 'Capture window (set schedule)',
   capturarFueraVentana: 'Add outside window',
+  monitorLecturas: 'Reads monitor',
 };
 
 /** Opciones de visibilidad de registros por módulo (columna Visibility de la matriz). */

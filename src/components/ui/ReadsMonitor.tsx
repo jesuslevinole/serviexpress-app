@@ -15,17 +15,25 @@ function compact(n: number): string {
  * por el app como siempre y el desglose lo dice.
  */
 export function ReadsMonitor() {
-  const { isAdmin } = useAuth();
+  const { effectiveRole } = useAuth();
+  /**
+   * Oculto de fábrica: solo se muestra si el ROL vigente tiene la acción
+   * "Reads monitor" concedida en algún módulo (se activa en Roles cuando se
+   * quiere vigilar el consumo). En "View as" manda el rol simulado.
+   */
+  const enabled = Object.values(effectiveRole?.permissions ?? {}).some(
+    (perms) => perms?.monitorLecturas === true,
+  );
   const [open, setOpen] = useState(false);
   const [tally, setTally] = useState(() => getReadTally());
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!enabled) return;
     const timer = window.setInterval(() => setTally(getReadTally()), 4000);
     return () => window.clearInterval(timer);
-  }, [isAdmin]);
+  }, [enabled]);
 
-  if (!isAdmin) return null;
+  if (!enabled) return null;
 
   return (
     <div className={`readsmon ${open ? 'is-open' : ''}`}>
