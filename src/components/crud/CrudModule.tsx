@@ -37,12 +37,16 @@ import { CoverageBanner } from './CoverageBanner';
 import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
+import { AlertThresholdsModal } from './AlertThresholdsModal';
+import { AttachmentsPanel } from './AttachmentsPanel';
+import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
 import { RecordPeekModal } from './RecordPeekModal';
 import { DetailTabs } from './DetailTabs';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
-import { Truck } from 'lucide-react';
+import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
+import { Gauge, Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
@@ -264,6 +268,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);
   const [myTrucksOpen, setMyTrucksOpen] = useState(false);
+  /** Umbrales de alerta (rojo cuando el número es <= umbral), configurables. */
+  const alertThresholds = useAlertThresholds();
+  const [alertsOpen, setAlertsOpen] = useState(false);
   /** Camión abierto en el visor rápido desde una lista informativa. */
   const [peekTruck, setPeekTruck] = useState<EntityData | null>(null);
 
@@ -308,6 +315,32 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         return null;
     }
   };
+  /**
+   * Carpeta de Storage del registro, con la estructura acordada:
+   * Truck/<unitN> · mantenimientoPreventivo|Correctivo/<unitN> ·
+   * Driver/<nombre> · <colección>/<etiqueta> para el resto.
+   */
+  const attachmentFolder = (record: EntityData): string => {
+    if (config.id === 'trucks') {
+      const unit = record.unitN;
+      return `Truck/${sanitizeSegment(typeof unit === 'string' ? unit : String(unit ?? record.id))}`;
+    }
+    if (config.id === 'maintenance') {
+      const root =
+        record.type === 'Corrective' ? 'mantenimientoCorrectivo' : 'mantenimientoPreventivo';
+      const truckId = typeof record.idTruck === 'string' ? record.idTruck : '';
+      const truck = refMaps[COLLECTIONS.trucks]?.rows.find((r) => r.id === truckId);
+      const unit = truck?.unitN;
+      return `${root}/${sanitizeSegment(
+        typeof unit === 'string' ? unit : String(unit ?? truckId ?? record.id),
+      )}`;
+    }
+    if (config.id === 'drivers') {
+      return `Driver/${sanitizeSegment(auditLabel(record))}`;
+    }
+    return `${config.collection}/${sanitizeSegment(auditLabel(record))}`;
+  };
+
   /** Nombre auditables del usuario REAL (con "(as X)" cuando simula). */
   const auditName = (): string => {
     const real = profile?.name ?? firebaseUser?.email ?? 'unknown';
@@ -986,11 +1019,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           if ((STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—') {
             return <Badge value={text} tone={field.badgeTones?.[text]} />;
           }
+          // Umbral de alerta: el número en o bajo el límite se pinta en rojo.
+          if (isAlertValue(field, effectiveValue(field, row as EntityData), alertThresholds)) {
+            return <span className="num-alert">{text}</span>;
+          }
           return text;
         },
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tableFields, refMaps],
+    [tableFields, refMaps, alertThresholds],
   );
 
   const openCreate = () => {
@@ -1550,6 +1587,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Export Excel</span>
             </button>
           ) : null}
+          {isAdminView &&
+          [...config.fields, ...(config.detail?.fields ?? [])].some(
+            (f) => f.type === 'number' && f.compute === undefined,
+          ) ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Set the number at or below which a value shows in red (Diff mileage, tires…)"
+              onClick={() => setAlertsOpen(true)}
+            >
+              <Gauge size={16} />
+              <span className="crud-btn-text">Alerts</span>
+            </button>
+          ) : null}
           {captureSpec && pendingStations.length > 0 ? (
             <button
               type="button"
@@ -1853,6 +1904,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                         content: <RelatedList view={view} recordId={viewing.id} />,
                       })),
                       {
+                        id: '__files',
+                        title: 'Files & photos',
+                        content: (
+                          <AttachmentsPanel folder={attachmentFolder(viewing)} canEdit={canEdit} />
+                        ),
+                      },
+                      {
                         id: '__changes',
                         title: 'All changes',
                         content: <ChangeHistoryList recordId={viewing.id} />,
@@ -1862,8 +1920,22 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                 </section>
               ) : (
                 <section className="crud-related">
-                  <h3>Changes</h3>
-                  <ChangeHistoryList recordId={viewing.id} />
+                  <DetailTabs
+                    tabs={[
+                      {
+                        id: '__files',
+                        title: 'Files & photos',
+                        content: (
+                          <AttachmentsPanel folder={attachmentFolder(viewing)} canEdit={canEdit} />
+                        ),
+                      },
+                      {
+                        id: '__changes',
+                        title: 'Changes',
+                        content: <ChangeHistoryList recordId={viewing.id} />,
+                      },
+                    ]}
+                  />
                 </section>
               )}
               {config.detail && detailEnabled(viewing) ? (
@@ -2069,6 +2141,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           collection={COLLECTIONS.trucks}
           record={peekTruck}
           onClose={() => setPeekTruck(null)}
+        />
+      ) : null}
+
+      {alertsOpen ? (
+        <AlertThresholdsModal
+          config={mergedConfig}
+          current={alertThresholds}
+          byUid={firebaseUser?.uid ?? null}
+          onClose={() => setAlertsOpen(false)}
         />
       ) : null}
 

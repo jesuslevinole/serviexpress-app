@@ -27,6 +27,7 @@ import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
 import { RecordDetailModal } from './RecordDetailModal';
 import { displayValue, scalar } from './displayValue';
+import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
 import type { DetailConfig, EntityData, FieldValue } from '../../types/models';
 import './DetailModal.css';
 
@@ -77,6 +78,7 @@ export function DetailModal({
   windowSummaryFor,
   onClose,
 }: DetailModalProps) {
+  const alertThresholds = useAlertThresholds();
   const { can, firebaseUser, isAdminView, profile, viewAs } = useAuth();
   const { editMode } = useUiConfig();
   const [layoutOpen, setLayoutOpen] = useState(false);
@@ -201,16 +203,20 @@ export function DetailModal({
           key: field.key,
           label: field.label,
           render: (row) => {
-            const text = displayValue(field, scalar((row as EntityData)[field.key]), refLabel);
-            return (field.key === 'status' || field.badge === true) && text !== '—' ? (
-              <Badge value={text} />
-            ) : (
-              text
-            );
+            const value = scalar((row as EntityData)[field.key]);
+            const text = displayValue(field, value, refLabel);
+            if ((field.key === 'status' || field.badge === true) && text !== '—') {
+              return <Badge value={text} />;
+            }
+            // Umbral de alerta: Diff mileage en 0 o menos, cauchos gastados…
+            if (isAlertValue(field, value, alertThresholds)) {
+              return <span className="num-alert">{text}</span>;
+            }
+            return text;
           },
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detailFields, refMaps],
+    [detailFields, refMaps, alertThresholds],
   );
 
   /**

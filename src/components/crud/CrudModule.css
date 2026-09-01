@@ -266,3 +266,9 @@
   background: var(--warning-bg);
   color: var(--warning);
 }
+
+/* Número en o bajo su umbral de alerta: rojo en cualquier tabla. */
+.num-alert {
+  color: var(--danger);
+  font-weight: 800;
+}

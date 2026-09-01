@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -18,6 +19,8 @@ export const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+/** Firebase Storage: fotos y documentos adjuntos de los registros. */
+export const storage = getStorage(app);
 // Los correos que envía Firebase (restablecer contraseña, etc.) salen en español.
 auth.languageCode = 'es';
 

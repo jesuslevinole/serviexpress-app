@@ -6,6 +6,7 @@ import { DataTable, type TableColumn } from '../ui/DataTable';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import { displayCell } from './displayValue';
+import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
 import type { EntityData, RelatedView } from '../../types/models';
 import './RelatedRecordsModal.css';
 
@@ -21,6 +22,7 @@ interface RelatedRecordsModalProps {
 
 /** Una pestaña: se suscribe a su colección y muestra los registros ligados. */
 export function RelatedList({ view, recordId }: { view: RelatedView; recordId: string }) {
+  const alertThresholds = useAlertThresholds();
   // El filtro se hace en el SERVIDOR: solo llegan los registros de este
   // documento, en vez de leer la colección completa y filtrarla aquí.
   const { rows, loading, error } = useCollection(view.collection, {
@@ -50,7 +52,12 @@ export function RelatedList({ view, recordId }: { view: RelatedView; recordId: s
     label: field.label,
     render: (row) => {
       const text = displayCell(field, row as EntityData, refLabel);
-      return field.badge === true && text !== '—' ? <Badge value={text} /> : text;
+      if (field.badge === true && text !== '—') return <Badge value={text} />;
+      const raw = (row as EntityData)[field.key];
+      if (isAlertValue(field, typeof raw === 'object' ? null : raw, alertThresholds)) {
+        return <span className="num-alert">{text}</span>;
+      }
+      return text;
     },
   }));
 

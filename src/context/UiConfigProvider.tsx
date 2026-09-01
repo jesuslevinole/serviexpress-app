@@ -109,7 +109,11 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
       .map((field, index) => {
         const override = fieldOverrides[field.key];
         let next = field;
-        if (override !== undefined) {
+        // Campos INTERNOS del motor (ni tabla ni formulario en el código,
+        // como la copia "Name (from Team)"): un override viejo no puede
+        // volverlos columna; son plomería, no datos para la vista.
+        const internal = field.form === false && field.table === false && field.compute === undefined;
+        if (override !== undefined && !internal) {
           next = {
             ...field,
             ...(override.label !== undefined ? { label: override.label } : {}),
