@@ -14,6 +14,8 @@ interface BlockedRefsNoteProps {
   items: BlockedItem[];
   /** Placeholder del buscador ("Search by truck number…"). */
   searchPlaceholder: string;
+  /** Clic en un elemento: abre su detalle. */
+  onItemClick?: (id: string) => void;
 }
 
 /**
@@ -22,7 +24,12 @@ interface BlockedRefsNoteProps {
  * camiones bloqueados, el BC teclea el número y ve al instante por qué no
  * aparece en el desplegable y quién lo agregó.
  */
-export function BlockedRefsNote({ title, items, searchPlaceholder }: BlockedRefsNoteProps) {
+export function BlockedRefsNote({
+  title,
+  items,
+  searchPlaceholder,
+  onItemClick,
+}: BlockedRefsNoteProps) {
   const [search, setSearch] = useState('');
   const needle = search.trim().toLowerCase();
   const filtered =
@@ -45,7 +52,14 @@ export function BlockedRefsNote({ title, items, searchPlaceholder }: BlockedRefs
       <ul>
         {filtered.slice(0, 60).map((item) => (
           <li key={item.id}>
-            {item.label} — {item.reason}
+            {onItemClick ? (
+              <button type="button" className="cwin-truck-btn" onClick={() => onItemClick(item.id)}>
+                {item.label}
+              </button>
+            ) : (
+              item.label
+            )}{' '}
+            — {item.reason}
           </li>
         ))}
         {filtered.length > 60 ? <li>…and {filtered.length - 60} more (narrow the search)</li> : null}

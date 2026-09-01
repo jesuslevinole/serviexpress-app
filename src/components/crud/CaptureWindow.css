@@ -305,3 +305,15 @@
   font-size: 12px;
   color: var(--text-soft);
 }
+
+/* Números de camión clicables en las listas del aviso: abren su detalle. */
+.cwin-truck-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}

@@ -17,6 +17,8 @@ interface MyTrucksModalProps {
   trucks: MyTruckRow[];
   /** Camiones capturados por su estación que ya no cuentan (movidos/baja). */
   moved: { id: string; label: string; reason: string }[];
+  /** Clic en un camión: abre su detalle. */
+  onTruckClick?: (id: string) => void;
   onClose: () => void;
 }
 
@@ -33,7 +35,13 @@ const STATE_LABEL: Record<MyTruckRow['state'], string> = {
  * su estado en la ventana vigente (agregado / en taller / pendiente), con
  * buscador por número.
  */
-export function MyTrucksModal({ stationNames, trucks, moved, onClose }: MyTrucksModalProps) {
+export function MyTrucksModal({
+  stationNames,
+  trucks,
+  moved,
+  onTruckClick,
+  onClose,
+}: MyTrucksModalProps) {
   const [search, setSearch] = useState('');
   const needle = search.trim().toLowerCase();
   const filtered =
@@ -52,7 +60,14 @@ export function MyTrucksModal({ stationNames, trucks, moved, onClose }: MyTrucks
           <ul>
             {moved.map((item) => (
               <li key={item.id}>
-                {item.label} — {item.reason}
+                {onTruckClick ? (
+                  <button type="button" className="mytrucks-link" onClick={() => onTruckClick(item.id)}>
+                    {item.label}
+                  </button>
+                ) : (
+                  item.label
+                )}{' '}
+                — {item.reason}
               </li>
             ))}
           </ul>
@@ -78,7 +93,18 @@ export function MyTrucksModal({ stationNames, trucks, moved, onClose }: MyTrucks
       <ul className="mytrucks-list">
         {filtered.map((truck) => (
           <li key={truck.id} className={`is-${truck.state}`}>
-            <span className="mytrucks-label">{truck.label}</span>
+            {onTruckClick ? (
+              <button
+                type="button"
+                className="mytrucks-label mytrucks-link"
+                title="Open this truck's detail"
+                onClick={() => onTruckClick(truck.id)}
+              >
+                {truck.label}
+              </button>
+            ) : (
+              <span className="mytrucks-label">{truck.label}</span>
+            )}
             <span className="mytrucks-state">{STATE_LABEL[truck.state]}</span>
             <span className="mytrucks-detail">{truck.detail}</span>
           </li>

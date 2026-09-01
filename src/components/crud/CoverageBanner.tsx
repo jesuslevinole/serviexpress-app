@@ -15,6 +15,8 @@ interface CoverageBannerProps {
   scopeStations?: string[];
   /** Uid efectivo, para el conteo "agregados por ti". */
   ownUid?: string | null;
+  /** Clic en un registro de la lista de faltantes: abre su detalle. */
+  onSourceClick?: (row: EntityData) => void;
 }
 
 /** Texto que identifica un registro de la lista de referencia. */
@@ -36,6 +38,7 @@ export function CoverageBanner({
   rowsAreSource,
   scopeStations = [],
   ownUid = null,
+  onSourceClick,
 }: CoverageBannerProps) {
   const [open, setOpen] = useState(false);
 
@@ -118,7 +121,20 @@ export function CoverageBanner({
       {open && missing.length > 0 ? (
         <ul className="coverage-list">
           {missing.map((row) => (
-            <li key={row.id}>{labelOf(row, config.sourceLabelKeys)}</li>
+            <li key={row.id}>
+              {onSourceClick ? (
+                <button
+                  type="button"
+                  className="coverage-chip-btn"
+                  title="Open this truck's detail"
+                  onClick={() => onSourceClick(row)}
+                >
+                  {labelOf(row, config.sourceLabelKeys)}
+                </button>
+              ) : (
+                labelOf(row, config.sourceLabelKeys)
+              )}
+            </li>
           ))}
         </ul>
       ) : null}

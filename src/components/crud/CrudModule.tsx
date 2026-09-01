@@ -38,6 +38,7 @@ import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
+import { RecordPeekModal } from './RecordPeekModal';
 import { Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
@@ -243,6 +244,27 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);
   const [myTrucksOpen, setMyTrucksOpen] = useState(false);
+  /** Camión abierto en el visor rápido desde una lista informativa. */
+  const [peekTruck, setPeekTruck] = useState<EntityData | null>(null);
+
+  /**
+   * Abre el detalle del camión desde cualquier lista (cobertura, faltantes,
+   * bloqueados, My trucks): busca el registro en los datos ya suscritos.
+   */
+  const openTruckPeek = (id: string) => {
+    const pools: EntityData[][] = [
+      captureInfo.sourceRowsAll,
+      refMaps[COLLECTIONS.trucks]?.rows ?? [],
+      detailRefMaps[COLLECTIONS.trucks]?.rows ?? [],
+    ];
+    for (const pool of pools) {
+      const row = pool.find((r) => r.id === id);
+      if (row) {
+        setPeekTruck(row);
+        return;
+      }
+    }
+  };
   /**
    * Quién configura el horario y quién puede capturar fuera de él se decide
    * en la matriz de Roles (el admin real siempre puede, para corregir).
@@ -569,6 +591,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         title={`${items.length} ${once.sourceLabel}${items.length === 1 ? '' : 's'} can't be added right now`}
         items={items}
         searchPlaceholder={`Search by ${once.sourceLabel} number…`}
+        onItemClick={openTruckPeek}
       />
     );
   };
@@ -1536,6 +1559,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             spec={captureSpec}
             info={captureInfo}
             extraTaken={extraTakenList}
+            onTruckClick={openTruckPeek}
             refLabel={detailRefLabel}
             describeParent={describeParent}
             scopeStations={pendingStations}
@@ -1561,6 +1585,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             rowsAreSource={config.collection === config.coverage.sourceCollection}
             scopeStations={pendingStations}
             ownUid={effectiveUser?.id ?? firebaseUser?.uid ?? null}
+            onSourceClick={(row) => setPeekTruck(row)}
           />
         ) : null}
         {canBulkDelete && selectedIds.size > 0 ? (
@@ -1918,6 +1943,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         />
       ) : null}
 
+      {peekTruck ? (
+        <RecordPeekModal
+          collection={COLLECTIONS.trucks}
+          record={peekTruck}
+          onClose={() => setPeekTruck(null)}
+        />
+      ) : null}
+
       {myTrucksOpen && captureSpec ? (
         <MyTrucksModal
           stationNames={pendingStations
@@ -1950,6 +1983,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
           })()}
           moved={extraTakenList}
+          onTruckClick={openTruckPeek}
           onClose={() => setMyTrucksOpen(false)}
         />
       ) : null}

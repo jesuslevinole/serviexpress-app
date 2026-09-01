@@ -32,6 +32,8 @@ interface CaptureWindowBannerProps {
    * reporte tiene 28" y "17 of 20 added".
    */
   extraTaken?: { id: string; label: string; reason: string }[];
+  /** Clic en un camión de cualquier lista del aviso: abre su detalle. */
+  onTruckClick?: (id: string) => void;
 }
 
 type PendingKind = 'missing' | 'done' | 'blocked';
@@ -42,6 +44,29 @@ type PendingKind = 'missing' | 'done' | 'blocked';
  * de esta ventana. Un camión en taller o con correctivo pendiente no se
  * exige (tampoco se puede capturar), y se muestra aparte.
  */
+/** Etiqueta clicable (abre el detalle) o texto plano si no hay handler. */
+function TruckLabel({
+  id,
+  label,
+  onTruckClick,
+}: {
+  id: string;
+  label: string;
+  onTruckClick?: (id: string) => void;
+}) {
+  if (!onTruckClick) return <>{label}</>;
+  return (
+    <button
+      type="button"
+      className="cwin-truck-btn"
+      title="Open this truck's detail"
+      onClick={() => onTruckClick(id)}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function CaptureWindowBanner({
   spec,
   info,
@@ -52,6 +77,7 @@ export function CaptureWindowBanner({
   onConfigure,
   stationBcs,
   extraTaken = [],
+  onTruckClick,
 }: CaptureWindowBannerProps) {
   const [open, setOpen] = useState(false);
   const [showDone, setShowDone] = useState(false);
@@ -226,7 +252,9 @@ export function CaptureWindowBanner({
                     ) : null}
                     <ul className="cwin-list">
                       {group.missing.map((item) => (
-                        <li key={item.row.id}>{item.label}</li>
+                        <li key={item.row.id}>
+                          <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} />
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -237,7 +265,9 @@ export function CaptureWindowBanner({
                 <span className="cwin-group-title">Missing</span>
                 <ul className="cwin-list">
                   {missing.map((item) => (
-                    <li key={item.row.id}>{item.label}</li>
+                    <li key={item.row.id}>
+                      <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} />
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -250,7 +280,8 @@ export function CaptureWindowBanner({
               <ul className="cwin-list is-blocked">
                 {blocked.map((item) => (
                   <li key={item.row.id} title={info.blocked.get(item.row.id)}>
-                    {item.label} — {info.blocked.get(item.row.id)}
+                    <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} /> —{' '}
+                    {info.blocked.get(item.row.id)}
                   </li>
                 ))}
               </ul>
@@ -265,7 +296,8 @@ export function CaptureWindowBanner({
               <ul className="cwin-list is-blocked">
                 {extraTaken.map((item) => (
                   <li key={item.id} title={item.reason}>
-                    {item.label} — {item.reason}
+                    <TruckLabel id={item.id} label={item.label} onTruckClick={onTruckClick} /> —{' '}
+                    {item.reason}
                   </li>
                 ))}
               </ul>
@@ -282,7 +314,8 @@ export function CaptureWindowBanner({
                 <ul className="cwin-list is-done">
                   {done.map((item) => (
                     <li key={item.row.id}>
-                      {item.label} — {describeParent(info.taken.get(item.row.id)?.parent ?? null)}
+                      <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} />{' '}
+                      — {describeParent(info.taken.get(item.row.id)?.parent ?? null)}
                     </li>
                   ))}
                 </ul>
