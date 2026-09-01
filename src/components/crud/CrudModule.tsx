@@ -66,7 +66,7 @@ import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel
 import { Pagination } from '../ui/Pagination';
 import { displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
 import { isActiveRecord } from '../../services/activeStatus';
-import type { EntityData, FieldValue, ModuleConfig } from '../../types/models';
+import type { FieldConfig, EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
 interface CrudModuleProps {
@@ -120,7 +120,24 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const { can, canOr, firebaseUser, isAdminView, profile, viewAs } = useAuth();
   const { editMode, applyToModule } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
-  const config = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
+  const mergedConfig = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
+  /**
+   * Campos "solo admin" del layout: quien no es admin (o el admin en View
+   * as, para ver lo mismo que esa persona) no los ve ni en tabla ni en
+   * formulario. Los OCULTOS-para-todos ya vienen quitados desde el merge.
+   */
+  const config = useMemo(() => {
+    if (isAdminView) return mergedConfig;
+    const strip = (fields: FieldConfig[]) => fields.filter((f) => f.adminOnly !== true);
+    return {
+      ...mergedConfig,
+      fields: strip(mergedConfig.fields),
+      ...(mergedConfig.detail
+        ? { detail: { ...mergedConfig.detail, fields: strip(mergedConfig.detail.fields) } }
+        : {}),
+    };
+  }, [mergedConfig, isAdminView]);
+
   const [layoutOpen, setLayoutOpen] = useState(false);
   /** Puede personalizar layout y obligatorios: admin o rol con permiso Customization. */
   const canCustomize = isAdminView || can('customize', 'editar');
@@ -864,11 +881,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             );
             done += 1;
           } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            // Cuota diaria de Firestore agotada: seguir intentando solo
+            // quema más intentos. Se frena TODO el ciclo de inmediato.
+            if (
+              message.toLowerCase().includes('quota') ||
+              (error as { code?: string }).code === 'resource-exhausted'
+            ) {
+              firstError =
+                "Firestore's FREE daily quota is exhausted — counting is paused and will resume another day (upgrading to the Blaze plan removes this limit)";
+              failed += 1;
+              backfillFailed.current.add(row.id);
+              console.error('[trucks-count] quota exhausted, aborting', error);
+              break;
+            }
             // Se sigue con el resto; el error exacto se muestra en pantalla.
             failed += 1;
             backfillFailed.current.add(row.id);
             if (firstError === null) {
-              firstError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+              firstError = `${error instanceof Error ? error.name : 'Error'}: ${message}`;
               console.error('[trucks-count] first failure', row.id, error);
             }
           }

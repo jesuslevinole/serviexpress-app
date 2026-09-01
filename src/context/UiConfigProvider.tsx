@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../hooks/useAuth';
-import {
+import { type CustomFieldDef,
   UiConfigContext,
   type FieldOverride,
   type ModuleOverride,
@@ -89,20 +89,27 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
     [overrides, persist],
   );
 
-  /** Aplica etiquetas, orden, obligatorio y visibilidad a una lista de campos. */
+  /**
+   * Aplica el layout del admin a una lista de campos: agrega los campos
+   * personalizados, aplica etiquetas/orden/obligatorio/visibilidad, quita
+   * los OCULTOS (para todos, admin incluido) y marca los "solo admin" (el
+   * módulo los filtra según quién mira).
+   */
   const applyFieldOverrides = (
     baseFields: FieldConfig[],
     fieldOverrides: Record<string, FieldOverride>,
-  ): FieldConfig[] =>
-    baseFields
+    customFields: CustomFieldDef[] = [],
+  ): FieldConfig[] => {
+    const custom: FieldConfig[] = customFields.map((def) => ({
+      key: def.key,
+      label: def.label,
+      type: def.type,
+    }));
+    return [...baseFields, ...custom]
       .map((field, index) => {
         const override = fieldOverrides[field.key];
         let next = field;
-        if (
-          override?.label !== undefined ||
-          override?.required !== undefined ||
-          override?.table !== undefined
-        ) {
+        if (override !== undefined) {
           next = {
             ...field,
             ...(override.label !== undefined ? { label: override.label } : {}),
@@ -110,40 +117,26 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
               ? { required: override.required }
               : {}),
             ...(override.table !== undefined ? { table: override.table } : {}),
+            ...(override.adminOnly !== undefined ? { adminOnly: override.adminOnly } : {}),
           };
         }
-        return { field: next, order: override?.order ?? index };
+        return { field: next, order: override?.order ?? index, hidden: override?.hidden === true };
       })
+      .filter((item) => !item.hidden)
       .sort((a, b) => a.order - b.order)
       .map((item) => item.field);
+  };
 
   const applyToModule = useCallback(
     (base: ModuleConfig): ModuleConfig => {
       const moduleOverride = overrides.modules[base.id];
       if (!moduleOverride) return base;
       const fieldOverrides = moduleOverride.fields ?? {};
-      const fields = base.fields
-        .map((field, index) => {
-          const override = fieldOverrides[field.key];
-          let next = field;
-          if (
-            override?.label !== undefined ||
-            override?.required !== undefined ||
-            override?.table !== undefined
-          ) {
-            next = {
-              ...field,
-              ...(override.label !== undefined ? { label: override.label } : {}),
-              ...(override.required !== undefined && field.compute === undefined
-                ? { required: override.required }
-                : {}),
-              ...(override.table !== undefined ? { table: override.table } : {}),
-            };
-          }
-          return { field: next, order: override?.order ?? index };
-        })
-        .sort((a, b) => a.order - b.order)
-        .map((item) => item.field);
+      const fields = applyFieldOverrides(
+        base.fields,
+        fieldOverrides,
+        moduleOverride.customFields ?? [],
+      );
       // Pestañas configuradas por el admin: sustituyen a las del código.
       const formSteps = moduleOverride.formSteps ?? base.formSteps;
       // El detalle usa sus propios overrides bajo el id "<módulo>__detail".

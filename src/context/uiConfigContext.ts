@@ -6,14 +6,28 @@ export interface FieldOverride {
   order?: number;
   /** Obligatorio configurado por el admin (sobrescribe el del código). */
   required?: boolean;
-  /** false = la columna no se muestra en la tabla. */
+  /** false = la columna no se muestra en la tabla (semántica anterior). */
   table?: boolean;
+  /** true = el campo NO se ve en ningún lado, para NADIE (ni el admin). */
+  hidden?: boolean;
+  /** true = solo los administradores ven el campo (tabla y formulario). */
+  adminOnly?: boolean;
+}
+
+/** Campo agregado por el admin desde "Edit layout" (vive en los documentos). */
+export interface CustomFieldDef {
+  /** Clave física en el documento ("cf_placa"). */
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'bool';
 }
 
 export interface ModuleOverride {
   title?: string;
   order?: number;
   fields?: Record<string, FieldOverride>;
+  /** Campos agregados por el admin: se capturan y guardan en la colección. */
+  customFields?: CustomFieldDef[];
   /** Pestañas del formulario configuradas por el admin (sustituyen a las del código). */
   formSteps?: FormStep[];
 }

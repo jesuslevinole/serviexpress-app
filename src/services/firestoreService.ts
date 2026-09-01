@@ -1,4 +1,5 @@
 import {
+  deleteField,
   addDoc,
   collection,
   deleteDoc,
@@ -258,6 +259,38 @@ export async function countDocumentsSafe(
       throw error;
     }
   }
+}
+
+/**
+ * Cuántos documentos de la colección TIENEN dato en un campo (ordenar por el
+ * campo solo devuelve los que lo tienen). 1 lectura. Para avisar antes de
+ * eliminar un campo personalizado.
+ */
+export async function countDocumentsHavingField(
+  collectionName: string,
+  fieldKey: string,
+): Promise<number> {
+  const snapshot = await getCountFromServer(
+    query(collection(db, collectionName), orderBy(fieldKey)),
+  );
+  trackReads(`${collectionName} (aggregate)`, 1);
+  return snapshot.data().count;
+}
+
+/**
+ * Elimina un campo de TODOS los documentos que lo tienen (borrado físico del
+ * dato, con confirmación previa del admin). Devuelve cuántos se limpiaron.
+ */
+export async function removeFieldFromDocuments(
+  collectionName: string,
+  fieldKey: string,
+): Promise<number> {
+  const snapshot = await getDocs(query(collection(db, collectionName), orderBy(fieldKey)));
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (fetch)`, snapshot.size);
+  for (const document of snapshot.docs) {
+    await updateDoc(doc(db, collectionName, document.id), { [fieldKey]: deleteField() });
+  }
+  return snapshot.size;
 }
 
 /** Lectura puntual de una colección FILTRADA (para reapuntar referencias). */

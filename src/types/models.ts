@@ -105,6 +105,8 @@ export interface RefFilter {
 }
 
 export interface FieldConfig {
+  /** Solo los administradores ven este campo (lo aplica el layout del admin). */
+  adminOnly?: boolean;
   /** Clave del campo en el documento (camelCase del nombre de columna original). */
   key: string;
   /** Etiqueta que se muestra en formularios, tablas y Excel. */

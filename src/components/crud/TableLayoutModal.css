@@ -114,3 +114,95 @@
   border-radius: var(--radius-sm);
   padding: 10px 12px;
 }
+/* ── V00036: arrastre, doble visibilidad y campos propios ──────────── */
+.tlayout-grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-soft);
+  cursor: grab;
+}
+
+.tlayout-grip:active {
+  cursor: grabbing;
+}
+
+.tlayout-list li.is-dragging {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.tlayout-custom-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.tlayout-remove {
+  color: var(--danger);
+}
+
+.tlayout-add {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tlayout-add-title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.tlayout-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tlayout-add-row input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.tlayout-add-row select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tlayout-add small {
+  color: var(--text-soft);
+  font-size: 11.5px;
+}
+
+.tlayout-confirm {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  font-size: 13px;
+}
+
+.tlayout-confirm p {
+  margin: 0 0 10px;
+}
+
+.tlayout-confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
