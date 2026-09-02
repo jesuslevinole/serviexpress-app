@@ -1,4 +1,5 @@
 import {
+  getDocFromCache,
   deleteField,
   addDoc,
   collection,
@@ -359,9 +360,28 @@ export async function fetchDocumentsWhere(
   return snapshot.docs.map((d) => toEntity(d.id, d.data()));
 }
 
+/**
+ * Lectura puntual de UN documento, CACHÉ PRIMERO: si el navegador ya lo
+ * tiene (IndexedDB), no cuesta lectura; solo va al servidor si no está.
+ * Para documentos que casi no cambian (encabezados de reportes viejos).
+ */
+export async function fetchDocumentCachedFirst(
+  collectionName: string,
+  id: string,
+): Promise<EntityData | null> {
+  try {
+    const cached = await getDocFromCache(doc(db, collectionName, id));
+    if (cached.exists()) return toEntity(cached.id, cached.data());
+  } catch {
+    /* no está en caché: se pide al servidor */
+  }
+  return fetchDocument(collectionName, id);
+}
+
 /** Lectura puntual de UN documento (null si no existe). */
 export async function fetchDocument(collectionName: string, id: string): Promise<EntityData | null> {
   const snapshot = await getDoc(doc(db, collectionName, id));
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (doc)`, 1);
   if (!snapshot.exists()) return null;
   return toEntity(snapshot.id, snapshot.data());
 }

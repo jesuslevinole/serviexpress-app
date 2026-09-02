@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
-import { fetchDocument, subscribeToCollection } from '../services/firestoreService';
+import { fetchDocumentCachedFirst, subscribeToCollection } from '../services/firestoreService';
 import {
   clearCaptureWindow,
   resolveOccurrence,
@@ -213,7 +213,7 @@ export function useCaptureWindow(
     if (missingKey === '' || config.collection === '') return;
     let cancelled = false;
     void Promise.all(
-      missingKey.split('|').map(async (id) => [id, await fetchDocument(config.collection, id)] as const),
+      missingKey.split('|').map(async (id) => [id, await fetchDocumentCachedFirst(config.collection, id)] as const),
     ).then((results) => {
       if (cancelled) return;
       setExtraParents((prev) => {
