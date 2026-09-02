@@ -17,6 +17,17 @@ export type RefMaps = Record<string, RefData>;
  * Se suscribe una sola vez a cada colección referenciada por los campos
  * de un módulo y devuelve mapas id -> nombre para mostrar y para los selects.
  */
+/**
+ * Catálogos referenciados que CRECEN sin límite (bcReports suma ~30 a la
+ * semana): como referencia solo hacen falta los recientes para etiquetas.
+ * El tope comparte el listener con el propio módulo (misma clave), así que
+ * para el admin no cuesta lecturas extra.
+ */
+const REF_SUBSCRIBE_LIMITS: Record<string, number> = {
+  bcReports: 500,
+  maintenance: 500,
+};
+
 export function useRefMaps(
   fields: FieldConfig[],
   /**
@@ -63,6 +74,9 @@ export function useRefMaps(
         stationKey !== undefined && scopeKey !== ''
           ? [{ op: 'in', field: stationKey, values: scopeKey.split(',') }]
           : undefined;
+      // Tope solo SIN cláusulas (limit exige orderBy y con "in" pediría un
+      // índice compuesto); con alcance el conjunto ya es chico.
+      const limit = clauses === undefined ? REF_SUBSCRIBE_LIMITS[collectionName] : undefined;
       return subscribeToCollection(
         collectionName,
         (rows) => {
@@ -86,7 +100,7 @@ export function useRefMaps(
           setMaps((prev) => ({ ...prev, [collectionName]: { labels: new Map(), rows: [] } }));
         },
         undefined,
-        clauses !== undefined ? { clauses } : undefined,
+        clauses !== undefined || limit !== undefined ? { clauses, limit } : undefined,
       );
     });
     return () => unsubscribers.forEach((u) => u());
