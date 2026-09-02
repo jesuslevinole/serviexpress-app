@@ -43,7 +43,15 @@ export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
  * (Un driver toma su nombre del catálogo Team.)
  */
 export const REF_LABEL_DEPENDENCIES: Record<string, string[]> = {
-  [COLLECTIONS.drivers]: [COLLECTIONS.team],
+  /**
+   * V00045: la dependencia de Team se QUITÓ a propósito. El catálogo Team
+   * (430 docs) viajaba completo a los 5 módulos que muestran drivers solo
+   * para armar el nombre — pero los drivers ya traen su nombre copiado
+   * ("APELLIDOS, Nombres"), así que la etiqueta sale del propio driver. En
+   * el módulo Drivers, Team sigue suscrito (campo idTeam) y ahí la
+   * resolución completa sigue funcionando. Ahorro: -430 lecturas por carga
+   * fría en Trucks, Fleet, Assets, Accidents y Requirements.
+   */
 };
 
 /** resolve(colección, id) -> nombre, disponible para etiquetas compuestas. */
