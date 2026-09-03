@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  subscribeToCollection,
+  subscribeCachedCollection,
   type CollectionFilter,
   type QueryClause,
 } from '../services/firestoreService';
@@ -39,7 +39,10 @@ export function useCollection(
     setLoading(true);
     const activeFilter =
       filterField !== null ? { field: filterField, value: filterValue } : undefined;
-    const unsubscribe = subscribeToCollection(
+    // Modo caché+TTL: sin listener vivo (Firestore cobra el resultado
+    // completo al restablecer un listener tras >30 min dormido; las listas
+    // se refrescan del servidor solo al vencer o tras una escritura).
+    const unsubscribe = subscribeCachedCollection(
       collectionName,
       (data) => {
         setRows(data);

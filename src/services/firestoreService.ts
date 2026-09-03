@@ -1,4 +1,7 @@
 import {
+  type DocumentData,
+  type Query,
+  getDocsFromCache,
   getDocFromCache,
   deleteField,
   addDoc,
@@ -18,7 +21,6 @@ import {
   where,
   orderBy,
   limit as limitTo,
-  type DocumentData,
   type QueryConstraint,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -192,6 +194,170 @@ export function subscribeToCollection(
       shared.delete(key);
     }, KEEP_ALIVE_MS);
   };
+}
+
+/* ── Lecturas con caché y vencimiento (TTL) compartido entre pestañas ──
+ * POR QUÉ EXISTE: Firestore cobra el resultado COMPLETO cada vez que un
+ * listener se restablece tras >30 min desconectado (pestaña dormida,
+ * teléfono bloqueado). Con muchas pestañas y teléfonos, los listeners
+ * "siempre vivos" de catálogos re-facturaban 500+ documentos por despertar.
+ * Este modo lee del caché local (0 lecturas) y solo consulta al servidor
+ * cuando el dato venció — con la marca de frescura en localStorage,
+ * COMPARTIDA por todas las pestañas: una sola lectura de servidor por TTL
+ * para todo el navegador. Las escrituras propias invalidan al instante. */
+
+interface CachedEntry {
+  rows: EntityData[] | null;
+  listeners: Set<(rows: EntityData[]) => void>;
+  errorListeners: Set<(error: Error) => void>;
+  inflight: boolean;
+  collectionName: string;
+  build: () => Query<DocumentData>;
+  ttlMs: number;
+}
+
+const cachedRegistry = new Map<string, CachedEntry>();
+const SYNC_PREFIX = 'sx_sync_';
+
+function syncStamp(key: string): number {
+  try {
+    return Number(globalThis.localStorage?.getItem(SYNC_PREFIX + key) ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+function markSynced(key: string) {
+  try {
+    globalThis.localStorage?.setItem(SYNC_PREFIX + key, String(Date.now()));
+  } catch {
+    /* sin almacenamiento: TTL solo en memoria */
+  }
+}
+
+async function refreshCachedEntry(key: string, entry: CachedEntry, force: boolean) {
+  if (entry.inflight) return;
+  const fresh = Date.now() - syncStamp(key) < entry.ttlMs;
+  if (!force && fresh && entry.rows !== null) return;
+
+  entry.inflight = true;
+  try {
+    // 1) Caché local primero: gratis e inmediato.
+    if (entry.rows === null) {
+      try {
+        const cached = await getDocsFromCache(entry.build());
+        if (cached.size > 0) {
+          const rows = cached.docs.map((d) => toEntity(d.id, d.data()));
+          rows.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+          entry.rows = rows;
+          entry.listeners.forEach((listener) => listener(rows));
+        }
+      } catch {
+        /* caché vacío para esta consulta */
+      }
+    }
+    // 2) Servidor solo si venció (o lo invalidó una escritura).
+    if (force || !fresh || entry.rows === null) {
+      const snapshot = await getDocs(entry.build());
+      if (!snapshot.metadata.fromCache) {
+        trackReads(entry.collectionName, snapshot.size);
+      }
+      const rows = snapshot.docs.map((d) => toEntity(d.id, d.data()));
+      rows.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      entry.rows = rows;
+      markSynced(key);
+      entry.listeners.forEach((listener) => listener(rows));
+    }
+  } catch (error) {
+    entry.errorListeners.forEach((listener) =>
+      listener(error instanceof Error ? error : new Error(String(error))),
+    );
+  } finally {
+    entry.inflight = false;
+  }
+}
+
+/**
+ * Invalida el caché TTL de una colección (tras crear/editar/borrar): las
+ * vistas activas se refrescan al instante y las demás pestañas se enteran
+ * por el evento de almacenamiento.
+ */
+export function invalidateCollectionCache(collectionName: string) {
+  cachedRegistry.forEach((entry, key) => {
+    if (entry.collectionName !== collectionName) return;
+    try {
+      globalThis.localStorage?.removeItem(SYNC_PREFIX + key);
+    } catch {
+      /* nada */
+    }
+    if (entry.listeners.size > 0) void refreshCachedEntry(key, entry, true);
+    else entry.rows = null;
+  });
+}
+
+/** Igual que subscribeToCollection pero en modo caché+TTL (sin listener vivo). */
+export function subscribeCachedCollection(
+  collectionName: string,
+  onData: (rows: EntityData[]) => void,
+  onError: (error: Error) => void,
+  filter?: CollectionFilter,
+  options?: CollectionOptions & { ttlMs?: number },
+): () => void {
+  const clausesKey = options?.clauses ? JSON.stringify(options.clauses) : '';
+  const key = `${subscriptionKey(collectionName, filter)}|${options?.limit ?? 'all'}${clausesKey}#ttl`;
+  let entry = cachedRegistry.get(key);
+  if (!entry) {
+    const build = () => {
+      const constraints: QueryConstraint[] = [];
+      if (filter) constraints.push(where(filter.field, '==', filter.value));
+      (options?.clauses ?? []).forEach((clause) => {
+        if (clause.op === 'in') constraints.push(where(clause.field, 'in', clause.values));
+        else constraints.push(where(clause.field, '>=', clause.from), where(clause.field, '<=', clause.to));
+      });
+      if (options?.limit) constraints.push(orderBy('createdAt', 'desc'), limitTo(options.limit));
+      return query(collection(db, collectionName), ...constraints);
+    };
+    entry = {
+      rows: null,
+      listeners: new Set(),
+      errorListeners: new Set(),
+      inflight: false,
+      collectionName,
+      build,
+      ttlMs: options?.ttlMs ?? DEFAULT_CACHE_TTL_MS,
+    };
+    cachedRegistry.set(key, entry);
+  }
+  const current = entry;
+  current.listeners.add(onData);
+  current.errorListeners.add(onError);
+  if (current.rows !== null) onData(current.rows);
+  void refreshCachedEntry(key, current, false);
+  return () => {
+    current.listeners.delete(onData);
+    current.errorListeners.delete(onError);
+  };
+}
+
+/** TTL por defecto: catálogos y listas se refrescan del servidor cada tanto. */
+export const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// Al volver el foco a la pestaña, refrescar SOLO lo vencido y en uso.
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('focus', () => {
+    cachedRegistry.forEach((entry, key) => {
+      if (entry.listeners.size > 0) void refreshCachedEntry(key, entry, false);
+    });
+  });
+  // Otra pestaña invalidó (escritura): recoger el cambio si está en uso.
+  globalThis.addEventListener('storage', (event) => {
+    const e = event as StorageEvent;
+    if (!e.key || !e.key.startsWith(SYNC_PREFIX)) return;
+    if (e.newValue !== null) return; // solo nos importa la invalidación
+    const key = e.key.slice(SYNC_PREFIX.length);
+    const entry = cachedRegistry.get(key);
+    if (entry && entry.listeners.size > 0) void refreshCachedEntry(key, entry, false);
+  });
 }
 
 /* ── Monitor de lecturas de la sesión ─────────────────────────────────
@@ -395,6 +561,7 @@ export async function createDocument(
     createdAt: new Date().toISOString(),
     updatedAt: serverTimestamp(),
   });
+  invalidateCollectionCache(collectionName);
   return ref.id;
 }
 
@@ -410,6 +577,7 @@ export async function setDocument(
     ? { ...data, updatedAt: serverTimestamp() }
     : { ...data, createdAt: new Date().toISOString(), updatedAt: serverTimestamp() };
   await setDoc(doc(db, collectionName, id), payload, { merge });
+  invalidateCollectionCache(collectionName);
 }
 
 /** Actualiza campos de un documento existente. */
@@ -422,11 +590,13 @@ export async function updateDocument(
     ...data,
     updatedAt: serverTimestamp(),
   });
+  invalidateCollectionCache(collectionName);
 }
 
 /** Elimina un documento. */
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   await deleteDoc(doc(db, collectionName, id));
+  invalidateCollectionCache(collectionName);
 }
 
 /**
@@ -445,4 +615,5 @@ export async function adjustCounter(
     [field]: increment(delta),
     updatedAt: serverTimestamp(),
   });
+  invalidateCollectionCache(collectionName);
 }

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
-import { fetchDocumentCachedFirst, subscribeToCollection } from '../services/firestoreService';
+import {
+  fetchDocumentCachedFirst,
+  subscribeCachedCollection,
+  subscribeToCollection,
+} from '../services/firestoreService';
 import {
   clearCaptureWindow,
   resolveOccurrence,
@@ -176,7 +180,11 @@ export function useCaptureWindow(
   const sourceCollection = spec?.once.sourceCollection ?? '';
   useEffect(() => {
     if (sourceCollection === '') return;
-    return subscribeToCollection(sourceCollection, setSourceAll, () => setSourceAll([]));
+    // Catálogo de camiones en modo caché+TTL: el bloqueo por estado del
+    // camión no exige tiempo real (los cambios propios invalidan solos).
+    return subscribeCachedCollection(sourceCollection, setSourceAll, () => setSourceAll([]), undefined, {
+      ttlMs: 30 * 60 * 1000,
+    });
   }, [sourceCollection]);
 
   const sourceRows = useMemo(

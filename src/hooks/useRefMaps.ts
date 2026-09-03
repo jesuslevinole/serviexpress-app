@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { subscribeToCollection, type QueryClause } from '../services/firestoreService';
+import { subscribeCachedCollection, type QueryClause } from '../services/firestoreService';
 import { STATION_KEY_BY_COLLECTION } from '../services/activeStatus';
 import { REF_LABEL_DEPENDENCIES, buildRefLabel } from '../config/collections';
 import type { EntityData, FieldConfig } from '../types/models';
@@ -77,7 +77,7 @@ export function useRefMaps(
       // Tope solo SIN cláusulas (limit exige orderBy y con "in" pediría un
       // índice compuesto); con alcance el conjunto ya es chico.
       const limit = clauses === undefined ? REF_SUBSCRIBE_LIMITS[collectionName] : undefined;
-      return subscribeToCollection(
+      return subscribeCachedCollection(
         collectionName,
         (rows) => {
           rowsByCollection.set(collectionName, rows);
@@ -100,7 +100,8 @@ export function useRefMaps(
           setMaps((prev) => ({ ...prev, [collectionName]: { labels: new Map(), rows: [] } }));
         },
         undefined,
-        clauses !== undefined || limit !== undefined ? { clauses, limit } : undefined,
+        // Catálogos: 30 min de vigencia (las escrituras invalidan al instante).
+        { clauses, limit, ttlMs: 30 * 60 * 1000 },
       );
     });
     return () => unsubscribers.forEach((u) => u());
