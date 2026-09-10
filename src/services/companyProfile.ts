@@ -1,4 +1,4 @@
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 
@@ -23,6 +23,7 @@ const DOC = ['settings_company', 'profile'] as const;
 
 export function subscribeCompanyProfile(
   onData: (profile: CompanyProfile) => void,
+  onError?: (message: string) => void,
 ): () => void {
   return onSnapshot(
     doc(db, DOC[0], DOC[1]),
@@ -40,8 +41,25 @@ export function subscribeCompanyProfile(
         logoUrl: typeof data?.logoUrl === 'string' && data.logoUrl !== '' ? data.logoUrl : null,
       });
     },
-    () => onData({ ...DEFAULT_COMPANY }),
+    (error) => {
+      // Antes se caía a los valores de fábrica EN SILENCIO: parecía que lo
+      // guardado "se borraba solo". Ahora el motivo se ve en pantalla.
+      console.error('[company] no se pudo leer la identidad', error);
+      onError?.(error.message);
+    },
   );
+}
+
+/** Lectura puntual para comprobar que lo guardado quedó (diagnóstico). */
+export async function readCompanyProfileOnce(): Promise<CompanyProfile | null> {
+  const snapshot = await getDoc(doc(db, DOC[0], DOC[1]));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  return {
+    name: typeof data.name === 'string' ? data.name : DEFAULT_COMPANY.name,
+    tagline: typeof data.tagline === 'string' ? data.tagline : DEFAULT_COMPANY.tagline,
+    logoUrl: typeof data.logoUrl === 'string' && data.logoUrl !== '' ? data.logoUrl : null,
+  };
 }
 
 export async function saveCompanyProfile(

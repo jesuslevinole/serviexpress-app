@@ -13,28 +13,37 @@ import {
  * que se guarda desde el módulo Company.
  */
 let shared: CompanyProfile = { ...DEFAULT_COMPANY };
-const listeners = new Set<(profile: CompanyProfile) => void>();
+let sharedError: string | null = null;
+const listeners = new Set<() => void>();
 let started = false;
 
 function ensure() {
   if (started) return;
   started = true;
-  subscribeCompanyProfile((profile) => {
-    shared = profile;
-    listeners.forEach((listener) => listener(profile));
-  });
+  subscribeCompanyProfile(
+    (profile) => {
+      shared = profile;
+      sharedError = null;
+      listeners.forEach((listener) => listener());
+    },
+    (message) => {
+      // La lectura falló: se conserva lo último conocido y se avisa.
+      sharedError = message;
+      listeners.forEach((listener) => listener());
+    },
+  );
 }
 
-export function useCompanyProfile(): CompanyProfile {
-  const [profile, setProfile] = useState<CompanyProfile>(shared);
+export function useCompanyProfile(): CompanyProfile & { error: string | null } {
+  const [, force] = useState(0);
   useEffect(() => {
     ensure();
-    const listener = (value: CompanyProfile) => setProfile(value);
+    const listener = () => force((n) => n + 1);
     listeners.add(listener);
-    setProfile(shared);
+    listener();
     return () => {
       listeners.delete(listener);
     };
   }, []);
-  return profile;
+  return { ...shared, error: sharedError };
 }

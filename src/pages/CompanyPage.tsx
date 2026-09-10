@@ -3,7 +3,11 @@ import { Building2, Upload } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BrandLogo } from '../components/ui/BrandLogo';
 import { useCompanyProfile } from '../hooks/useCompanyProfile';
-import { saveCompanyProfile, uploadCompanyLogo } from '../services/companyProfile';
+import {
+  readCompanyProfileOnce,
+  saveCompanyProfile,
+  uploadCompanyLogo,
+} from '../services/companyProfile';
 import './CompanyPage.css';
 
 /**
@@ -103,8 +107,20 @@ export function CompanyPage() {
         },
         firebaseUser?.uid ?? null,
       );
-      setDirty(false);
-      setSaved(true);
+      // Comprobación real: se vuelve a LEER lo guardado. Si el documento no
+      // se puede leer, el aviso lo dice en vez de "revertirse solo".
+      const stored = await readCompanyProfileOnce();
+      if (stored === null) {
+        setError(
+          'Se guardó, pero al releerlo el documento no aparece. Revisa las reglas de Firestore para settings_company.',
+        );
+      } else {
+        setName(stored.name);
+        setTagline(stored.tagline);
+        setLogoUrl(stored.logoUrl);
+        setDirty(false);
+        setSaved(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? `It could not be saved: ${err.message}` : 'Save error');
     } finally {
@@ -122,6 +138,12 @@ export function CompanyPage() {
         </div>
       </header>
 
+      {company.error ? (
+        <p className="company-error">
+          The saved identity cannot be READ ({company.error}). Firestore rules must allow the
+          collection <code>settings_company</code>; meanwhile the app shows the built-in values.
+        </p>
+      ) : null}
       {error ? <p className="company-error">{error}</p> : null}
       {saved ? <p className="company-saved">Saved — the login and the menu now use it.</p> : null}
 
