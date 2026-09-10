@@ -60,8 +60,8 @@
 
 .company-logo-row {
   display: flex;
-  align-items: flex-end;
-  gap: 20px;
+  align-items: flex-start;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
@@ -122,4 +122,17 @@
 .company-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.company-logo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 22px;
+}
+
+/* Recuadro punteado para juzgar el recorte real del logo. */
+.company-logo-box {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
 }

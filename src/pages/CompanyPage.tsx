@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Building2, Upload } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { BrandLogo } from '../components/ui/BrandLogo';
 import { useCompanyProfile } from '../hooks/useCompanyProfile';
 import { saveCompanyProfile, uploadCompanyLogo } from '../services/companyProfile';
 import './CompanyPage.css';
@@ -23,12 +24,17 @@ export function CompanyPage() {
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
+  // El logo SIEMPRE refleja lo guardado (se aplica al subirlo); los textos
+  // no se pisan mientras el admin los está escribiendo.
+  useEffect(() => {
+    setLogoUrl(company.logoUrl);
+  }, [company.logoUrl]);
+
   useEffect(() => {
     if (dirty) return;
     setName(company.name);
     setTagline(company.tagline);
-    setLogoUrl(company.logoUrl);
-  }, [company.name, company.tagline, company.logoUrl, dirty]);
+  }, [company.name, company.tagline, dirty]);
 
   const handleLogo = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -37,8 +43,18 @@ export function CompanyPage() {
     setSaved(false);
     try {
       const url = await uploadCompanyLogo(files[0]);
+      // Se aplica DE INMEDIATO: subir el archivo y guardarlo son una sola
+      // acción, así el logo nunca queda "subido pero sin aplicar".
+      await saveCompanyProfile(
+        {
+          name: name.trim() === '' ? 'ServiExpress' : name.trim(),
+          tagline: tagline.trim() === '' ? 'Fleet control' : tagline.trim(),
+          logoUrl: url,
+        },
+        firebaseUser?.uid ?? null,
+      );
       setLogoUrl(url);
-      setDirty(true);
+      setSaved(true);
     } catch (err) {
       setError(
         err instanceof Error
@@ -48,6 +64,29 @@ export function CompanyPage() {
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = '';
+    }
+  };
+
+  /** Quitar el logo configurado y volver al de fábrica. */
+  const handleRemoveLogo = async () => {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await saveCompanyProfile(
+        {
+          name: name.trim() === '' ? 'ServiExpress' : name.trim(),
+          tagline: tagline.trim() === '' ? 'Fleet control' : tagline.trim(),
+          logoUrl: null,
+        },
+        firebaseUser?.uid ?? null,
+      );
+      setLogoUrl(null);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? `It could not be removed: ${err.message}` : 'Error');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -96,24 +135,36 @@ export function CompanyPage() {
           <div className="company-logo-preview">
             <span>Menu (38 px)</span>
             <div className="company-logo-box is-small">
-              {logoUrl ? <img src={logoUrl} alt="logo" /> : <em>current</em>}
+              <BrandLogo size={38} />
             </div>
           </div>
-          <div className="company-logo-preview">
+          <div className="company-logo-preview is-login">
             <span>Login (150 px)</span>
             <div className="company-logo-box is-big">
-              {logoUrl ? <img src={logoUrl} alt="logo" /> : <em>current</em>}
+              <BrandLogo size={150} />
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-          >
-            <Upload size={15} />
-            {busy ? 'Working…' : 'Upload logo'}
-          </button>
+          <div className="company-logo-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Upload size={15} />
+              {busy ? 'Working…' : 'Upload logo'}
+            </button>
+            {logoUrl ? (
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={busy}
+                onClick={() => void handleRemoveLogo()}
+              >
+                Remove logo
+              </button>
+            ) : null}
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -122,12 +173,11 @@ export function CompanyPage() {
             onChange={(e) => void handleLogo(e.target.files)}
           />
         </div>
-        {dirty ? (
-          <p className="company-pending">
-            The new logo is uploaded — press <strong>Save</strong> to use it on the login and the
-            menu.
-          </p>
-        ) : null}
+        <p className="company-pending">
+          {logoUrl
+            ? 'A custom logo is in use — it applies as soon as you upload it, on the menu and the login.'
+            : 'No custom logo yet: the app is using the built-in one. Upload a PNG with a transparent background.'}
+        </p>
       </section>
 
       <section className="company-card">
