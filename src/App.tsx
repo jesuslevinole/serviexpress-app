@@ -10,6 +10,7 @@ import { CatalogosPage } from './pages/CatalogosPage';
 import { UniformInventoryPage } from './pages/UniformInventoryPage';
 import { UsuariosPage } from './pages/UsuariosPage';
 import { RolesPage } from './pages/RolesPage';
+import { CompanyPage } from './pages/CompanyPage';
 import type { ReactNode } from 'react';
 import './App.css';
 
@@ -85,6 +86,7 @@ export default function App() {
             </Protected>
           }
         />
+        <Route path="/company" element={<CompanyPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

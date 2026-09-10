@@ -1,0 +1,101 @@
+/* ── Company: identidad de la empresa ──────────────────────────────── */
+.company {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.company-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.company-head h2 {
+  margin: 0;
+}
+
+.company-head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.company-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.company-saved {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--success);
+}
+
+.company-card {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.company-card h3 {
+  margin: 0 0 8px;
+}
+
+.company-hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.company-logo-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.company-logo-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.company-logo-preview img {
+  object-fit: contain;
+}
+
+.company-logo-preview img.is-small {
+  width: 38px;
+  height: 38px;
+}
+
+.company-logo-preview img.is-big {
+  width: 150px;
+  height: 150px;
+}
+
+.company-file {
+  display: none;
+}
+
+.company-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.company-actions {
+  display: flex;
+  justify-content: flex-end;
+}

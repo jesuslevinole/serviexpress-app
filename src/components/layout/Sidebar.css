@@ -20,12 +20,10 @@
 }
 
 .sidebar-brand img {
+  /* El logo se muestra TAL CUAL, sin fondo ni marcos (pedido del cliente). */
   width: 38px;
   height: 38px;
   object-fit: contain;
-  border-radius: 9px;
-  background: #ffffff;
-  padding: 4px;
 }
 
 .sidebar-brand strong {

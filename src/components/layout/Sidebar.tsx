@@ -195,6 +195,12 @@ export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: 
               <span className="sidebar-link-text">Roles</span>
             </NavLink>
           ) : null}
+          {isAdminView ? (
+            <NavLink to="/company" className={linkClass} title="Company (logo and name)">
+              <Building2 size={17} />
+              <span className="sidebar-link-text">Company</span>
+            </NavLink>
+          ) : null}
         </nav>
 
         {/* Firma y versión: siempre al final del menú, también plegado. */}

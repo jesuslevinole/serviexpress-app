@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import bundledLogo from '../../assets/logo.svg';
+import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 
 interface BrandLogoProps {
   size: number;
@@ -14,8 +15,20 @@ interface BrandLogoProps {
  * filtros de color, para respetar los colores originales.
  */
 export function BrandLogo({ size, className, alt = 'ServiExpress' }: BrandLogoProps) {
-  const sources = ['/logo.png', '/logo.jpg', '/logo.svg', bundledLogo];
+  const { logoUrl } = useCompanyProfile();
+  // El logo subido en "Company" tiene prioridad; luego los archivos de
+  // public/ y por último el incluido en el código.
+  const sources = [
+    ...(logoUrl ? [logoUrl] : []),
+    '/logo.png',
+    '/logo.jpg',
+    '/logo.svg',
+    bundledLogo,
+  ];
   const [index, setIndex] = useState(0);
+  useEffect(() => {
+    setIndex(0);
+  }, [logoUrl]);
 
   return (
     <img

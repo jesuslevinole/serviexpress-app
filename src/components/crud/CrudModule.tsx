@@ -38,6 +38,8 @@ import { CaptureWindowBanner } from './CaptureWindowBanner';
 import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
 import { AlertThresholdsModal } from './AlertThresholdsModal';
+import { EmailRecipientsModal } from './EmailRecipientsModal';
+import { notifyModuleSave } from '../../services/emailNotifications';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
@@ -46,7 +48,7 @@ import { DetailTabs } from './DetailTabs';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
 import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
-import { Gauge, Truck } from 'lucide-react';
+import { Gauge, Mail, Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { CaptureWindowModal } from './CaptureWindowModal';
@@ -287,6 +289,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   /** Umbrales de alerta (rojo cuando el número es <= umbral), configurables. */
   const alertThresholds = useAlertThresholds();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [mailCfgOpen, setMailCfgOpen] = useState(false);
   /** Camión abierto en el visor rápido desde una lista informativa. */
   const [peekTruck, setPeekTruck] = useState<EntityData | null>(null);
 
@@ -362,6 +365,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     return `${config.collection}/${sanitizeSegment(auditLabel(record))}`;
   };
+
+  /** Resumen corto del registro guardado (para el correo de aviso). */
+  const saveSummary = (payload: Record<string, FieldValue>): string =>
+    config.fields
+      .filter((field) => field.compute === undefined && field.key in payload)
+      .slice(0, 6)
+      .map((field) => {
+        const value = payload[field.key] ?? null;
+        if (value === null || value === '') return null;
+        return `${field.label}: ${displayValue(field, value, refLabel)}`;
+      })
+      .filter(Boolean)
+      .join('\n');
 
   /** Nombre auditables del usuario REAL (con "(as X)" cuando simula). */
   const auditName = (): string => {
@@ -1109,6 +1125,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }
       if (editing) {
         await updateDocument(config.collection, editing.id, payload);
+        notifyModuleSave({
+          moduleId: config.id,
+          moduleTitle: config.title,
+          action: 'update',
+          recordLabel: auditLabel(editing),
+          summary: saveSummary(payload),
+        });
         // Auditoría universal: cada campo cambiado, con valores legibles.
         void logRecordChange({
           collection: config.collection,
@@ -1203,6 +1226,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           payload[`${config.detail.countField}Ok`] = true;
         }
         const newId = await createDocument(config.collection, payload);
+        notifyModuleSave({
+          moduleId: config.id,
+          moduleTitle: config.title,
+          action: 'create',
+          recordLabel: displayValue(config.fields[0], payload[config.fields[0].key] ?? null, refLabel),
+          summary: saveSummary(payload),
+        });
         void logRecordChange({
           collection: config.collection,
           recordId: newId,
@@ -1618,6 +1648,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             <button type="button" className="btn btn-outline" onClick={() => setExportOpen(true)}>
               <FileSpreadsheet size={16} />
               <span className="crud-btn-text">Export Excel</span>
+            </button>
+          ) : null}
+          {isAdminView ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Choose which users get an email when a form of this module is saved"
+              onClick={() => setMailCfgOpen(true)}
+            >
+              <Mail size={16} />
+              <span className="crud-btn-text">Email on save</span>
             </button>
           ) : null}
           {isAdminView &&
@@ -2174,6 +2215,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           collection={COLLECTIONS.trucks}
           record={peekTruck}
           onClose={() => setPeekTruck(null)}
+        />
+      ) : null}
+
+      {mailCfgOpen ? (
+        <EmailRecipientsModal
+          moduleId={config.id}
+          moduleTitle={config.title}
+          byUid={firebaseUser?.uid ?? null}
+          onClose={() => setMailCfgOpen(false)}
         />
       ) : null}
 

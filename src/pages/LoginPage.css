@@ -20,14 +20,10 @@
 }
 
 .login-brand img {
+  /* El logo se muestra TAL CUAL, sin fondo ni marcos (pedido del cliente). */
   width: 150px;
   height: 150px;
   object-fit: contain;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: var(--shadow-lg);
 }
 
 .login-brand h1 {

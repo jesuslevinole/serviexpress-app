@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardCheck,
   ClipboardList,
@@ -38,6 +39,7 @@ interface StatCard {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const alertThresholds = useAlertThresholds();
   const { can, profile, viewAs, isAdminView, effectiveRole } = useAuth();
   const { moduleTitle } = useUiConfig();
@@ -244,7 +246,17 @@ export function DashboardPage() {
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <article key={card.id} className={`dash-card tone-${card.tone}`}>
+            <article
+              key={card.id}
+              className={`dash-card tone-${card.tone} is-clickable`}
+              role="button"
+              tabIndex={0}
+              title={`Open ${moduleTitle(card.id, card.label)}`}
+              onClick={() => navigate(`/${card.id}`)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') navigate(`/${card.id}`);
+              }}
+            >
               <span className="dash-card-icon">
                 <Icon size={16} />
               </span>
