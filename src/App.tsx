@@ -83,10 +83,10 @@ export default function App() {
           element={
             <Protected moduleId="roles">
               <RolesPage />
-        <Route path="/company" element={<CompanyPage />} />
             </Protected>
           }
         />
+        <Route path="/company" element={<CompanyPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
