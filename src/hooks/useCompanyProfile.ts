@@ -5,7 +5,13 @@ import {
   type CompanyProfile,
 } from '../services/companyProfile';
 
-/* Una sola suscripción compartida (1 documento chico) para toda la app. */
+/**
+ * Nombre, lema y logo de la empresa, vivos en toda la app.
+ * UNA sola suscripción compartida (1 documento chico): el primer componente
+ * la abre y TODOS los que lleguen después reciben el último valor conocido
+ * de inmediato — así el menú lateral se actualiza en el mismo instante en
+ * que se guarda desde el módulo Company.
+ */
 let shared: CompanyProfile = { ...DEFAULT_COMPANY };
 const listeners = new Set<(profile: CompanyProfile) => void>();
 let started = false;
@@ -19,7 +25,6 @@ function ensure() {
   });
 }
 
-/** Nombre, lema y logo de la empresa, vivos en toda la app. */
 export function useCompanyProfile(): CompanyProfile {
   const [profile, setProfile] = useState<CompanyProfile>(shared);
   useEffect(() => {

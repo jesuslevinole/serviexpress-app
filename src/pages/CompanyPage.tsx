@@ -6,10 +6,9 @@ import { saveCompanyProfile, uploadCompanyLogo } from '../services/companyProfil
 import './CompanyPage.css';
 
 /**
- * "Company" (solo admin): el nombre de la empresa, el lema y el LOGO que se
- * muestran en el login y en el menú lateral. El logo sube a Storage y se
- * muestra TAL CUAL (sin fondos ni marcos) con el mismo tamaño de siempre:
- * 38 px en el menú, 150 px en el login.
+ * "Company" (solo admin): nombre, lema y LOGO que se muestran en el login y
+ * en el menú lateral. El logo sube a Storage y se muestra TAL CUAL (sin
+ * fondos ni marcos) con los tamaños de siempre: 38 px menú, 150 px login.
  */
 export function CompanyPage() {
   const { firebaseUser, isAdminView } = useAuth();
@@ -17,16 +16,19 @@ export function CompanyPage() {
   const [name, setName] = useState(company.name);
   const [tagline, setTagline] = useState(company.tagline);
   const [logoUrl, setLogoUrl] = useState<string | null>(company.logoUrl);
+  /** Evita que la suscripción pise lo que el admin está escribiendo. */
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (dirty) return;
     setName(company.name);
     setTagline(company.tagline);
     setLogoUrl(company.logoUrl);
-  }, [company.name, company.tagline, company.logoUrl]);
+  }, [company.name, company.tagline, company.logoUrl, dirty]);
 
   if (!isAdminView) {
     return (
@@ -41,9 +43,11 @@ export function CompanyPage() {
     if (!files || files.length === 0) return;
     setBusy(true);
     setError(null);
+    setSaved(false);
     try {
       const url = await uploadCompanyLogo(files[0]);
       setLogoUrl(url);
+      setDirty(true);
     } catch (err) {
       setError(
         err instanceof Error
@@ -69,6 +73,7 @@ export function CompanyPage() {
         },
         firebaseUser?.uid ?? null,
       );
+      setDirty(false);
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? `It could not be saved: ${err.message}` : 'Save error');
@@ -94,16 +99,20 @@ export function CompanyPage() {
         <h3>Logo</h3>
         <p className="company-hint">
           Shown exactly as uploaded — no background, no frames — at the same sizes as today:
-          38 px in the menu, 150 px on the login. A PNG with transparent background looks best.
+          38 px in the menu, 150 px on the login. A PNG with a transparent background looks best.
         </p>
         <div className="company-logo-row">
           <div className="company-logo-preview">
             <span>Menu (38 px)</span>
-            {logoUrl ? <img src={logoUrl} alt="logo" className="is-small" /> : <em>current</em>}
+            <div className="company-logo-box is-small">
+              {logoUrl ? <img src={logoUrl} alt="logo" /> : <em>current</em>}
+            </div>
           </div>
           <div className="company-logo-preview">
             <span>Login (150 px)</span>
-            {logoUrl ? <img src={logoUrl} alt="logo" className="is-big" /> : <em>current</em>}
+            <div className="company-logo-box is-big">
+              {logoUrl ? <img src={logoUrl} alt="logo" /> : <em>current</em>}
+            </div>
           </div>
           <button
             type="button"
@@ -112,7 +121,7 @@ export function CompanyPage() {
             onClick={() => fileInput.current?.click()}
           >
             <Upload size={15} />
-            Upload logo
+            {busy ? 'Working…' : 'Upload logo'}
           </button>
           <input
             ref={fileInput}
@@ -122,17 +131,39 @@ export function CompanyPage() {
             onChange={(e) => void handleLogo(e.target.files)}
           />
         </div>
+        {dirty ? (
+          <p className="company-pending">
+            The new logo is uploaded — press <strong>Save</strong> to use it on the login and the
+            menu.
+          </p>
+        ) : null}
       </section>
 
       <section className="company-card">
         <h3>Texts</h3>
         <label className="company-field">
-          Company name
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+          <span>Company name</span>
+          <input
+            className="field-input"
+            value={name}
+            maxLength={60}
+            onChange={(e) => {
+              setName(e.target.value);
+              setDirty(true);
+            }}
+          />
         </label>
         <label className="company-field">
-          Tagline (under the name)
-          <input value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={90} />
+          <span>Tagline (under the name)</span>
+          <input
+            className="field-input"
+            value={tagline}
+            maxLength={90}
+            onChange={(e) => {
+              setTagline(e.target.value);
+              setDirty(true);
+            }}
+          />
         </label>
       </section>
 

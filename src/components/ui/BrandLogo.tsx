@@ -16,8 +16,8 @@ interface BrandLogoProps {
  */
 export function BrandLogo({ size, className, alt = 'ServiExpress' }: BrandLogoProps) {
   const { logoUrl } = useCompanyProfile();
-  // El logo subido en "Company" tiene prioridad; luego los archivos de
-  // public/ y por último el incluido en el código.
+  // El logo subido en "Company" manda; si no hay, los archivos de public/ y
+  // por último el incluido en el código.
   const sources = [
     ...(logoUrl ? [logoUrl] : []),
     '/logo.png',
@@ -26,6 +26,7 @@ export function BrandLogo({ size, className, alt = 'ServiExpress' }: BrandLogoPr
     bundledLogo,
   ];
   const [index, setIndex] = useState(0);
+  // Al cambiar el logo configurado, volver a la primera fuente.
   useEffect(() => {
     setIndex(0);
   }, [logoUrl]);

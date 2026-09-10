@@ -34,6 +34,12 @@
   color: var(--success);
 }
 
+.company-pending {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--warning);
+}
+
 .company-card {
   padding: 16px 18px;
   border: 1px solid var(--border);
@@ -46,7 +52,7 @@
 }
 
 .company-hint {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   font-size: 12.5px;
   color: var(--text-soft);
   line-height: 1.5;
@@ -55,7 +61,7 @@
 .company-logo-row {
   display: flex;
   align-items: flex-end;
-  gap: 18px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -63,23 +69,37 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 11.5px;
   color: var(--text-soft);
 }
 
-.company-logo-preview img {
-  object-fit: contain;
+/* Las vistas previas reservan su tamaño exacto para juzgar el resultado. */
+.company-logo-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.company-logo-preview img.is-small {
+.company-logo-box.is-small {
   width: 38px;
   height: 38px;
 }
 
-.company-logo-preview img.is-big {
+.company-logo-box.is-big {
   width: 150px;
   height: 150px;
+}
+
+.company-logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.company-logo-box em {
+  font-size: 11px;
+  font-style: normal;
 }
 
 .company-file {
@@ -90,9 +110,13 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 12.5px;
   color: var(--text-soft);
+}
+
+.company-field:last-child {
+  margin-bottom: 0;
 }
 
 .company-actions {

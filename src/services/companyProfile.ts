@@ -3,10 +3,9 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 
 /**
- * Identidad de la empresa (configurable por el admin en "Company"): nombre,
- * lema y logo. El logo sube a Storage (carpeta company/) y su URL se guarda
- * aquí; el login y el menú lateral lo muestran con el MISMO tamaño de
- * siempre — solo cambia la imagen y el texto.
+ * Identidad de la empresa (módulo "Company"): nombre, lema y logo. El logo
+ * sube a Storage (carpeta company/) y su URL se guarda aquí; el login y el
+ * menú lateral lo muestran con el MISMO tamaño de siempre.
  */
 export interface CompanyProfile {
   name: string;

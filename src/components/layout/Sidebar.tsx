@@ -29,6 +29,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import { CRUD_MODULES } from '../../config/modules';
 import { BrandLogo } from '../ui/BrandLogo';
+import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 import { APP_VERSION } from '../../config/version';
 import './Sidebar.css';
 
@@ -54,6 +55,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: SidebarProps) {
+  const company = useCompanyProfile();
   const { can, isAdminView } = useAuth();
   const { editMode, moduleTitle, sortModules, saveModuleOverride, saveMenuOrder } = useUiConfig();
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -94,8 +96,8 @@ export function Sidebar({ open, collapsed = false, onToggleCollapse, onClose }: 
         <div className="sidebar-brand">
           <BrandLogo size={34} />
           <div>
-            <strong>ServiExpress</strong>
-            <span>Fleet control</span>
+            <strong>{company.name}</strong>
+            <span>{company.tagline}</span>
           </div>
           <button type="button" className="icon-btn sidebar-close" onClick={onClose} aria-label="Close menu">
             <X size={18} />

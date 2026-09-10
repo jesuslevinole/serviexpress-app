@@ -5,9 +5,11 @@ import { checkEmailRegistered, sendSetPasswordEmail } from '../services/userServ
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
 import { BrandLogo } from '../components/ui/BrandLogo';
+import { useCompanyProfile } from '../hooks/useCompanyProfile';
 import './LoginPage.css';
 
 export function LoginPage() {
+  const company = useCompanyProfile();
   const { firebaseUser, loading, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,8 +77,8 @@ export function LoginPage() {
     <div className="login">
       <div className="login-panel login-brand">
         <BrandLogo size={110} />
-        <h1>ServiExpress</h1>
-        <p>Fleet control · maintenance, shop, drivers and units</p>
+        <h1>{company.name}</h1>
+        <p>{company.tagline}</p>
       </div>
       <div className="login-panel login-form-panel">
         <form className="login-form" onSubmit={handleSubmit}>
