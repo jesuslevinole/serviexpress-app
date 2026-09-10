@@ -11,7 +11,7 @@ import './CompanyPage.css';
  * fondos ni marcos) con los tamaños de siempre: 38 px menú, 150 px login.
  */
 export function CompanyPage() {
-  const { firebaseUser, isAdminView } = useAuth();
+  const { firebaseUser } = useAuth();
   const company = useCompanyProfile();
   const [name, setName] = useState(company.name);
   const [tagline, setTagline] = useState(company.tagline);
@@ -29,15 +29,6 @@ export function CompanyPage() {
     setTagline(company.tagline);
     setLogoUrl(company.logoUrl);
   }, [company.name, company.tagline, company.logoUrl, dirty]);
-
-  if (!isAdminView) {
-    return (
-      <div className="app-no-access">
-        <h2>No access</h2>
-        <p>Only administrators can edit the company identity.</p>
-      </div>
-    );
-  }
 
   const handleLogo = async (files: FileList | null) => {
     if (!files || files.length === 0) return;

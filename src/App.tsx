@@ -14,12 +14,32 @@ import { CompanyPage } from './pages/CompanyPage';
 import type { ReactNode } from 'react';
 import './App.css';
 
-/** Protege una ruta: exige sesión iniciada y permiso de ver el módulo. */
-function Protected({ moduleId, children }: { moduleId: string; children: ReactNode }) {
-  const { firebaseUser, loading, can } = useAuth();
+/**
+ * Protege una ruta: exige sesión iniciada y, según el caso, permiso de ver
+ * el módulo o ser administrador. La SESIÓN se evalúa primero: al cerrar
+ * sesión, cualquier pantalla manda al login en vez de mostrar "No access".
+ */
+function Protected({
+  moduleId,
+  adminOnly,
+  children,
+}: {
+  moduleId?: string;
+  adminOnly?: boolean;
+  children: ReactNode;
+}) {
+  const { firebaseUser, loading, can, isAdminView } = useAuth();
   if (loading) return <Spinner label="Checking session…" />;
   if (!firebaseUser) return <Navigate to="/login" replace />;
-  if (!can(moduleId, 'ver')) {
+  if (adminOnly && !isAdminView) {
+    return (
+      <div className="app-no-access">
+        <h2>No access</h2>
+        <p>Only administrators can open this section.</p>
+      </div>
+    );
+  }
+  if (moduleId && !can(moduleId, 'ver')) {
     return (
       <div className="app-no-access">
         <h2>No access</h2>
@@ -86,7 +106,14 @@ export default function App() {
             </Protected>
           }
         />
-        <Route path="/company" element={<CompanyPage />} />
+        <Route
+          path="/company"
+          element={
+            <Protected adminOnly>
+              <CompanyPage />
+            </Protected>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
