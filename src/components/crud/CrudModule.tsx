@@ -855,7 +855,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setPage(1);
   };
 
-  const sortedRows = useMemo(() => {
+  const baseSortedRows = useMemo(() => {
     // Sin orden elegido: de la fecha más reciente a la más antigua.
     if (!sortKey || !sortDir) {
       if (!primaryDateKey) return filteredRows;
@@ -887,6 +887,42 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, sortKey, sortDir, config.fields, refMaps, primaryDateKey]);
+
+  /**
+   * Los DUPLICADOS van primero: se ven en la página 1 sin buscarlos, junto
+   * con su "gemelo" más reciente para poder comparar antes de borrar. El
+   * resto conserva el orden elegido.
+   */
+  const sortedRows = useMemo(() => {
+    if (duplicateIds.size === 0) return baseSortedRows;
+    const unique = config.uniqueBy;
+    // Valores repetidos (para subir también el registro que se conserva).
+    const clashValues = new Set<string>();
+    if (unique) {
+      baseSortedRows.forEach((row) => {
+        if (!duplicateIds.has(row.id)) return;
+        const value = row[unique.field];
+        if (typeof value === 'string') clashValues.add(value);
+      });
+    }
+    const rank = (row: EntityData): number => {
+      if (duplicateIds.has(row.id)) return 0;
+      if (unique) {
+        const value = row[unique.field];
+        if (typeof value === 'string' && clashValues.has(value)) return 1;
+      }
+      return 2;
+    };
+    return [...baseSortedRows].sort((a, b) => {
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      if (!unique) return 0;
+      // Cada camión repetido con sus copias juntas.
+      const valueA = typeof a[unique.field] === 'string' ? (a[unique.field] as string) : '';
+      const valueB = typeof b[unique.field] === 'string' ? (b[unique.field] as string) : '';
+      return valueA.localeCompare(valueB);
+    });
+  }, [baseSortedRows, duplicateIds, config.uniqueBy]);
 
   /** Página visible (máx 50 filas). */
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
@@ -1817,6 +1853,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                 </button>
               </>
             )}
+          </p>
+        ) : null}
+        {duplicateIds.size > 0 ? (
+          <p className="crud-dup-note">
+            <strong>{duplicateIds.size}</strong>{' '}
+            {duplicateIds.size === 1 ? 'record is' : 'records are'} repeated in {config.title} and
+            {duplicateIds.size === 1 ? ' is' : ' are'} shown first, marked{' '}
+            <span className="dtable-flag">DUPLICATE</span>: keep the newest and delete the marked
+            one. Deleting here does not affect the truck history in Trucks.
           </p>
         ) : null}
         {captureSpec ? (

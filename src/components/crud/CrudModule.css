@@ -272,3 +272,19 @@
   color: var(--danger);
   font-weight: 800;
 }
+
+/* Aviso de registros repetidos (Fleet). */
+.crud-dup-note {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.crud-dup-note .dtable-flag {
+  margin: 0 2px;
+}
