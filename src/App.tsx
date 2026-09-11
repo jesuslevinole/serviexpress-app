@@ -109,7 +109,7 @@ export default function App() {
         <Route
           path="/company"
           element={
-            <Protected adminOnly>
+            <Protected moduleId="company">
               <CompanyPage />
             </Protected>
           }

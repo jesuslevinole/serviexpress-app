@@ -45,6 +45,8 @@ interface DataTableProps<T extends { id: string }> {
   onToggleActive?: (row: T) => void;
   /** ¿La fila está activa? (pinta el botón y atenúa las inactivas). */
   isRowActive?: (row: T) => boolean;
+  /** Etiqueta de aviso para la fila (p. ej. "DUPLICATE"); null = sin aviso. */
+  rowFlag?: (row: T) => { label: string; title: string } | null;
   /**
    * Selección múltiple. Si se define, aparece una casilla por fila y otra en
    * el encabezado para marcar o desmarcar todo lo que se está viendo.
@@ -74,6 +76,7 @@ export function DataTable<T extends { id: string }>({
   onHistory,
   onToggleActive,
   isRowActive,
+  rowFlag,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -167,6 +170,11 @@ export function DataTable<T extends { id: string }>({
                       >
                         <PlusCircle size={18} strokeWidth={2.2} />
                       </button>
+                    ) : null}
+                    {rowFlag?.(row) ? (
+                      <span className="dtable-flag" title={rowFlag(row)!.title}>
+                        {rowFlag(row)!.label}
+                      </span>
                     ) : null}
                     {onHistory ? (
                       <button

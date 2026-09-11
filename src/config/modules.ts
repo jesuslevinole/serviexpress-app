@@ -2022,6 +2022,7 @@ export const PERMISSION_MODULES: { id: string; title: string }[] = [
   { id: 'catalogs', title: 'Catalogs' },
   { id: 'users', title: 'Users' },
   { id: 'roles', title: 'Roles' },
+  { id: 'company', title: 'Company (logo, name)' },
   { id: 'customize', title: 'Customization (required fields & layout)' },
   { id: 'capturedBy', title: 'Captured by (edit the capturing user)' },
   { id: 'entityStation', title: 'Entity & Station fields (edit in forms)' },

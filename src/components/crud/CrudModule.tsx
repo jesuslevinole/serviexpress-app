@@ -290,6 +290,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const alertThresholds = useAlertThresholds();
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [mailCfgOpen, setMailCfgOpen] = useState(false);
+  /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
+  const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
   const [peekTruck, setPeekTruck] = useState<EntityData | null>(null);
 
@@ -387,6 +389,32 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   /** Etiqueta legible de un registro para la bitácora. */
   const auditLabel = (record: EntityData): string =>
     displayValue(config.fields[0], effectiveValue(config.fields[0], record), refLabel);
+
+  /**
+   * Duplicados del valor único ya guardados (Fleet: el mismo camión dos
+   * veces). Se conserva el MÁS RECIENTE; los anteriores se marcan para
+   * borrarlos a mano — borrar en Fleet no toca el historial del camión en
+   * Trucks, que vive en su propia colección.
+   */
+  const duplicateIds = useMemo(() => {
+    const unique = config.uniqueBy;
+    if (!unique) return new Set<string>();
+    const newestByValue = new Map<string, { id: string; stamp: string }>();
+    const extra = new Set<string>();
+    [...allRows]
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+      .forEach((row) => {
+        const value = row[unique.field];
+        if (typeof value !== 'string' || value === '') return;
+        const seen = newestByValue.get(value);
+        if (!seen) {
+          newestByValue.set(value, { id: row.id, stamp: String(row.createdAt ?? '') });
+          return;
+        }
+        extra.add(row.id);
+      });
+    return extra;
+  }, [allRows, config.uniqueBy]);
 
   /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
   const captureLocked = lockMessageFor(captureInfo.status);
@@ -1212,9 +1240,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           const clash = rows.find((row) => row[unique.field] === value);
           if (clash) {
             const who = typeof clash.idUsers === 'string' ? refLabel(COLLECTIONS.users, clash.idUsers) : '';
+            const field = config.fields.find((f) => f.key === unique.field);
+            const label =
+              field?.refCollection && typeof value === 'string'
+                ? refLabel(field.refCollection, value)
+                : String(value ?? '');
             setFormError(
-              `That ${unique.label} is already registered${who && who !== '—' ? ` by ${who}` : ''}. Look it up in the list and check with them before adding it again.`,
+              `That ${unique.label} is already in ${config.title}${who && who !== '—' ? ` (added by ${who})` : ''}. Nothing was duplicated — open the existing record to edit it.`,
             );
+            // Se ofrece EDITAR el que ya existe, en vez de dejar al usuario
+            // buscándolo a mano en la lista.
+            setUniqueClash({ row: clash, label });
             setBusy(false);
             return;
           }
@@ -1847,6 +1883,18 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           isRowActive={
             config.activeToggle ? (row) => isActiveRecord(row, config.activeToggle) : undefined
           }
+          rowFlag={
+            duplicateIds.size > 0
+              ? (row) =>
+                  duplicateIds.has(row.id)
+                    ? {
+                        label: 'DUPLICATE',
+                        title:
+                          'This truck already has a newer record in Fleet. Delete this older one; the truck history in Trucks is not affected.',
+                      }
+                    : null
+              : undefined
+          }
           onToggleActive={
             config.activeToggle && canEdit
               ? (row) => {
@@ -2215,6 +2263,22 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           collection={COLLECTIONS.trucks}
           record={peekTruck}
           onClose={() => setPeekTruck(null)}
+        />
+      ) : null}
+
+      {uniqueClash ? (
+        <ConfirmDialog
+          open
+          title={`${config.title}: this ${config.uniqueBy?.label ?? 'record'} is already registered`}
+          message={`${uniqueClash.label} already has a record here, so nothing was duplicated. Accept to open that record and edit it; cancel to stay on this form.`}
+          onConfirm={() => {
+            const target = uniqueClash.row;
+            setUniqueClash(null);
+            setFormError(null);
+            setFormOpen(false);
+            openEdit(target);
+          }}
+          onCancel={() => setUniqueClash(null)}
         />
       ) : null}
 

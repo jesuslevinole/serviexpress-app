@@ -122,3 +122,17 @@
 .dtable-power-off {
   color: var(--danger);
 }
+
+/* Aviso por fila (p. ej. camión repetido en Fleet). */
+.dtable-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  cursor: help;
+}

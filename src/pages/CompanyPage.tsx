@@ -16,7 +16,8 @@ import './CompanyPage.css';
  * fondos ni marcos) con los tamaños de siempre: 38 px menú, 150 px login.
  */
 export function CompanyPage() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, can } = useAuth();
+  const canEdit = can('company', 'editar');
   const company = useCompanyProfile();
   const [name, setName] = useState(company.name);
   const [tagline, setTagline] = useState(company.tagline);
@@ -180,7 +181,7 @@ export function CompanyPage() {
               <button
                 type="button"
                 className="btn btn-outline"
-                disabled={busy}
+                disabled={busy || !canEdit}
                 onClick={() => void handleRemoveLogo()}
               >
                 Remove logo
@@ -234,7 +235,7 @@ export function CompanyPage() {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={busy}
+          disabled={busy || !canEdit}
           onClick={() => void handleSave()}
         >
           {busy ? 'Working…' : 'Save'}

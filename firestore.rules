@@ -1,8 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regla base: solo usuarios autenticados pueden leer/escribir.
-    // Afínala por colección cuando definas los roles finales.
+    /**
+     * Regla base: cualquier usuario CON SESIÓN puede leer y escribir.
+     * El control fino de quién ve y edita qué lo hace el app por ROLES.
+     * Importante: esta regla debe estar PUBLICADA en la consola de Firebase
+     * (Firestore Database -> Reglas -> Publicar). Lo que vale es lo
+     * publicado, no este archivo del repositorio.
+     * Cubre también las colecciones de configuración y bitácoras:
+     * settings_company, settings_alerts, settings_notifications,
+     * settings_windows, change_log y messages_log.
+     */
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
