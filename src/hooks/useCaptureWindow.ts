@@ -248,6 +248,13 @@ export function useCaptureWindow(
         const target = row[key];
         const parentId = row[parentKey];
         if (typeof target !== 'string' || target === '' || map.has(target)) return;
+        // Renglón HUÉRFANO: su reporte ya no existe (se borró). No debe
+        // seguir bloqueando al camión — el reporte que lo "tenía" se fue.
+        if (typeof parentId === 'string' && parentId !== '') {
+          const resolved = parentById.get(parentId);
+          const known = parentById.has(parentId) || parentId in extraParents;
+          if (known && !resolved) return;
+        }
         map.set(target, {
           rowId: row.id,
           parentId: typeof parentId === 'string' ? parentId : '',
@@ -255,7 +262,7 @@ export function useCaptureWindow(
         });
       });
     return map;
-  }, [spec, windowRows, parentKey, parentById]);
+  }, [spec, windowRows, parentKey, parentById, extraParents]);
 
   const blocked = useMemo(() => {
     const map = new Map<string, string>();

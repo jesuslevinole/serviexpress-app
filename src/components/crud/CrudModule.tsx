@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
+  fetchDocumentsWhere,
   adjustCounter,
   countDocuments,
   createDocument,
@@ -1356,7 +1357,31 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         setFormOpen(false);
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not save');
+      // Razón CLARA para el BC: los fallos típicos (permisos, cuota, red)
+      // tienen mensaje en español; el resto muestra el texto original para
+      // poder reportarlo tal cual.
+      const raw = err instanceof Error ? err.message : String(err);
+      const lower = raw.toLowerCase();
+      let reason = raw;
+      if (lower.includes('permission') || lower.includes('insufficient')) {
+        reason =
+          'Firestore rechazó el guardado por permisos. Avisa al administrador: hay que revisar las reglas de la base de datos.';
+      } else if (lower.includes('quota') || lower.includes('resource-exhausted')) {
+        reason =
+          'La base de datos llegó a su límite diario. El reporte NO se guardó; inténtalo más tarde o avisa al administrador.';
+      } else if (
+        lower.includes('offline') ||
+        lower.includes('unavailable') ||
+        lower.includes('network')
+      ) {
+        reason =
+          'Sin conexión con la base de datos. Revisa tu internet y vuelve a presionar Guardar (no cierres esta ventana).';
+      } else if (lower.includes('not-found')) {
+        reason =
+          'Un registro enlazado ya no existe (pudo borrarse mientras capturabas). Cierra y vuelve a abrir el formulario.';
+      }
+      console.error('[save] fallo al guardar', err);
+      setFormError(`No se pudo guardar: ${reason}`);
     } finally {
       setBusy(false);
     }
@@ -1380,6 +1405,26 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (!deleting) return;
     setBusy(true);
     try {
+      // Borrado EN CASCADA: los renglones del registro (y sus copias en la
+      // colección espejo) se van con él. Sin esto quedaban huérfanos y
+      // seguían bloqueando al camión en la ventana de captura.
+      if (config.detail) {
+        const detail = config.detail;
+        try {
+          const lines = await fetchDocumentsWhere(detail.collection, {
+            field: detail.parentKey,
+            value: deleting.id,
+          });
+          for (const line of lines) {
+            await deleteDocument(detail.collection, line.id);
+            if (detail.mirror) {
+              await deleteDocument(detail.mirror.collection, `${detail.mirror.idPrefix}${line.id}`);
+            }
+          }
+        } catch (error) {
+          console.error('[delete] no se pudieron borrar los renglones', error);
+        }
+      }
       await deleteDocument(config.collection, deleting.id);
       void logRecordChange({
         collection: config.collection,
