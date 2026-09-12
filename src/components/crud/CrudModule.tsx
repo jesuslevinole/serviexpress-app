@@ -1245,7 +1245,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         // renglón de mantenimiento (los exentos pueden, para correcciones).
         if (captureSpec && !exemptFromWindow && config.detail && draftRows.length === 0) {
           setFormError(
-            'An empty BC Report cannot be saved: use "Add lines" and capture at least one truck before saving.',
+            'An empty BC Report cannot be saved: use "Add truck" and capture at least one truck before saving.',
           );
           setBusy(false);
           return;

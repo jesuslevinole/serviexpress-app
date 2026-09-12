@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ListPlus, Plus, Trash2 } from 'lucide-react';
+import { ListPlus, Trash2 } from 'lucide-react';
 import { FormField } from '../ui/FormField';
 import { Modal } from '../ui/Modal';
 import { displayCell } from './displayValue';
@@ -172,13 +172,20 @@ export function DraftDetailRows({
     return options.sort((a, b) => a.label.localeCompare(b.label));
   };
 
-  const handleAdd = () => {
+  /** ¿El formulario de captura tiene algo escrito? */
+  const draftHasData = fields.some((field) => {
+    const value = draft[field.key];
+    return value !== '' && value !== null && value !== undefined && value !== false;
+  });
+
+  /** Agrega el renglón capturado. Devuelve false si algo lo impide. */
+  const handleAdd = (): boolean => {
     const missing = fields.filter(
       (field) => field.required && (draft[field.key] === '' || draft[field.key] === null),
     );
     if (missing.length > 0) {
-      setError(`Fill in ${missing.map((f) => f.label).join(', ')} before adding the line.`);
-      return;
+      setError(`Fill in ${missing.map((f) => f.label).join(', ')} before saving the line.`);
+      return false;
     }
     const unique = detail.uniqueRowKey;
     if (unique) {
@@ -190,12 +197,12 @@ export function DraftDetailRows({
           : String(chosen ?? '');
       if (rows.some((row) => row[unique.key] === chosen && chosen !== '' && chosen !== null)) {
         setError(`The ${unique.label} "${name}" is already in this ${detail.title.toLowerCase()}. Each ${unique.label} goes only once.`);
-        return;
+        return false;
       }
       const reason = typeof chosen === 'string' ? blockedRefs?.[unique.key]?.get(chosen) : undefined;
       if (reason) {
         setError(`The ${unique.label} "${name}" can't be added: ${reason}.`);
-        return;
+        return false;
       }
     }
     if (control && available !== null) {
@@ -207,12 +214,13 @@ export function DraftDetailRows({
             ? 'There is no stock of this uniform and size. Register it first in Uniform inventory, with the “Add stock” button.'
             : `Not enough stock: only ${available} available. Lower the quantity, or register more in Uniform inventory.`,
         );
-        return;
+        return false;
       }
     }
     setError(null);
     onChange([...rows, draft]);
     setDraft(blank);
+    return true;
   };
 
   const [open, setOpen] = useState(false);
@@ -239,7 +247,7 @@ export function DraftDetailRows({
         </div>
         <button type="button" className="btn btn-outline" onClick={() => setOpen(true)}>
           <ListPlus size={16} />
-          {rows.length === 0 ? 'Add lines' : 'Edit lines'}
+          {rows.length === 0 ? 'Add truck' : 'Add another truck'}
         </button>
       </section>
 
@@ -250,12 +258,29 @@ export function DraftDetailRows({
         title={detail.title}
         onClose={() => setOpen(false)}
         footer={
-          <button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              // "Done" hace las dos cosas: guarda lo capturado y cierra. Si
+              // hay algo escrito y algo lo impide (falta un campo, camión
+              // repetido o bloqueado), la ventana NO se cierra y el motivo
+              // queda a la vista.
+              if (draftHasData && !handleAdd()) return;
+              setError(null);
+              setOpen(false);
+            }}
+          >
             Done
           </button>
         }
       >
         <div className="draftrows">
+          <p className="draftrows-help">
+            Fill in this truck and press <strong>Done</strong>: the line is saved and the window
+            closes. To add another truck, open it again with{' '}
+            <strong>Add another truck</strong>.
+          </p>
           <div className="draftrows-form">
             {fields.map((field) => (
               <FormField
@@ -289,10 +314,6 @@ export function DraftDetailRows({
                 </span>
               </div>
             ) : null}
-            <button type="button" className="btn btn-outline draftrows-add" onClick={handleAdd}>
-              <Plus size={16} />
-              Add line
-            </button>
           </div>
 
           {error ? <p className="draftrows-error">{error}</p> : null}
