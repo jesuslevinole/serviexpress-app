@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { ReadsMonitor } from '../ui/ReadsMonitor';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CRUD_MODULES } from '../../config/modules';
@@ -50,7 +49,6 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <ReadsMonitor />
     </div>
   );
 }

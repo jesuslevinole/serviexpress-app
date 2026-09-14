@@ -54,6 +54,8 @@ export type PermissionAction =
    * de diagnóstico: OCULTA de fábrica para todos; se enciende por rol (basta
    * concederla en cualquier módulo) cuando se quiere vigilar el consumo.
    */
+  /** RETIRADO en V00057: el monitor de lecturas ya no existe en la interfaz.
+   *  Se conserva el valor para no romper los roles que lo tengan guardado. */
   | 'monitorLecturas'
   /**
    * Capturar aunque la ventana esté cerrada. Para supervisores u oficina que
