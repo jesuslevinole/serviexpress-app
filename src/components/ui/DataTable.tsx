@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
+  CheckCircle2,
   ChevronsUpDown,
   History,
   Pencil,
@@ -45,6 +46,10 @@ interface DataTableProps<T extends { id: string }> {
   onToggleActive?: (row: T) => void;
   /** ¿La fila está activa? (pinta el botón y atenúa las inactivas). */
   isRowActive?: (row: T) => boolean;
+  /** Check de verificación (solo admin): marcar el registro como correcto. */
+  onVerify?: (row: T) => void;
+  /** ¿El registro ya fue verificado? (pinta el check en verde). */
+  isRowVerified?: (row: T) => boolean;
   /** Etiqueta de aviso para la fila (p. ej. "DUPLICATE"); null = sin aviso. */
   rowFlag?: (row: T) => { label: string; title: string } | null;
   /**
@@ -77,12 +82,14 @@ export function DataTable<T extends { id: string }>({
   onToggleActive,
   isRowActive,
   rowFlag,
+  onVerify,
+  isRowVerified,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
 }: DataTableProps<T>) {
   const showActions =
-    (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory || onToggleActive;
+    (canEdit && onEdit) || (canDelete && onDelete) || onDetail || onHistory || onToggleActive || onVerify;
   const showSelect = selectedIds !== undefined && onToggleSelect !== undefined;
   const allSelected =
     showSelect && rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
@@ -184,6 +191,20 @@ export function DataTable<T extends { id: string }>({
                         onClick={() => onHistory(row)}
                       >
                         <History size={16} />
+                      </button>
+                    ) : null}
+                    {onVerify ? (
+                      <button
+                        type="button"
+                        className={`icon-btn ${isRowVerified?.(row) ? 'dtable-verified' : ''}`}
+                        title={
+                          isRowVerified?.(row)
+                            ? 'Verified as correct — click to remove the check'
+                            : 'Mark as verified (information is correct)'
+                        }
+                        onClick={() => onVerify(row)}
+                      >
+                        <CheckCircle2 size={16} />
                       </button>
                     ) : null}
                     {onToggleActive ? (

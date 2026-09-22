@@ -9,6 +9,7 @@ import {
   Building2,
   Check,
   ClipboardCheck,
+  FileCheck2,
   ClipboardList,
   FolderCog,
   KeySquare,
@@ -34,6 +35,7 @@ import { APP_VERSION } from '../../config/version';
 import './Sidebar.css';
 
 const ICONS: Record<string, LucideIcon> = {
+  FileCheck2,
   AlertTriangle,
   Truck,
   Users,

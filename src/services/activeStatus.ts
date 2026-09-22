@@ -25,6 +25,7 @@ export const ACTIVE_FLAG_BY_COLLECTION: Record<string, string> = {
   [COLLECTIONS.drivers]: 'status',
   [COLLECTIONS.trucks]: 'status',
   [COLLECTIONS.assets]: 'status',
+  [COLLECTIONS.rentals]: 'status',
 };
 
 /**

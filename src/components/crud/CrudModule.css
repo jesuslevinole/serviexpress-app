@@ -288,3 +288,11 @@
 .crud-dup-note .dtable-flag {
   margin: 0 2px;
 }
+
+/* Fleet Report: crear mantenimientos con los datos ya capturados. */
+.crud-maint-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 14px;
+}

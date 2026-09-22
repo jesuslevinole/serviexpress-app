@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileDown,
   FileSpreadsheet,
@@ -291,6 +291,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const alertThresholds = useAlertThresholds();
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [mailCfgOpen, setMailCfgOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  /** Prellenado que llega de OTRO módulo (mantenimiento desde el Fleet Report). */
+  const [externalPrefill, setExternalPrefill] = useState<Record<string, FieldValue> | null>(null);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
   const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
@@ -623,7 +627,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * camiones en ese. Los exentos (admin, oficina con permiso) no aplican.
    */
   const oneReportLock = (): string | null => {
-    if (!captureSpec || exemptFromWindow) return null;
+    // Modo propio (Fleet Report): cada registro es UN camión, así que un BC
+    // hace muchos por semana; esta regla es solo para reportes con renglones.
+    if (!captureSpec || exemptFromWindow || !config.detail) return null;
     // El uid EFECTIVO: con "View as" se evalúa al usuario simulado, no a la
     // sesión real del admin (si no, la regla no se ve en las pruebas).
     const effectiveUid = effectiveUser?.id ?? firebaseUser?.uid ?? null;
@@ -1139,11 +1145,27 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     // formulario, que es donde el BC lo va a leer.)
     if (captureLocked) return;
     setEditing(null);
+    setExternalPrefill(null);
     setFormError(null);
     // Un alta nueva nunca arrastra los renglones de la anterior.
     setDraftRows([]);
     setFormOpen(true);
   };
+
+  // Llegada con prellenado (p. ej. "Add corrective maintenance" desde el
+  // Fleet Report): se abre el alta con esos datos y se limpia el estado de
+  // navegación para que un refresco no vuelva a abrirla.
+  useEffect(() => {
+    const state = location.state as { prefill?: Record<string, FieldValue> } | null;
+    if (!state?.prefill) return;
+    setExternalPrefill(state.prefill);
+    setEditing(null);
+    setFormError(null);
+    setDraftRows([]);
+    setFormOpen(true);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const openEdit = (row: EntityData) => {
     setEditing(row);
@@ -1240,6 +1262,29 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           setFormError(lockedNow);
           setBusy(false);
           return;
+        }
+        // Modo propio (Fleet Report): el CAMIÓN del registro debe estar libre
+        // en esta ventana — ni capturado ya por otro, ni en taller/correctivo.
+        if (captureSpec && !config.detail && !exemptFromWindow) {
+          const key = captureSpec.once.detailKey;
+          const chosen = payload[key];
+          if (typeof chosen === 'string' && chosen !== '') {
+            const label = detailRefLabel(captureSpec.once.sourceCollection, chosen);
+            const takenBy = captureInfo.taken.get(chosen);
+            if (takenBy) {
+              setFormError(
+                `No se puede guardar: el camión ${label} ya tiene su ${config.title} en esta ventana (${describeParent(takenBy.parent)}). Abre ese registro para corregirlo.`,
+              );
+              setBusy(false);
+              return;
+            }
+            const blockedReason = captureInfo.blocked.get(chosen);
+            if (blockedReason) {
+              setFormError(`No se puede guardar: el camión ${label} está bloqueado — ${blockedReason}.`);
+              setBusy(false);
+              return;
+            }
+          }
         }
         // Prohibido guardar un BC Report VACÍO: debe traer al menos un
         // renglón de mantenimiento (los exentos pueden, para correcciones).
@@ -1973,6 +2018,45 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           isRowActive={
             config.activeToggle ? (row) => isActiveRecord(row, config.activeToggle) : undefined
           }
+          isRowVerified={
+            config.verifyToggle ? (row) => row[config.verifyToggle!] === true : undefined
+          }
+          onVerify={
+            config.verifyToggle && isAdminView
+              ? (row) => {
+                  /**
+                   * Check del admin: "información correcta". Guarda quién y
+                   * cuándo, y deja constancia en la bitácora del registro.
+                   */
+                  const key = config.verifyToggle!;
+                  const next = row[key] !== true;
+                  const stamp = new Date().toISOString();
+                  const patch: Record<string, FieldValue> = {
+                    [key]: next,
+                    verifiedBy: next ? auditName() : '',
+                    verifiedAt: next ? stamp : '',
+                  };
+                  void updateDocument(config.collection, row.id, patch);
+                  void logRecordChange({
+                    collection: config.collection,
+                    recordId: row.id,
+                    action: 'update',
+                    moduleTitle: config.title,
+                    recordLabel: auditLabel(row),
+                    byUid: firebaseUser?.uid ?? '',
+                    byName: auditName(),
+                    changes: [
+                      {
+                        key,
+                        label: 'Verified',
+                        from: row[key] === true ? 'Yes' : 'No',
+                        to: next ? 'Yes' : 'No',
+                      },
+                    ],
+                  });
+                }
+              : undefined
+          }
           rowFlag={
             duplicateIds.size > 0
               ? (row) =>
@@ -2106,6 +2190,50 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           refLabels={refLabel}
           extra={
             <>
+              {config.id === 'fleetReports' && can('maintenance', 'crear') ? (
+                <div className="crud-maint-actions">
+                  {(['Corrective', 'Preventive'] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className={`btn ${kind === 'Corrective' ? 'btn-danger' : 'btn-primary'}`}
+                      onClick={() => {
+                        /**
+                         * Lo ya capturado en el Fleet Report viaja al
+                         * mantenimiento: camión, entidad, estación, escáner,
+                         * millaje y cauchos. Solo falta lo propio del
+                         * mantenimiento.
+                         */
+                        const carry: Record<string, FieldValue> = { type: kind };
+                        [
+                          'idTruck',
+                          'idEntity',
+                          'idStation',
+                          'idScanner',
+                          'mileage',
+                          'frontLDriver',
+                          'frontRPass',
+                          'backLDriverOut',
+                          'backLDriverIn',
+                          'backRPassOut',
+                          'backRPassIn',
+                        ].forEach((key) => {
+                          const value = viewing[key];
+                          if (value !== undefined && value !== null && value !== '') {
+                            carry[key] = scalar(value);
+                          }
+                        });
+                        setViewing(null);
+                        navigate('/maintenance', { state: { prefill: carry } });
+                      }}
+                    >
+                      {kind === 'Corrective'
+                        ? 'Add corrective maintenance'
+                        : 'Add preventive maintenance'}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {config.relatedViews && config.relatedViews.length > 0 ? (
                 <section className="crud-related">
                   <DetailTabs
@@ -2272,6 +2400,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         capturedByKey={config.autoUserField}
         currentUid={capturingUid}
         presetValues={scopePresets}
+        prefillValues={externalPrefill ?? undefined}
+        blockedRefs={
+          // Modo propio (Fleet Report): el desplegable de camiones excluye los
+          // ya capturados esta ventana y los que están en taller/correctivo.
+          captureSpec && !config.detail
+            ? blockedRefsFor(editing?.id ?? null)
+            : undefined
+        }
         userScopes={userScopes}
         contextEditable={canEditContext}
         onClose={() => setFormOpen(false)}

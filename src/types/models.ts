@@ -504,6 +504,12 @@ export interface ModuleConfig {
    */
   activeToggle?: string;
   /**
+   * Campo bool de VERIFICACIÓN: botón (solo admin) para marcar el registro
+   * como revisado y con la información correcta. Guarda también quién y
+   * cuándo lo verificó.
+   */
+  verifyToggle?: string;
+  /**
    * Los usuarios acotados a estaciones se suscriben SOLO a los registros de
    * sus estaciones (cláusula "in" por servidor): menos lecturas por sesión.
    */

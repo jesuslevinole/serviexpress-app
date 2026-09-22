@@ -205,6 +205,19 @@ export function useCaptureWindow(
   // Encabezados fuera de la lista del módulo (más viejos que el tope): se
   // leen una vez para poder decir quién y dónde capturó el camión.
   const parentKey = detail?.parentKey ?? '';
+  /**
+   * MODO PROPIO (Fleet Report): el módulo no tiene renglones — cada registro
+   * ES el camión. Los "capturados en la ventana" salen de los propios
+   * registros del módulo (ya descargados): cero lecturas extra.
+   */
+  const selfMode = detail === null;
+  const selfWindowRows = useMemo(() => {
+    if (!selfMode || startAt === '' || endAt === '') return [];
+    return parents.filter(
+      (row) =>
+        typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt,
+    );
+  }, [selfMode, parents, startAt, endAt]);
   const missingParentIds = useMemo(() => {
     if (parentKey === '') return [];
     const ids = new Set<string>();
@@ -239,8 +252,19 @@ export function useCaptureWindow(
 
   const taken = useMemo(() => {
     const map = new Map<string, TakenInfo>();
-    if (!spec || parentKey === '') return map;
+    if (!spec) return map;
     const key = spec.once.detailKey;
+    if (selfMode) {
+      [...selfWindowRows]
+        .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
+        .forEach((row) => {
+          const target = row[key];
+          if (typeof target !== 'string' || target === '' || map.has(target)) return;
+          map.set(target, { rowId: row.id, parentId: row.id, parent: row });
+        });
+      return map;
+    }
+    if (parentKey === '') return map;
     // Del más antiguo al más reciente: el primero que lo capturó es el que cuenta.
     [...windowRows]
       .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
@@ -262,7 +286,7 @@ export function useCaptureWindow(
         });
       });
     return map;
-  }, [spec, windowRows, parentKey, parentById, extraParents]);
+  }, [spec, windowRows, parentKey, parentById, extraParents, selfMode, selfWindowRows]);
 
   const blocked = useMemo(() => {
     const map = new Map<string, string>();

@@ -19,6 +19,7 @@ export const COLLECTIONS = {
   drivers: 'drivers',
   assets: 'assets',
   fleet: 'fleet',
+  fleetReports: 'fleetReports',
   shopOrders: 'shopOrders',
   bcReports: 'bcReports',
   bcReportDetails: 'bcReportDetails',

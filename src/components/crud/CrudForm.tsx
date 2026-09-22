@@ -44,6 +44,12 @@ interface CrudFormProps {
   currentUid?: string | null;
   /** Valores iniciales extra en altas (p. ej. entidad/estación del usuario). */
   presetValues?: Record<string, FieldValue>;
+  /**
+   * Prellenado EXPLÍCITO de un alta (p. ej. un mantenimiento creado desde el
+   * Fleet Report): a diferencia de presetValues, SÍ reemplaza los valores
+   * por defecto, para no volver a escribir lo que ya se capturó.
+   */
+  prefillValues?: Record<string, FieldValue>;
   /** Contenido extra bajo el formulario (p. ej. los uniformes ya cargados). */
   extraSection?: ReactNode;
   /**
@@ -117,6 +123,7 @@ export function CrudForm({
   capturedByKey,
   currentUid,
   presetValues,
+  prefillValues,
   userScopes,
   extraSection,
   renderExtra,
@@ -181,6 +188,12 @@ export function CrudForm({
           }
         });
       }
+      // Alta con prellenado explícito: manda sobre los valores por defecto.
+      if (!initial && prefillValues) {
+        Object.entries(prefillValues).forEach(([key, value]) => {
+          if (key in base && value !== null && value !== '') base[key] = value;
+        });
+      }
       // Entidad y estación del capturista: hasta ahora solo se rellenaban al
       // CAMBIAR el capturista, así que en un alta normal quedaban vacías.
       if (!initial) {
@@ -210,6 +223,7 @@ export function CrudForm({
     capturedByKey,
     currentUid,
     presetValues,
+    prefillValues,
     userScopes,
   ]);
 

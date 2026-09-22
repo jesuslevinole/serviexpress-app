@@ -979,6 +979,8 @@ export const bcReportsModule: ModuleConfig = {
 /** Módulo BD_RENTAL — Rentas. */
 export const rentalsModule: ModuleConfig = {
   id: 'rentals',
+  /** Botón activar/desactivar; los inactivos salen de los desplegables. */
+  activeToggle: 'status',
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
   collection: COLLECTIONS.rentals,
@@ -986,6 +988,7 @@ export const rentalsModule: ModuleConfig = {
   icon: 'KeySquare',
   autoUserField: 'idUsers',
   fields: [
+    { key: 'status', label: 'Status', type: 'bool', defaultValue: true, table: false },
     {
       key: 'idVendor',
       label: 'Vendor',
@@ -1989,11 +1992,59 @@ export const catalogModules: ModuleConfig[] = [
 ];
 
 /** Módulos CRUD principales que aparecen en el menú. */
+/**
+ * FLEET REPORT — fusión de Fleet y BC Report: un registro por camión con el
+ * formulario de Fleet más el millaje y los 6 cauchos. Comparte el MISMO
+ * horario de ventana que BC Reports (reloj, bloqueos por taller/correctivo y
+ * "un camión una vez por semana"). Cada registro ES el camión: no hay
+ * renglones. Desde el detalle se crea un mantenimiento Correctivo o
+ * Preventivo con los datos ya capturados (sin volver a escribirlos).
+ */
+const fleetReportExtraFields: FieldConfig[] = [
+  { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number' },
+  { key: 'frontRPass', label: 'Front R/Pass', type: 'number' },
+  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number' },
+  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number' },
+  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number' },
+  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number' },
+  {
+    key: 'verified',
+    label: 'Verified',
+    type: 'bool',
+    form: false,
+    badge: true,
+    badgeTones: { Yes: 'positive', No: 'neutral' },
+  },
+  { key: 'verifiedBy', label: 'Verified by', type: 'text', form: false, table: false },
+  { key: 'verifiedAt', label: 'Verified at', type: 'text', form: false, table: false },
+];
+
+export const fleetReportsModule: ModuleConfig = {
+  id: 'fleetReports',
+  collection: COLLECTIONS.fleetReports,
+  title: 'Fleet Report',
+  icon: 'FileCheck2',
+  autoUserField: fleetModule.autoUserField,
+  listLimit: 500,
+  scopeServerSide: true,
+  /** Mismo horario que BC Reports (id compartido = mismo reloj). */
+  captureWindow: { ...bcReportsModule.captureWindow!, label: 'Fleet Report window' },
+  /** Check solo-admin: "información correcta". */
+  verifyToggle: 'verified',
+  fields: [
+    ...fleetModule.fields.filter((field) => field.key !== 'observation'),
+    ...fleetReportExtraFields,
+    ...fleetModule.fields.filter((field) => field.key === 'observation'),
+  ],
+};
+
 export const CRUD_MODULES: ModuleConfig[] = [
   trucksModule,
   driversModule,
   assetsModule,
   fleetModule,
+  fleetReportsModule,
   shopModule,
   maintenanceModule,
   accidentsModule,
