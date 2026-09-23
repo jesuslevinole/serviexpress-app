@@ -22,6 +22,7 @@ import {
   createDocument,
   fetchCollection,
   setDocument,
+  fetchDocument,
   deleteDocument,
   updateDocument,
 } from '../../services/firestoreService';
@@ -423,6 +424,103 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       });
     return extra;
   }, [allRows, config.uniqueBy]);
+
+  /**
+   * BARRIDO SEMANAL (Fleet Report): al cerrar una ventana, los camiones que
+   * NO se capturaron pasan a la estación "Maintenance". Corre una sola vez
+   * por ventana — queda una marca en settings_sweeps — y solo lo dispara el
+   * admin real (nunca en View as), para que no se repita entre usuarios.
+   */
+  const [sweepNote, setSweepNote] = useState<string | null>(null);
+  const sweepRunning = useRef(false);
+  useEffect(() => {
+    if (config.id !== 'fleetReports' || !isAdminView) return;
+    const occurrence = captureInfo.occurrence;
+    if (!occurrence || captureInfo.loading || sweepRunning.current) return;
+    // Ventana ANTERIOR: la misma, siete días atrás.
+    const shift = (iso: string) => new Date(new Date(iso).getTime() - 7 * 86400000).toISOString();
+    const prevStart = shift(occurrence.startAt);
+    const prevEnd = shift(occurrence.endAt);
+    // Solo se barre una ventana YA CERRADA.
+    if (new Date(prevEnd).getTime() > Date.now()) return;
+    const prevKey = `${prevStart}|${prevEnd}`;
+    const markerId = `fleetReports_${prevStart.slice(0, 10)}_${prevEnd.slice(0, 10)}`;
+    sweepRunning.current = true;
+    void (async () => {
+      try {
+        const done = await fetchDocument('settings_sweeps', markerId);
+        if (done) return;
+        const stations = refMaps[COLLECTIONS.stations]?.rows ?? [];
+        const target = stations.find(
+          (row) => String(row.name ?? '').trim().toLowerCase() === 'maintenance',
+        );
+        if (!target) {
+          setSweepNote(
+            'Weekly sweep pending: there is no station named "Maintenance" in Catalogs. Create it and reload to move the trucks that were not captured.',
+          );
+          return;
+        }
+        // Camiones capturados en la ventana anterior (por sello o por fecha).
+        const captured = new Set(
+          allRows
+            .filter((row) => {
+              if (typeof row.windowKey === 'string' && row.windowKey !== '') {
+                return row.windowKey === prevKey;
+              }
+              return (
+                typeof row.createdAt === 'string' &&
+                row.createdAt >= prevStart &&
+                row.createdAt <= prevEnd
+              );
+            })
+            .map((row) => String(row.idTruck ?? '')),
+        );
+        const pending = captureInfo.sourceRows.filter(
+          (truck) => !captured.has(truck.id) && truck.idStationActual !== target.id,
+        );
+        // La marca se escribe ANTES de mover: si algo falla, no se repite el
+        // barrido completo en cada recarga.
+        await setDocument('settings_sweeps', markerId, {
+          module: 'fleetReports',
+          windowKey: prevKey,
+          trucks: pending.length,
+          runBy: firebaseUser?.uid ?? '',
+          runAt: new Date().toISOString(),
+        });
+        for (const truck of pending) {
+          const fromLabel = detailRefLabel(COLLECTIONS.stations, String(truck.idStationActual ?? ''));
+          await updateDocument(COLLECTIONS.trucks, truck.id, { idStationActual: target.id });
+          void logRecordChange({
+            collection: COLLECTIONS.trucks,
+            recordId: truck.id,
+            action: 'update',
+            moduleTitle: 'Trucks',
+            recordLabel: detailRefLabel(COLLECTIONS.trucks, truck.id),
+            byUid: firebaseUser?.uid ?? '',
+            byName: 'Weekly sweep (no Fleet Report in the window)',
+            changes: [
+              {
+                key: 'idStationActual',
+                label: 'Current station',
+                from: fromLabel,
+                to: String(target.name ?? 'Maintenance'),
+              },
+            ],
+          });
+        }
+        if (pending.length > 0) {
+          setSweepNote(
+            `${pending.length} truck${pending.length === 1 ? '' : 's'} had no Fleet Report in the previous window and moved to the Maintenance station.`,
+          );
+        }
+      } catch (error) {
+        console.error('[sweep] no se pudo completar el barrido semanal', error);
+      } finally {
+        sweepRunning.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.id, isAdminView, captureInfo.occurrence, captureInfo.loading, allRows.length]);
 
   /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
   const captureLocked = lockMessageFor(captureInfo.status);
@@ -1978,6 +2076,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             )}
           </p>
         ) : null}
+        {sweepNote ? <p className="crud-dup-note">{sweepNote}</p> : null}
         {duplicateIds.size > 0 ? (
           <p className="crud-dup-note">
             <strong>{duplicateIds.size}</strong>{' '}

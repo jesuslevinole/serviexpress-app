@@ -112,20 +112,45 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
           {(window?.history?.length ?? 0) > 0 ? (
             <div className="cwmodal-history">
               <span className="cwmodal-history-title">Schedules used before</span>
-              <ul>
-                {window!.history!.map((entry) => (
-                  <li key={`${windowSignature(entry)}-${entry.usedUntil}`}>
-                    {describeWindow(entry)}
-                    <em>
-                      {' '}
-                      · until {new Date(entry.usedUntil).toLocaleDateString('en-US')}
-                    </em>
-                  </li>
-                ))}
-              </ul>
+              <table className="cwmodal-history-table">
+                <thead>
+                  <tr>
+                    <th>Schedule</th>
+                    <th>Used until</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {window!.history!.map((entry) => (
+                    <tr key={`${windowSignature(entry)}-${entry.usedUntil}`}>
+                      <td>{describeWindow(entry)}</td>
+                      <td>{new Date(entry.usedUntil).toLocaleDateString('en-US')}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-outline cwmodal-pick"
+                          title="Load this schedule into the form"
+                          onClick={() => {
+                            // Se carga en el formulario: el admin revisa y
+                            // confirma con "Update window".
+                            setStartDay(String(entry.startDay));
+                            setStartTime(entry.startTime);
+                            setEndDay(String(entry.endDay));
+                            setEndTime(entry.endTime);
+                            setEndNextWeek(entry.endNextWeek);
+                          }}
+                        >
+                          Use this one
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               <small>
-                Records saved under each schedule keep their own window: changing it here never
-                mixes them. A schedule that was already used cannot be repeated.
+                Pick a saved schedule or set a new one below. Records keep the window they were
+                saved under, so changing this never mixes them, and the schedule already in use
+                cannot be saved twice.
               </small>
             </div>
           ) : null}
