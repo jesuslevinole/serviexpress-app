@@ -101,7 +101,7 @@
   top: 0;
   /* Por encima de las celdas del cuerpo, incluida la primera columna fija. */
   z-index: 4;
-  background: var(--surface-2);
+  background: var(--surface-soft);
   /* El borde va como sombra: con position sticky el borde de la tabla no
      acompaña a la celda y las filas se ven encimadas al desplazar. */
   box-shadow: inset 0 -1px 0 var(--border);
@@ -110,15 +110,18 @@
 .roles-col-module {
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 3;
+  /* Fondo OPACO: con fondo transparente las casillas que pasan por debajo
+     al desplazar se veían encima del nombre del módulo. */
   background: var(--surface);
+  background-clip: padding-box;
   min-width: 190px;
   font-weight: 600;
 }
 
 .roles-matrix thead .roles-col-module {
   z-index: 5;
-  background: var(--surface-2);
+  background: var(--surface-soft);
 }
 
 /* La cabecera de fila tapa lo que pasa por debajo al desplazar en horizontal. */
@@ -127,7 +130,7 @@
 }
 
 .roles-matrix tbody tr:hover .roles-col-module {
-  background: var(--surface-2);
+  background: var(--surface-soft);
 }
 
 /* Encabezado presionable: marca o desmarca la acción en toda la columna. */
@@ -187,11 +190,11 @@
 
 /* Renglones alternos: seguir una fila entre 12 columnas sin perderse. */
 .roles-matrix tbody tr:nth-child(even) td {
-  background: var(--surface-2);
+  background: var(--surface-soft);
 }
 
 .roles-matrix tbody tr:nth-child(even) .roles-col-module {
-  background: var(--surface-2);
+  background: var(--surface-soft);
 }
 
 .roles-matrix tbody tr:last-child td {

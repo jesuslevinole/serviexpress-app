@@ -50,6 +50,14 @@ export type PermissionAction =
    */
   /** Marcar registros como verificados (check de "información correcta"). */
   | 'verificar'
+  /** Usar "View as": entrar al app viendo exactamente lo que ve otro usuario. */
+  | 'verComo'
+  /** Configurar los umbrales de alerta (números en rojo) del módulo. */
+  | 'configurarAlertas'
+  /** Elegir quién recibe el correo al guardar un formulario del módulo. */
+  | 'avisosCorreo'
+  /** Renombrar y reordenar menús y tablas (modo Edit de la barra superior). */
+  | 'personalizarMenu'
   | 'ventanaCaptura'
   /**
    * Ver el monitor de lecturas de Firestore (burbuja "Reads"). Herramienta

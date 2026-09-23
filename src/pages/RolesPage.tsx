@@ -49,6 +49,10 @@ const ACTIONS: PermissionAction[] = [
   'configurarForm',
   'editarProtegidos',
   'verificar',
+  'verComo',
+  'configurarAlertas',
+  'avisosCorreo',
+  'personalizarMenu',
   'ventanaCaptura',
   'capturarFueraVentana',
 ];
@@ -70,6 +74,10 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   configurarForm: 'Configure form',
   editarProtegidos: 'Edit locked fields',
   verificar: 'Verify (correct info check)',
+  verComo: 'View as (see the app as another user)',
+  configurarAlertas: 'Alerts (red thresholds)',
+  avisosCorreo: 'Email on save (recipients)',
+  personalizarMenu: 'Customize menu & tables (Edit mode)',
   ventanaCaptura: 'Capture window (set schedule)',
   capturarFueraVentana: 'Add outside window',
   // Retirada de la interfaz (V00057): la etiqueta se conserva por tipado.

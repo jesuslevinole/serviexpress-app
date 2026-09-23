@@ -415,7 +415,7 @@
 }
 
 .dash-drawer-close:hover {
-  background: var(--surface-2);
+  background: var(--surface-soft);
   color: var(--text);
 }
 

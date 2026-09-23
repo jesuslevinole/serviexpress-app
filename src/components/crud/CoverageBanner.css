@@ -3,7 +3,7 @@
   padding: 11px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface-2);
+  background: var(--surface-soft);
 }
 
 .coverage.has-missing {

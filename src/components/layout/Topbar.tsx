@@ -14,7 +14,15 @@ interface TopbarProps {
 const THEME_KEY = 'se-theme';
 
 export function Topbar({ title, onMenu }: TopbarProps) {
-  const { profile, role, logout, isAdmin, viewAs, stopViewAs } = useAuth();
+  const { profile, role, logout, isAdminView, viewAs, stopViewAs, can } = useAuth();
+  /**
+   * "View as" y el modo Edit se controlan desde Roles (además del admin, que
+   * siempre los tiene). Basta con conceder la acción en CUALQUIER módulo.
+   */
+  // Durante "View as" se evalúa el rol SIMULADO (isAdminView es false), así
+  // que la vista es total: si esa persona no tiene el botón, tú tampoco.
+  const canViewAs = isAdminView || can('users', 'verComo');
+  const canCustomizeMenu = isAdminView || can('customize', 'personalizarMenu');
   const { editMode, setEditMode } = useUiConfig();
   const [viewAsOpen, setViewAsOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
@@ -48,7 +56,7 @@ export function Topbar({ title, onMenu }: TopbarProps) {
         <div className="topbar-user">
           {/* Aviso de versión nueva: lo ven todos los usuarios, no solo admin. */}
           <UpdateNotice />
-          {isAdmin ? (
+          {canCustomizeMenu ? (
             <button
               type="button"
               className={`btn topbar-edit ${editMode ? 'is-on' : 'btn-outline'}`}
@@ -59,7 +67,7 @@ export function Topbar({ title, onMenu }: TopbarProps) {
               {editMode ? 'Done' : 'Edit'}
             </button>
           ) : null}
-          {isAdmin && !viewAs ? (
+          {canViewAs && !viewAs ? (
             <button
               type="button"
               className="icon-btn"

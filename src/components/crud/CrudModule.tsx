@@ -1837,7 +1837,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Export Excel</span>
             </button>
           ) : null}
-          {isAdminView ? (
+          {isAdminView || can(config.id, 'avisosCorreo') ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -1848,7 +1848,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Email on save</span>
             </button>
           ) : null}
-          {isAdminView &&
+          {(isAdminView || can(config.id, 'configurarAlertas')) &&
           [...config.fields, ...(config.detail?.fields ?? [])].some(
             (f) => f.type === 'number' && f.compute === undefined,
           ) ? (
