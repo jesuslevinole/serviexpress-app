@@ -2047,7 +2047,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             config.verifyToggle ? (row) => row[config.verifyToggle!] === true : undefined
           }
           onVerify={
-            config.verifyToggle && (isAdminView || can(config.id, 'verificar'))
+            /**
+             * Quién ve el check: el admin real, quien tenga el permiso
+             * "Verify" del módulo, y —como respaldo para no depender de
+             * configurar nada— quien pueda BORRAR en ese módulo (si alguien
+             * tiene el poder de eliminar registros, marcarlos como correctos
+             * es menor). Para restringirlo, quita "Delete" o usa la columna
+             * "Verify" en Roles.
+             */
+            config.verifyToggle &&
+            (isAdminView || can(config.id, 'verificar') || can(config.id, 'eliminar'))
               ? (row) => {
                   /**
                    * Check del admin: "información correcta". Guarda quién y
