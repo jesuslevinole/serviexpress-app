@@ -213,10 +213,13 @@ export function useCaptureWindow(
   const selfMode = detail === null;
   const selfWindowRows = useMemo(() => {
     if (!selfMode || startAt === '' || endAt === '') return [];
-    return parents.filter(
-      (row) =>
-        typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt,
-    );
+    const key = `${startAt}|${endAt}`;
+    return parents.filter((row) => {
+      // Manda el SELLO de ventana si el registro lo trae (así un cambio de
+      // horario no reasigna registros viejos); si no, la fecha de creación.
+      if (typeof row.windowKey === 'string' && row.windowKey !== '') return row.windowKey === key;
+      return typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt;
+    });
   }, [selfMode, parents, startAt, endAt]);
   const missingParentIds = useMemo(() => {
     if (parentKey === '') return [];
@@ -303,11 +306,13 @@ export function useCaptureWindow(
   }, [spec, blockedRows]);
 
   const save = useCallback(
-    async (next: Omit<CaptureWindow, 'updatedBy'>) => {
+    async (next: Omit<CaptureWindow, 'updatedBy' | 'history'>) => {
       if (!spec) return;
-      await saveCaptureWindow(spec.id, next, firebaseUser?.uid ?? null);
+      // Se pasa el horario vigente para archivarlo en el historial y para
+      // rechazar un horario repetido.
+      await saveCaptureWindow(spec.id, next, firebaseUser?.uid ?? null, window);
     },
-    [spec, firebaseUser],
+    [spec, firebaseUser, window],
   );
 
   const clear = useCallback(async () => {

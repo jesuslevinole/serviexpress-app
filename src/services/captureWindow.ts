@@ -34,8 +34,44 @@ export interface CaptureWindow {
    * cada elemento se puede capturar una vez por ciclo semanal.
    */
   endNextWeek: boolean;
-  /** Uid de quien la configuró. */
+  /** Uid de quien la configuró y cuándo (ISO). */
   updatedBy: string | null;
+  updatedAt?: string | null;
+  /**
+   * Horarios ANTERIORES, del más reciente al más antiguo. Se conservan para
+   * no repetirlos y para poder leer con qué regla se capturó cada registro
+   * del pasado.
+   */
+  history?: WindowHistoryEntry[];
+}
+
+/** Un horario que estuvo vigente (queda registrado al cambiarlo). */
+export interface WindowHistoryEntry {
+  startDay: number;
+  startTime: string;
+  endDay: number;
+  endTime: string;
+  endNextWeek: boolean;
+  /** Cuándo empezó a regir y cuándo se reemplazó (ISO). */
+  usedFrom: string | null;
+  usedUntil: string;
+  updatedBy: string | null;
+}
+
+/** Firma de un horario: sirve para detectar repetidos. */
+export function windowSignature(
+  w: Pick<CaptureWindow, 'startDay' | 'startTime' | 'endDay' | 'endTime' | 'endNextWeek'>,
+): string {
+  return `${w.startDay}|${w.startTime}|${w.endDay}|${w.endTime}|${w.endNextWeek ? 'next' : 'same'}`;
+}
+
+/** Texto legible de un horario ("Tue 8:00 AM → Wed 11:59 PM (next week)"). */
+export function describeWindow(
+  w: Pick<CaptureWindow, 'startDay' | 'startTime' | 'endDay' | 'endTime' | 'endNextWeek'>,
+): string {
+  return `${DAY_NAMES[w.startDay]} ${formatClock(w.startTime)} → ${DAY_NAMES[w.endDay]} ${formatClock(
+    w.endTime,
+  )}${w.endNextWeek ? ' (next week)' : ''}`;
 }
 
 /**
@@ -312,6 +348,8 @@ export function subscribeToCaptureWindow(
         endDay,
         endTime,
         endNextWeek: data.endNextWeek === true,
+        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+        history: parseHistory(data.history),
         updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null,
       });
     },
@@ -319,14 +357,48 @@ export function subscribeToCaptureWindow(
   );
 }
 
+/** Lee el historial guardado (viaja serializado en el documento). */
+function parseHistory(raw: unknown): WindowHistoryEntry[] {
+  if (typeof raw !== 'string' || raw === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as WindowHistoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Guarda la ventana semanal (día de la semana + hora de Texas). */
 export async function saveCaptureWindow(
   id: string,
-  window: Omit<CaptureWindow, 'updatedBy'>,
+  window: Omit<CaptureWindow, 'updatedBy' | 'history'>,
   updatedBy: string | null,
+  /** Horario vigente hasta ahora (para archivarlo) y su historial. */
+  previous?: CaptureWindow | null,
 ): Promise<void> {
   if (!isTime(window.startTime) || !isTime(window.endTime)) {
     throw new Error('Both the opening and the closing time are required');
+  }
+  const signature = windowSignature(window);
+  const history = [...(previous?.history ?? [])];
+  if (previous) {
+    if (windowSignature(previous) === signature) {
+      throw new Error('That schedule is already the one in use.');
+    }
+    // El horario que se reemplaza pasa al historial (sin repetirlo).
+    const archived: WindowHistoryEntry = {
+      startDay: previous.startDay,
+      startTime: previous.startTime,
+      endDay: previous.endDay,
+      endTime: previous.endTime,
+      endNextWeek: previous.endNextWeek,
+      usedFrom: previous.updatedAt ?? null,
+      usedUntil: new Date().toISOString(),
+      updatedBy: previous.updatedBy ?? null,
+    };
+    const already = history.findIndex((entry) => windowSignature(entry) === windowSignature(archived));
+    if (already >= 0) history.splice(already, 1);
+    history.unshift(archived);
   }
   await setDocument(WINDOWS_COLLECTION, id, {
     startDay: window.startDay,
@@ -336,6 +408,8 @@ export async function saveCaptureWindow(
     endNextWeek: window.endNextWeek,
     timeZone: APP_TIME_ZONE,
     updatedBy,
+    updatedAt: new Date().toISOString(),
+    history: JSON.stringify(history.slice(0, 20)),
   });
 }
 

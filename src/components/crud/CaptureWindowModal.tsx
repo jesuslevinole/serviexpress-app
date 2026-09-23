@@ -3,6 +3,8 @@ import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { SearchableSelect } from '../ui/SearchableSelect';
 import {
+  describeWindow,
+  windowSignature,
   APP_TIME_ZONE,
   DAY_NAMES,
   describeSchedule,
@@ -17,7 +19,7 @@ import './CaptureWindow.css';
 interface CaptureWindowModalProps {
   label: string;
   window: CaptureWindow | null;
-  onSave: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
+  onSave: (window: Omit<CaptureWindow, 'updatedBy' | 'history'>) => Promise<void>;
   onClear: () => Promise<void>;
   onClose: () => void;
 }
@@ -107,6 +109,26 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
       footer={
         <>
           {error ? <span className="crudform-error">{error}</span> : null}
+          {(window?.history?.length ?? 0) > 0 ? (
+            <div className="cwmodal-history">
+              <span className="cwmodal-history-title">Schedules used before</span>
+              <ul>
+                {window!.history!.map((entry) => (
+                  <li key={`${windowSignature(entry)}-${entry.usedUntil}`}>
+                    {describeWindow(entry)}
+                    <em>
+                      {' '}
+                      · until {new Date(entry.usedUntil).toLocaleDateString('en-US')}
+                    </em>
+                  </li>
+                ))}
+              </ul>
+              <small>
+                Records saved under each schedule keep their own window: changing it here never
+                mixes them. A schedule that was already used cannot be repeated.
+              </small>
+            </div>
+          ) : null}
           {window ? (
             <button
               type="button"

@@ -317,3 +317,33 @@
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
+
+/* Historial de horarios de la ventana (antes de cambiarla). */
+.cwmodal-history {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  font-size: 12.5px;
+}
+
+.cwmodal-history-title {
+  font-weight: 700;
+}
+
+.cwmodal-history ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+}
+
+.cwmodal-history em {
+  font-style: normal;
+  opacity: 0.75;
+}
+
+.cwmodal-history small {
+  color: var(--text-soft);
+  line-height: 1.45;
+}

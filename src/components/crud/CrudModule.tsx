@@ -1346,6 +1346,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           payload[config.detail.countField] = draftRows.length;
           payload[`${config.detail.countField}Ok`] = true;
         }
+        // SELLO DE VENTANA: el registro queda marcado con el rango exacto al
+        // que pertenece. Si mañana cambian el horario, este registro sigue
+        // contando para SU ventana y no se mezcla con los nuevos.
+        if (captureSpec && captureInfo.occurrence) {
+          payload.windowKey = `${captureInfo.occurrence.startAt}|${captureInfo.occurrence.endAt}`;
+          payload.windowStart = captureInfo.occurrence.startAt;
+          payload.windowEnd = captureInfo.occurrence.endAt;
+        }
         const newId = await createDocument(config.collection, payload);
         notifyModuleSave({
           moduleId: config.id,
