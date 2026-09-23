@@ -68,12 +68,21 @@
 }
 
 .fpanel-text,
-.fpanel-range input {
+.fpanel-range input,
+.fpanel-field select {
   width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
   font-size: 13px;
+  /* Sin esto el navegador los pintaba BLANCOS sobre el tema oscuro. */
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.fpanel-text::placeholder,
+.fpanel-range input::placeholder {
+  color: var(--text-soft);
 }
 
 .fpanel-text:focus,

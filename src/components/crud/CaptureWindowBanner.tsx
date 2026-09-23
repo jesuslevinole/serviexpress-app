@@ -213,12 +213,13 @@ export function CaptureWindowBanner({
         {configureButton}
       </div>
 
-      {status !== 'before' && required + blocked.length > 0 ? (
+      {required + blocked.length > 0 ? (
         <div className="cwin-progress">
           {missing.length > 0 ? <AlertTriangle size={15} /> : null}
           <span className="cwin-text">
             <strong>{done.length}</strong> of <strong>{required}</strong> {spec.once.sourceLabel}s
-            {scopeStations.length > 0 ? ' at your station' : ''} added in this window
+            {scopeStations.length > 0 ? ' at your station' : ''}{' '}
+            {status === 'before' ? 'added for the window that opens next' : 'added in this window'}
             {missing.length > 0 ? (
               <>
                 {' '}
@@ -240,7 +241,7 @@ export function CaptureWindowBanner({
               </>
             ) : null}
           </span>
-          {missing.length > 0 || blocked.length > 0 || extraTaken.length > 0 ? (
+          {missing.length > 0 || blocked.length > 0 || extraTaken.length > 0 || done.length > 0 ? (
             <button type="button" className="cwin-toggle" onClick={() => setOpen((v) => !v)}>
               {open ? 'Hide list' : 'See which ones'}
               {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -323,7 +324,9 @@ export function CaptureWindowBanner({
           {done.length > 0 ? (
             <div className="cwin-group">
               <button type="button" className="cwin-toggle" onClick={() => setShowDone((v) => !v)}>
-                {showDone ? 'Hide added' : `Show the ${done.length} already added`}
+                {showDone
+                  ? 'Hide added'
+                  : `Show the ${done.length} already added and who added them`}
                 {showDone ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </button>
               {showDone ? (
