@@ -2022,6 +2022,15 @@ const fleetReportExtraFields: FieldConfig[] = [
     badge: true,
     badgeTones: { Yes: 'positive', No: 'neutral' },
   },
+  {
+    key: 'verifiedResult',
+    label: 'Verification',
+    type: 'text',
+    form: false,
+    badge: true,
+    badgeTones: { ok: 'positive', issues: 'warning', wrong: 'negative' },
+  },
+  { key: 'verifiedNote', label: 'Verification note', type: 'text', form: false, table: false },
   { key: 'verifiedBy', label: 'Verified by', type: 'text', form: false, table: false },
   { key: 'verifiedAt', label: 'Verified at', type: 'text', form: false, table: false },
 ];

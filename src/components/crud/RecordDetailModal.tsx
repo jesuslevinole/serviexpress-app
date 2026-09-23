@@ -16,6 +16,8 @@ interface RecordDetailModalProps {
   refLabels: (collection: string, id: string) => string;
   /** Contenido extra opcional (p. ej. desglose de permisos en Roles). */
   extra?: ReactNode;
+  /** Acciones que van ARRIBA, antes de los campos (a la vista de entrada). */
+  headerExtra?: ReactNode;
   /** Si se define, muestra el botón Editar. */
   onEdit?: () => void;
   onClose: () => void;
@@ -49,6 +51,7 @@ function formatDateTime(iso: string): string {
  * en la fila de cualquier tabla del app.
  */
 export function RecordDetailModal({
+  headerExtra,
   title,
   fields,
   record,
@@ -103,6 +106,7 @@ export function RecordDetailModal({
         </>
       }
     >
+      {headerExtra ? <div className="rdetail-header-extra">{headerExtra}</div> : null}
       <div className="rdetail-grid">
         {fields.map((field) => {
           const text = displayCell(field, record, refLabels);

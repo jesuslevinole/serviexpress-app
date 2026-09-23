@@ -110,70 +110,6 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
       footer={
         <>
           {error ? <span className="crudform-error">{error}</span> : null}
-          {!window ? (
-            <p className="cwmodal-empty">
-              There are no saved schedules yet. Set the days and times below and press
-              <strong> Save window</strong> to create the first one; from then on it stays in this
-              list to reuse it.
-            </p>
-          ) : null}
-          {window ? (
-            <div className="cwmodal-history">
-              <span className="cwmodal-history-title">Saved schedules</span>
-              <table className="cwmodal-history-table">
-                <thead>
-                  <tr>
-                    <th>Schedule (from - to - start - end)</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* El que está EN USO encabeza la lista. */}
-                  <tr className="is-current">
-                    <td>
-                      <strong>{windowName(window)}</strong>
-                      <em> · {describeWindow(window)}</em>
-                    </td>
-                    <td>In use</td>
-                    <td />
-                  </tr>
-                  {(window.history ?? []).map((entry) => (
-                    <tr key={`${windowSignature(entry)}-${entry.usedUntil}`}>
-                      <td>
-                        <strong>{windowName(entry)}</strong>
-                        <em> · {describeWindow(entry)}</em>
-                      </td>
-                      <td>{new Date(entry.usedUntil).toLocaleDateString('en-US')}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-outline cwmodal-pick"
-                          title="Load this schedule into the form"
-                          onClick={() => {
-                            // Se carga en el formulario: el admin revisa y
-                            // confirma con "Update window".
-                            setStartDay(String(entry.startDay));
-                            setStartTime(entry.startTime);
-                            setEndDay(String(entry.endDay));
-                            setEndTime(entry.endTime);
-                            setEndNextWeek(entry.endNextWeek);
-                          }}
-                        >
-                          Use this one
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <small>
-                Pick a saved schedule with “Use this one”, or set a different one below and press
-                “Update window”. Each record keeps the schedule it was saved under, so changing
-                this never mixes them; the one in use cannot be saved twice.
-              </small>
-            </div>
-          ) : null}
           {window ? (
             <button
               type="button"
@@ -198,6 +134,70 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
         </>
       }
     >
+      {!window ? (
+        <p className="cwmodal-empty">
+          There are no saved schedules yet. Set the days and times below and press
+          <strong> Save window</strong> to create the first one; from then on it stays in this
+          list to reuse it.
+        </p>
+      ) : null}
+      {window ? (
+        <div className="cwmodal-history">
+          <span className="cwmodal-history-title">Saved schedules</span>
+          <table className="cwmodal-history-table">
+            <thead>
+              <tr>
+                <th>Schedule (from - to - start - end)</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {/* El que está EN USO encabeza la lista. */}
+              <tr className="is-current">
+                <td>
+                  <strong>{windowName(window)}</strong>
+                  <em> · {describeWindow(window)}</em>
+                </td>
+                <td>In use</td>
+                <td />
+              </tr>
+              {(window.history ?? []).map((entry) => (
+                <tr key={`${windowSignature(entry)}-${entry.usedUntil}`}>
+                  <td>
+                    <strong>{windowName(entry)}</strong>
+                    <em> · {describeWindow(entry)}</em>
+                  </td>
+                  <td>{new Date(entry.usedUntil).toLocaleDateString('en-US')}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-outline cwmodal-pick"
+                      title="Load this schedule into the form"
+                      onClick={() => {
+                        // Se carga en el formulario: el admin revisa y
+                        // confirma con "Update window".
+                        setStartDay(String(entry.startDay));
+                        setStartTime(entry.startTime);
+                        setEndDay(String(entry.endDay));
+                        setEndTime(entry.endTime);
+                        setEndNextWeek(entry.endNextWeek);
+                      }}
+                    >
+                      Use this one
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <small>
+            Pick a saved schedule with “Use this one”, or set a different one below and press
+            “Update window”. Each record keeps the schedule it was saved under, so changing
+            this never mixes them; the one in use cannot be saved twice.
+          </small>
+        </div>
+      ) : null}
       <div className="cwin-modal">
         <p className="cwin-modal-help">
           Pick the day of the week and the time the window opens and closes;{' '}

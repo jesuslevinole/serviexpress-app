@@ -31,6 +31,12 @@ import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Modal } from '../ui/Modal';
+import { VerifyModal } from './VerifyModal';
+import {
+  VERIFICATION_LABEL,
+  addVerification,
+  type VerificationResult,
+} from '../../services/verifications';
 import { DataTable, type SortDirection, type TableColumn } from '../ui/DataTable';
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
@@ -300,6 +306,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [externalPrefill, setExternalPrefill] = useState<Record<string, FieldValue> | null>(null);
   /** Tras guardar un Fleet Report: ¿se crea un mantenimiento con esos datos? */
   const [askMaintenance, setAskMaintenance] = useState<Record<string, FieldValue> | null>(null);
+  /** Registro que se está verificando (abre el modal con historial y nota). */
+  const [verifying, setVerifying] = useState<EntityData | null>(null);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
   const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
@@ -2157,48 +2165,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             config.verifyToggle ? (row) => row[config.verifyToggle!] === true : undefined
           }
           onVerify={
-            /**
-             * Quién ve el check: el admin real, quien tenga el permiso
-             * "Verify" del módulo, y —como respaldo para no depender de
-             * configurar nada— quien pueda BORRAR en ese módulo (si alguien
-             * tiene el poder de eliminar registros, marcarlos como correctos
-             * es menor). Para restringirlo, quita "Delete" o usa la columna
-             * "Verify" en Roles.
-             */
             config.verifyToggle &&
             (isAdminView || can(config.id, 'verificar') || can(config.id, 'eliminar'))
-              ? (row) => {
-                  /**
-                   * Check del admin: "información correcta". Guarda quién y
-                   * cuándo, y deja constancia en la bitácora del registro.
-                   */
-                  const key = config.verifyToggle!;
-                  const next = row[key] !== true;
-                  const stamp = new Date().toISOString();
-                  const patch: Record<string, FieldValue> = {
-                    [key]: next,
-                    verifiedBy: next ? auditName() : '',
-                    verifiedAt: next ? stamp : '',
-                  };
-                  void updateDocument(config.collection, row.id, patch);
-                  void logRecordChange({
-                    collection: config.collection,
-                    recordId: row.id,
-                    action: 'update',
-                    moduleTitle: config.title,
-                    recordLabel: auditLabel(row),
-                    byUid: firebaseUser?.uid ?? '',
-                    byName: auditName(),
-                    changes: [
-                      {
-                        key,
-                        label: 'Verified',
-                        from: row[key] === true ? 'Yes' : 'No',
-                        to: next ? 'Yes' : 'No',
-                      },
-                    ],
-                  });
-                }
+              ? (row) => setVerifying(row)
               : undefined
           }
           rowFlag={
@@ -2332,52 +2301,56 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           fields={allowedFields}
           record={viewing}
           refLabels={refLabel}
-          extra={
+          headerExtra={
             <>
               {config.id === 'fleetReports' && can('maintenance', 'crear') ? (
-                <div className="crud-maint-actions">
-                  {(['Corrective', 'Preventive'] as const).map((kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className={`btn ${kind === 'Corrective' ? 'btn-danger' : 'btn-primary'}`}
-                      onClick={() => {
-                        /**
-                         * Lo ya capturado en el Fleet Report viaja al
-                         * mantenimiento: camión, entidad, estación, escáner,
-                         * millaje y cauchos. Solo falta lo propio del
-                         * mantenimiento.
-                         */
-                        const carry: Record<string, FieldValue> = { type: kind };
-                        [
-                          'idTruck',
-                          'idEntity',
-                          'idStation',
-                          'idScanner',
-                          'mileage',
-                          'frontLDriver',
-                          'frontRPass',
-                          'backLDriverOut',
-                          'backLDriverIn',
-                          'backRPassOut',
-                          'backRPassIn',
-                        ].forEach((key) => {
-                          const value = viewing[key];
-                          if (value !== undefined && value !== null && value !== '') {
-                            carry[key] = scalar(value);
-                          }
-                        });
-                        setViewing(null);
-                        navigate('/maintenance', { state: { prefill: carry } });
-                      }}
-                    >
-                      {kind === 'Corrective'
-                        ? 'Add corrective maintenance'
-                        : 'Add preventive maintenance'}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <div className="crud-maint-actions">
+                {(['Corrective', 'Preventive'] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={`btn ${kind === 'Corrective' ? 'btn-danger' : 'btn-primary'}`}
+                    onClick={() => {
+                      /**
+                       * Lo ya capturado en el Fleet Report viaja al
+                       * mantenimiento: camión, entidad, estación, escáner,
+                       * millaje y cauchos. Solo falta lo propio del
+                       * mantenimiento.
+                       */
+                      const carry: Record<string, FieldValue> = { type: kind };
+                      [
+                        'idTruck',
+                        'idEntity',
+                        'idStation',
+                        'idScanner',
+                        'mileage',
+                        'frontLDriver',
+                        'frontRPass',
+                        'backLDriverOut',
+                        'backLDriverIn',
+                        'backRPassOut',
+                        'backRPassIn',
+                      ].forEach((key) => {
+                        const value = viewing[key];
+                        if (value !== undefined && value !== null && value !== '') {
+                          carry[key] = scalar(value);
+                        }
+                      });
+                      setViewing(null);
+                      navigate('/maintenance', { state: { prefill: carry } });
+                    }}
+                  >
+                    {kind === 'Corrective'
+                      ? 'Add corrective maintenance'
+                      : 'Add preventive maintenance'}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            </>
+          }
+          extra={
+            <>
               {config.relatedViews && config.relatedViews.length > 0 ? (
                 <section className="crud-related">
                   <DetailTabs
@@ -2633,6 +2606,55 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           collection={COLLECTIONS.trucks}
           record={peekTruck}
           onClose={() => setPeekTruck(null)}
+        />
+      ) : null}
+
+      {verifying && config.verifyToggle ? (
+        <VerifyModal
+          recordId={verifying.id}
+          recordLabel={auditLabel(verifying)}
+          moduleTitle={config.title}
+          onClose={() => setVerifying(null)}
+          onSubmit={async (result: VerificationResult, note: string) => {
+            const key = config.verifyToggle!;
+            const stamp = new Date().toISOString();
+            // El registro guarda el ÚLTIMO resultado (para el check y la
+            // columna); el historial completo vive en `verifications`.
+            await updateDocument(config.collection, verifying.id, {
+              [key]: result === 'ok',
+              verifiedResult: result,
+              verifiedBy: auditName(),
+              verifiedAt: stamp,
+              verifiedNote: note,
+            });
+            await addVerification({
+              collection: config.collection,
+              recordId: verifying.id,
+              result,
+              note,
+              byUid: firebaseUser?.uid ?? '',
+              byName: auditName(),
+            });
+            void logRecordChange({
+              collection: config.collection,
+              recordId: verifying.id,
+              action: 'update',
+              moduleTitle: config.title,
+              recordLabel: auditLabel(verifying),
+              byUid: firebaseUser?.uid ?? '',
+              byName: auditName(),
+              changes: [
+                {
+                  key,
+                  label: 'Verification',
+                  from: typeof verifying.verifiedResult === 'string'
+                    ? VERIFICATION_LABEL[verifying.verifiedResult as VerificationResult]
+                    : '—',
+                  to: `${VERIFICATION_LABEL[result]}${note !== '' ? ` — ${note}` : ''}`,
+                },
+              ],
+            });
+          }}
         />
       ) : null}
 
