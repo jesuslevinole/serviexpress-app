@@ -48,6 +48,8 @@ export type PermissionAction =
    * Configurar la ventana de captura del módulo (el horario semanal, hora de
    * Texas, en que se permite capturar). Pensada para BC Reports.
    */
+  /** Marcar registros como verificados (check de "información correcta"). */
+  | 'verificar'
   | 'ventanaCaptura'
   /**
    * Ver el monitor de lecturas de Firestore (burbuja "Reads"). Herramienta

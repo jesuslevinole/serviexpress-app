@@ -29,6 +29,7 @@ import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport
 import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Modal } from '../ui/Modal';
 import { DataTable, type SortDirection, type TableColumn } from '../ui/DataTable';
 import { Spinner } from '../ui/Spinner';
 import { CrudForm } from './CrudForm';
@@ -295,6 +296,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const location = useLocation();
   /** Prellenado que llega de OTRO módulo (mantenimiento desde el Fleet Report). */
   const [externalPrefill, setExternalPrefill] = useState<Record<string, FieldValue> | null>(null);
+  /** Tras guardar un Fleet Report: ¿se crea un mantenimiento con esos datos? */
+  const [askMaintenance, setAskMaintenance] = useState<Record<string, FieldValue> | null>(null);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
   const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
@@ -1367,6 +1370,28 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             displayValue(field, value, refLabel),
           ),
         });
+        // Fleet Report recién guardado: se ofrece crear el mantenimiento con
+        // los datos ya capturados (no hay que volver a escribirlos).
+        if (config.id === 'fleetReports') {
+          const carry: Record<string, FieldValue> = {};
+          [
+            'idTruck',
+            'idEntity',
+            'idStation',
+            'idScanner',
+            'mileage',
+            'frontLDriver',
+            'frontRPass',
+            'backLDriverOut',
+            'backLDriverIn',
+            'backRPassOut',
+            'backRPassIn',
+          ].forEach((key) => {
+            const value = payload[key];
+            if (value !== undefined && value !== null && value !== '') carry[key] = value;
+          });
+          setAskMaintenance(carry);
+        }
         // Los renglones capturados dentro del alta se guardan ya con el id
         // del maestro recién creado: así el uniforme se pide de una sola vez.
         if (config.detail && draftRows.length > 0) {
@@ -2022,7 +2047,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             config.verifyToggle ? (row) => row[config.verifyToggle!] === true : undefined
           }
           onVerify={
-            config.verifyToggle && isAdminView
+            config.verifyToggle && (isAdminView || can(config.id, 'verificar'))
               ? (row) => {
                   /**
                    * Check del admin: "información correcta". Guarda quién y
@@ -2490,6 +2515,55 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           record={peekTruck}
           onClose={() => setPeekTruck(null)}
         />
+      ) : null}
+
+      {askMaintenance ? (
+        <Modal
+          open
+          title="Fleet Report saved"
+          onClose={() => setAskMaintenance(null)}
+          size="sm"
+          layer="top"
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setAskMaintenance(null)}
+              >
+                No, thanks
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => {
+                  const carry = { ...askMaintenance, type: 'Corrective' as FieldValue };
+                  setAskMaintenance(null);
+                  navigate('/maintenance', { state: { prefill: carry } });
+                }}
+              >
+                Corrective maintenance
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const carry = { ...askMaintenance, type: 'Preventive' as FieldValue };
+                  setAskMaintenance(null);
+                  navigate('/maintenance', { state: { prefill: carry } });
+                }}
+              >
+                Preventive maintenance
+              </button>
+            </>
+          }
+        >
+          <p className="crud-ask-maint">
+            Do you want to create a maintenance for this truck? The form opens already filled in
+            with what you just captured (truck, entity, station, scanner, mileage and tires) —
+            you only complete the maintenance details.
+          </p>
+        </Modal>
       ) : null}
 
       {uniqueClash ? (

@@ -48,6 +48,7 @@ const ACTIONS: PermissionAction[] = [
   'eliminarMasivo',
   'configurarForm',
   'editarProtegidos',
+  'verificar',
   'ventanaCaptura',
   'capturarFueraVentana',
 ];
@@ -68,6 +69,7 @@ const ACTION_LABEL: Record<PermissionAction, string> = {
   eliminarMasivo: 'Bulk delete',
   configurarForm: 'Configure form',
   editarProtegidos: 'Edit locked fields',
+  verificar: 'Verify (correct info check)',
   ventanaCaptura: 'Capture window (set schedule)',
   capturarFueraVentana: 'Add outside window',
   // Retirada de la interfaz (V00057): la etiqueta se conserva por tipado.
