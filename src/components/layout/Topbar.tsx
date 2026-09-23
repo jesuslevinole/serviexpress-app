@@ -21,8 +21,16 @@ export function Topbar({ title, onMenu }: TopbarProps) {
    */
   // Durante "View as" se evalúa el rol SIMULADO (isAdminView es false), así
   // que la vista es total: si esa persona no tiene el botón, tú tampoco.
-  const canViewAs = isAdminView || can('users', 'verComo');
-  const canCustomizeMenu = isAdminView || can('customize', 'personalizarMenu');
+  /**
+   * Respaldo para no depender de configurar Roles: además del permiso
+   * propio, vale poder EDITAR usuarios (quien administra usuarios puede
+   * simularlos) y, para el modo Edit, poder personalizar. Para quitárselo a
+   * un rol, apaga esas casillas o usa la columna "View as".
+   */
+  const canViewAs =
+    isAdminView || can('users', 'verComo') || can('users', 'editar');
+  const canCustomizeMenu =
+    isAdminView || can('customize', 'personalizarMenu') || can('customize', 'editar');
   const { editMode, setEditMode } = useUiConfig();
   const [viewAsOpen, setViewAsOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
