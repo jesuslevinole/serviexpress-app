@@ -65,6 +65,19 @@ export function windowSignature(
   return `${w.startDay}|${w.startTime}|${w.endDay}|${w.endTime}|${w.endNextWeek ? 'next' : 'same'}`;
 }
 
+/**
+ * NOMBRE del horario, con el formato pedido "Desde - Hasta - Hora inicio -
+ * Hora fin": "Tue - Wed - 08:00 - 23:59". Es el que se guarda en cada
+ * registro para saber con qué horario se capturó.
+ */
+export function windowName(
+  w: Pick<CaptureWindow, 'startDay' | 'startTime' | 'endDay' | 'endTime' | 'endNextWeek'>,
+): string {
+  return `${DAY_NAMES[w.startDay]} - ${DAY_NAMES[w.endDay]} - ${w.startTime} - ${w.endTime}${
+    w.endNextWeek ? ' (+1w)' : ''
+  }`;
+}
+
 /** Texto legible de un horario ("Tue 8:00 AM → Wed 11:59 PM (next week)"). */
 export function describeWindow(
   w: Pick<CaptureWindow, 'startDay' | 'startTime' | 'endDay' | 'endTime' | 'endNextWeek'>,

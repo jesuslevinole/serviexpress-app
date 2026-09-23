@@ -2009,6 +2009,12 @@ const fleetReportExtraFields: FieldConfig[] = [
   { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number' },
   { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number' },
   {
+    key: 'windowName',
+    label: 'Schedule used',
+    type: 'text',
+    form: false,
+  },
+  {
     key: 'verified',
     label: 'Verified',
     type: 'bool',

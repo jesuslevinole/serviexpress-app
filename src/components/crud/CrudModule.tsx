@@ -58,6 +58,7 @@ import { CaptureWindowModal } from './CaptureWindowModal';
 import { useCaptureWindow } from '../../hooks/useCaptureWindow';
 import type { CaptureWindowStatus } from '../../services/captureWindow';
 import {
+  windowName,
   describeSchedule,
   formatTexas,
   plusOneWeekTexas,
@@ -1451,6 +1452,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           payload.windowKey = `${captureInfo.occurrence.startAt}|${captureInfo.occurrence.endAt}`;
           payload.windowStart = captureInfo.occurrence.startAt;
           payload.windowEnd = captureInfo.occurrence.endAt;
+          // Nombre del horario con el que se capturó ("Tue - Wed - 08:00 - 23:59").
+          if (captureInfo.window) payload.windowName = windowName(captureInfo.window);
         }
         const newId = await createDocument(config.collection, payload);
         notifyModuleSave({
