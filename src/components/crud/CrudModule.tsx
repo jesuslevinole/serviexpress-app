@@ -30,7 +30,6 @@ import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport
 import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { Modal } from '../ui/Modal';
 import { VerifyModal } from './VerifyModal';
 import {
   VERIFICATION_LABEL,
@@ -250,6 +249,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     scopeClauses,
   );
   const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
+  /**
+   * La pestaña "Historic" (semanas anteriores) se concede desde Roles con
+   * "Historic tab". El admin la ve siempre; como respaldo, también quien
+   * pueda borrar en el módulo.
+   */
+  const canSeeHistoric = isAdminView || can(config.id, 'verHistorico') || can(config.id, 'eliminar');
+  const visibleTabs = useMemo(
+    () => (config.viewTabs ?? []).filter((tab) => tab.id !== 'historic' || canSeeHistoric),
+    [config.viewTabs, canSeeHistoric],
+  );
   /** Ids de la semana vigente (los llena el memo de currentWindowRows). */
   const [currentWindowIds, setCurrentWindowIds] = useState<string[]>([]);
   const scopeFilter = useScopeFilter();
@@ -259,6 +268,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const tab = config.viewTabs?.find((item) => item.id === activeTab);
     return tab?.match ? inScope.filter(tab.match) : inScope;
   }, [allRows, scopeFilter, config, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'historic' && !canSeeHistoric) {
+      setActiveTab(config.viewTabs?.[0]?.id ?? 'all');
+    }
+  }, [activeTab, canSeeHistoric, config.viewTabs]);
 
   /** Conteo por pestaña, calculado sobre lo que el usuario puede ver. */
   const tabCounts = useMemo(() => {
@@ -315,8 +330,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const location = useLocation();
   /** Prellenado que llega de OTRO módulo (mantenimiento desde el Fleet Report). */
   const [externalPrefill, setExternalPrefill] = useState<Record<string, FieldValue> | null>(null);
-  /** Tras guardar un Fleet Report: ¿se crea un mantenimiento con esos datos? */
-  const [askMaintenance, setAskMaintenance] = useState<Record<string, FieldValue> | null>(null);
   /** Registro que se está verificando (abre el modal con historial y nota). */
   const [verifying, setVerifying] = useState<EntityData | null>(null);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
@@ -1001,12 +1014,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    */
   const tabbedRows = useMemo(() => {
     if (!config.captureWindow) return rows;
+    if (!canSeeHistoric && activeTab !== 'historic') {
+      const currentIds = new Set(currentWindowRows.map((row) => row.id));
+      return rows.filter((row) => currentIds.has(row.id));
+    }
     if (activeTab !== 'current' && activeTab !== 'historic') return rows;
     const currentIds = new Set(currentWindowRows.map((row) => row.id));
     return activeTab === 'current'
       ? rows.filter((row) => currentIds.has(row.id))
       : rows.filter((row) => !currentIds.has(row.id));
-  }, [rows, activeTab, currentWindowRows, config.captureWindow]);
+  }, [rows, activeTab, currentWindowRows, config.captureWindow, canSeeHistoric]);
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1589,57 +1606,59 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         // Fleet Report recién guardado: se ofrece crear el mantenimiento con
         // los datos ya capturados (no hay que volver a escribirlos).
         if (config.id === 'fleetReports' && payload.needsCorrective === true) {
-          // Salto DIRECTO al correctivo: lleva el problema escrito y de dónde
-          // viene, para poder volver al Fleet Report desde el mantenimiento.
-          const direct: Record<string, FieldValue> = {
-            type: 'Corrective',
-            diagnostic: typeof payload.correctiveIssue === 'string' ? payload.correctiveIssue : '',
-            originModule: 'fleetReports',
-            originId: newId,
-            originLabel: `Fleet Report ${
-              typeof payload.date === 'string' ? formatUsDate(payload.date) : ''
-            } · ${displayValue(config.fields[1], payload[config.fields[1].key] ?? null, refLabel)}`,
-          };
-          [
-            'idTruck',
-            'idEntity',
-            'idStation',
-            'idScanner',
-            'mileage',
-            'frontLDriver',
-            'frontRPass',
-            'backLDriverOut',
-            'backLDriverIn',
-            'backRPassOut',
-            'backRPassIn',
-          ].forEach((key) => {
-            const value = payload[key];
-            if (value !== undefined && value !== null && value !== '') direct[key] = value;
-          });
-          setFormOpen(false);
-          navigate('/maintenance', { state: { prefill: direct } });
-          setBusy(false);
-          return;
-        }
-        if (config.id === 'fleetReports') {
-          const carry: Record<string, FieldValue> = {};
-          [
-            'idTruck',
-            'idEntity',
-            'idStation',
-            'idScanner',
-            'mileage',
-            'frontLDriver',
-            'frontRPass',
-            'backLDriverOut',
-            'backLDriverIn',
-            'backRPassOut',
-            'backRPassIn',
-          ].forEach((key) => {
-            const value = payload[key];
-            if (value !== undefined && value !== null && value !== '') carry[key] = value;
-          });
-          setAskMaintenance(carry);
+          /**
+           * Correctivo AUTOMÁTICO: se crea el mantenimiento con los datos del
+           * reporte, sin abrir ningún formulario. Queda enlazado al Fleet
+           * Report de origen para poder volver desde el mantenimiento.
+           */
+          try {
+            const maintenance: Record<string, FieldValue> = {
+              type: 'Corrective',
+              status: 'Pending',
+              idTruck: typeof payload.idTruck === 'string' ? payload.idTruck : '',
+              mileage: typeof payload.mileage === 'number' ? payload.mileage : null,
+              observation:
+                typeof payload.correctiveIssue === 'string' ? payload.correctiveIssue : '',
+              idUsers: firebaseUser?.uid ?? '',
+              date: typeof payload.date === 'string' ? payload.date : texasToday(),
+              idEntity: typeof payload.idEntity === 'string' ? payload.idEntity : '',
+              idStation: typeof payload.idStation === 'string' ? payload.idStation : '',
+              originModule: 'fleetReports',
+              originId: newId,
+              originLabel: `Fleet Report ${
+                typeof payload.date === 'string' ? formatUsDate(payload.date) : ''
+              } · ${detailRefLabel(COLLECTIONS.trucks, String(payload.idTruck ?? ''))}`,
+            };
+            const maintenanceId = await createDocument(COLLECTIONS.maintenance, maintenance);
+            void logRecordChange({
+              collection: COLLECTIONS.maintenance,
+              recordId: maintenanceId,
+              action: 'create',
+              moduleTitle: 'Maintenance',
+              recordLabel: detailRefLabel(COLLECTIONS.trucks, String(payload.idTruck ?? '')),
+              byUid: firebaseUser?.uid ?? '',
+              byName: auditName(),
+              changes: [
+                {
+                  key: 'type',
+                  label: 'Created from',
+                  from: '—',
+                  to: `Fleet Report · ${String(maintenance.originLabel ?? '')}`,
+                },
+              ],
+            });
+            setSweepNote(
+              `Corrective maintenance created automatically for ${detailRefLabel(
+                COLLECTIONS.trucks,
+                String(payload.idTruck ?? ''),
+              )} (status Pending). You can open it in Maintenance.`,
+            );
+          } catch (error) {
+            console.error('[fleetReports] no se pudo crear el correctivo', error);
+            setSweepNote(
+              'The Fleet Report was saved, but the corrective maintenance could not be created. Create it from Maintenance.',
+            );
+          }
         }
         // Los renglones capturados dentro del alta se guardan ya con el id
         // del maestro recién creado: así el uniforme se pide de una sola vez.
@@ -1983,9 +2002,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
   return (
     <section className="crud">
-      {config.viewTabs ? (
+      {visibleTabs.length > 0 ? (
         <div className="crud-tabs" role="tablist">
-          {config.viewTabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -2448,50 +2467,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                   Came from: {String(viewing.originLabel ?? 'Fleet Report')}
                 </button>
               ) : null}
-              {config.id === 'fleetReports' && can('maintenance', 'crear') ? (
-              <div className="crud-maint-actions">
-                {(['Corrective', 'Preventive'] as const).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className={`btn ${kind === 'Corrective' ? 'btn-danger' : 'btn-primary'}`}
-                    onClick={() => {
-                      /**
-                       * Lo ya capturado en el Fleet Report viaja al
-                       * mantenimiento: camión, entidad, estación, escáner,
-                       * millaje y cauchos. Solo falta lo propio del
-                       * mantenimiento.
-                       */
-                      const carry: Record<string, FieldValue> = { type: kind };
-                      [
-                        'idTruck',
-                        'idEntity',
-                        'idStation',
-                        'idScanner',
-                        'mileage',
-                        'frontLDriver',
-                        'frontRPass',
-                        'backLDriverOut',
-                        'backLDriverIn',
-                        'backRPassOut',
-                        'backRPassIn',
-                      ].forEach((key) => {
-                        const value = viewing[key];
-                        if (value !== undefined && value !== null && value !== '') {
-                          carry[key] = scalar(value);
-                        }
-                      });
-                      setViewing(null);
-                      navigate('/maintenance', { state: { prefill: carry } });
-                    }}
-                  >
-                    {kind === 'Corrective'
-                      ? 'Add corrective maintenance'
-                      : 'Add preventive maintenance'}
-                  </button>
-                ))}
-              </div>
-            ) : null}
             </>
           }
           extra={
@@ -2801,55 +2776,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             });
           }}
         />
-      ) : null}
-
-      {askMaintenance ? (
-        <Modal
-          open
-          title="Fleet Report saved"
-          onClose={() => setAskMaintenance(null)}
-          size="sm"
-          layer="top"
-          footer={
-            <>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setAskMaintenance(null)}
-              >
-                No, thanks
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => {
-                  const carry = { ...askMaintenance, type: 'Corrective' as FieldValue };
-                  setAskMaintenance(null);
-                  navigate('/maintenance', { state: { prefill: carry } });
-                }}
-              >
-                Corrective maintenance
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  const carry = { ...askMaintenance, type: 'Preventive' as FieldValue };
-                  setAskMaintenance(null);
-                  navigate('/maintenance', { state: { prefill: carry } });
-                }}
-              >
-                Preventive maintenance
-              </button>
-            </>
-          }
-        >
-          <p className="crud-ask-maint">
-            Do you want to create a maintenance for this truck? The form opens already filled in
-            with what you just captured (truck, entity, station, scanner, mileage and tires) —
-            you only complete the maintenance details.
-          </p>
-        </Modal>
       ) : null}
 
       {uniqueClash ? (

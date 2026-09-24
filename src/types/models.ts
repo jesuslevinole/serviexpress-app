@@ -52,6 +52,8 @@ export type PermissionAction =
   | 'verificar'
   /** Usar "View as": entrar al app viendo exactamente lo que ve otro usuario. */
   | 'verComo'
+  /** Ver la pestaña "Historic" (semanas anteriores) del módulo. */
+  | 'verHistorico'
   /** Configurar los umbrales de alerta (números en rojo) del módulo. */
   | 'configurarAlertas'
   /** Elegir quién recibe el correo al guardar un formulario del módulo. */
