@@ -33,6 +33,17 @@ const DAY_OPTIONS = DAY_NAMES.map((name, index) => ({ value: String(index), labe
  * semana: p. ej. lunes 8:00 AM -> domingo 11:59 PM. El reloj muestra la hora
  * de Texas en este momento para que quien configura no convierta nada.
  */
+/** "Tue 09/22/2026" en hora de Texas. */
+function formatTexasDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'short',
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
 export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: CaptureWindowModalProps) {
   // Por omisión, el horario del ejemplo del cliente: lunes 08:00 -> domingo 23:59.
   const [startDay, setStartDay] = useState(String(window?.startDay ?? 1));
@@ -69,6 +80,16 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
   );
 
   /** Cómo quedaría la ventana con lo capturado, medida en este instante. */
+  /**
+   * Semana VIGENTE del horario guardado, con fechas reales: se recalcula
+   * sola cada semana ("Tue 09/22/2026 → Tue 09/29/2026") y es la marca que
+   * queda en los registros capturados dentro de ese rango.
+   */
+  const currentWeek = useMemo(
+    () => (window ? resolveOccurrence(window, now) : null),
+    [window, now],
+  );
+
   const preview = useMemo(
     () => resolveOccurrence({ ...draft, updatedBy: null }, now),
     [draft, now],
@@ -141,6 +162,17 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
           list to reuse it.
         </p>
       ) : null}
+      {currentWeek?.occurrence ? (
+        <p className="cwmodal-week">
+          <strong>Current week:</strong> {formatTexasDate(currentWeek.occurrence.startAt)} →{' '}
+          {formatTexasDate(currentWeek.occurrence.endAt)}
+          <em>
+            {' '}
+            · this range is saved on every record captured in it; next week it moves forward on
+            its own.
+          </em>
+        </p>
+      ) : null}
       {window ? (
         <div className="cwmodal-history">
           <span className="cwmodal-history-title">Saved schedules</span>
@@ -158,6 +190,12 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
                 <td>
                   <strong>{windowName(window)}</strong>
                   <em> · {describeWindow(window)}</em>
+                  {currentWeek?.occurrence ? (
+                    <div className="cwmodal-week-dates">
+                      This week: {formatTexasDate(currentWeek.occurrence.startAt)} →{' '}
+                      {formatTexasDate(currentWeek.occurrence.endAt)}
+                    </div>
+                  ) : null}
                 </td>
                 <td>In use</td>
                 <td />
