@@ -2048,6 +2048,24 @@ export const fleetReportsModule: ModuleConfig = {
     { id: 'current', label: 'In progress', tone: 'info' },
     { id: 'historic', label: 'Historic', tone: 'neutral' },
   ],
+  /** Mantenimientos creados DESDE este reporte (correctivo o preventivo). */
+  relatedViews: [
+    {
+      id: 'maintenanceFromHere',
+      title: 'Maintenance from this report',
+      collection: COLLECTIONS.maintenance,
+      foreignKey: 'originId',
+      emptyMessage: 'No maintenance has been created from this report yet',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date' },
+        { key: 'type', label: 'Type', type: 'text', badge: true },
+        { key: 'status', label: 'Status', type: 'text', badge: true },
+        { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+        { key: 'observation', label: 'Problem / observation', type: 'text' },
+        { key: 'idUsers', label: 'Captured by', type: 'ref', refCollection: COLLECTIONS.users },
+      ],
+    },
+  ],
   fields: [
     {
       key: 'date',
@@ -2055,6 +2073,14 @@ export const fleetReportsModule: ModuleConfig = {
       type: 'date',
       required: true,
       defaultValue: texasToday(),
+    },
+    {
+      key: 'unitType',
+      label: 'Type',
+      type: 'enum',
+      enumValues: BC_TYPES,
+      required: true,
+      defaultValue: 'TRUCK + SCANNER',
     },
     ...fleetModule.fields.filter((field) => field.key !== 'observation'),
     ...fleetReportExtraFields,

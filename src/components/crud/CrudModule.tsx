@@ -30,6 +30,7 @@ import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport
 import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Modal } from '../ui/Modal';
 import { VerifyModal } from './VerifyModal';
 import {
   VERIFICATION_LABEL,
@@ -52,7 +53,6 @@ import { AttachmentsPanel } from './AttachmentsPanel';
 import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
 import { RecordPeekModal } from './RecordPeekModal';
-import { DetailTabs } from './DetailTabs';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
 import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
@@ -332,6 +332,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [externalPrefill, setExternalPrefill] = useState<Record<string, FieldValue> | null>(null);
   /** Registro que se está verificando (abre el modal con historial y nota). */
   const [verifying, setVerifying] = useState<EntityData | null>(null);
+  /** Panel del detalle abierto en modal (archivos, cambios, relacionados). */
+  const [detailPanel, setDetailPanel] = useState<string | null>(null);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
   const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
@@ -712,6 +714,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canImport = canOr(config.id, 'importar', 'crear');
   const canExport = canOr(config.id, 'exportar', 'ver');
   const canFilter = canOr(config.id, 'filtrar', 'ver');
+  /** Pestaña de semanas cerradas: barra de solo consulta. */
+  const historicView = activeTab === 'historic';
 
   /**
    * Etiqueta de una referencia. El sufijo "#campo" (que pone displayValue
@@ -2038,8 +2042,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           />
         </div>
         <div className="crud-toolbar-actions">
-          {headerExtra}
-          {canTemplate ? (
+          {/* En la pestaña "Historic" la barra se reduce a consulta: solo
+              Filters y Export Excel (no se captura sobre semanas cerradas). */}
+          {!historicView ? headerExtra : null}
+          {canTemplate && !historicView ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -2050,7 +2056,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Template</span>
             </button>
           ) : null}
-          {canImport ? (
+          {!historicView && canImport ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -2105,7 +2111,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Export Excel</span>
             </button>
           ) : null}
-          {isAdminView || can(config.id, 'avisosCorreo') ? (
+          {!historicView && (isAdminView || can(config.id, 'avisosCorreo')) ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -2116,7 +2122,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Email on save</span>
             </button>
           ) : null}
-          {(isAdminView || can(config.id, 'configurarAlertas')) &&
+          {!historicView && (isAdminView || can(config.id, 'configurarAlertas')) &&
           [...config.fields, ...(config.detail?.fields ?? [])].some(
             (f) => f.type === 'number' && f.compute === undefined,
           ) ? (
@@ -2130,7 +2136,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Alerts</span>
             </button>
           ) : null}
-          {captureSpec && pendingStations.length > 0 ? (
+          {!historicView && captureSpec && pendingStations.length > 0 ? (
             <button
               type="button"
               className="btn btn-outline mytrucks-btn"
@@ -2144,7 +2150,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               ) : null}
             </button>
           ) : null}
-          {config.dedupe && isAdminView ? (
+          {!historicView && config.dedupe && isAdminView ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -2155,7 +2161,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Merge duplicates</span>
             </button>
           ) : null}
-          {canCreate ? (
+          {!historicView && canCreate ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -2471,50 +2477,69 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
           extra={
             <>
-              {config.relatedViews && config.relatedViews.length > 0 ? (
-                <section className="crud-related">
-                  <DetailTabs
-                    tabs={[
-                      ...config.relatedViews.map((view) => ({
-                        id: view.id,
-                        title: view.title,
-                        content: <RelatedList view={view} recordId={viewing.id} />,
-                      })),
-                      {
-                        id: '__files',
-                        title: 'Files & photos',
-                        content: (
-                          <AttachmentsPanel folder={attachmentFolder(viewing)} canEdit={canEdit} />
-                        ),
-                      },
-                      {
-                        id: '__changes',
-                        title: 'All changes',
-                        content: <ChangeHistoryList recordId={viewing.id} />,
-                      },
-                    ]}
-                  />
-                </section>
-              ) : (
-                <section className="crud-related">
-                  <DetailTabs
-                    tabs={[
-                      {
-                        id: '__files',
-                        title: 'Files & photos',
-                        content: (
-                          <AttachmentsPanel folder={attachmentFolder(viewing)} canEdit={canEdit} />
-                        ),
-                      },
-                      {
-                        id: '__changes',
-                        title: 'Changes',
-                        content: <ChangeHistoryList recordId={viewing.id} />,
-                      },
-                    ]}
-                  />
-                </section>
-              )}
+              {(() => {
+                /**
+                 * Cada sección del detalle es un BOTÓN que abre su modal:
+                 * los archivos con sus botones de carga dentro, la bitácora y
+                 * cada vista relacionada. Así el detalle no se alarga.
+                 */
+                const panels: { id: string; title: string; content: ReactNode }[] = [
+                  ...(config.relatedViews ?? []).map((view) => ({
+                    id: view.id,
+                    title: view.title,
+                    content: <RelatedList view={view} recordId={viewing.id} />,
+                  })),
+                  {
+                    id: '__files',
+                    title: 'Files & photos',
+                    content: (
+                      <AttachmentsPanel folder={attachmentFolder(viewing)} canEdit={canEdit} />
+                    ),
+                  },
+                  {
+                    id: '__changes',
+                    title: 'Changes',
+                    content: <ChangeHistoryList recordId={viewing.id} />,
+                  },
+                ];
+                const open = panels.find((panel) => panel.id === detailPanel) ?? null;
+                return (
+                  <section className="crud-related">
+                    <div className="crud-panel-buttons">
+                      {panels.map((panel) => (
+                        <button
+                          key={panel.id}
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={() => setDetailPanel(panel.id)}
+                        >
+                          {panel.title}
+                        </button>
+                      ))}
+                    </div>
+                    {open ? (
+                      <Modal
+                        open
+                        title={`${open.title} · ${auditLabel(viewing)}`}
+                        onClose={() => setDetailPanel(null)}
+                        size="lg"
+                        layer="top"
+                        footer={
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            onClick={() => setDetailPanel(null)}
+                          >
+                            Close
+                          </button>
+                        }
+                      >
+                        {open.content}
+                      </Modal>
+                    ) : null}
+                  </section>
+                );
+              })()}
               {config.detail && detailEnabled(viewing) ? (
                 <DetailSummary
                 detail={config.detail}
@@ -2543,7 +2568,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                 }
               : undefined
           }
-          onClose={() => setViewing(null)}
+          onClose={() => {
+            setDetailPanel(null);
+            setViewing(null);
+          }}
         />
       ) : null}
 

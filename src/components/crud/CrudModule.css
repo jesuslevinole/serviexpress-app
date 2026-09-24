@@ -303,3 +303,10 @@
   line-height: 1.55;
   color: var(--text-soft);
 }
+
+/* Secciones del detalle como botones (abren su propio modal). */
+.crud-panel-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
