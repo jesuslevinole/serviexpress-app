@@ -250,6 +250,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     scopeClauses,
   );
   const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
+  /** Ids de la semana vigente (los llena el memo de currentWindowRows). */
+  const [currentWindowIds, setCurrentWindowIds] = useState<string[]>([]);
   const scopeFilter = useScopeFilter();
   /** Filas dentro del alcance (entidades/estaciones asignadas al usuario). */
   const rows = useMemo(() => {
@@ -262,10 +264,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const tabCounts = useMemo(() => {
     if (!config.viewTabs) return {};
     const inScope = allRows.filter((row) => scopeFilter(config, row));
+    const currentIds = new Set(currentWindowIds);
     return Object.fromEntries(
-      config.viewTabs.map((tab) => [tab.id, tab.match ? inScope.filter(tab.match).length : inScope.length]),
+      config.viewTabs.map((tab) => {
+        if (config.captureWindow && (tab.id === 'current' || tab.id === 'historic')) {
+          const count = inScope.filter((row) =>
+            tab.id === 'current' ? currentIds.has(row.id) : !currentIds.has(row.id),
+          ).length;
+          return [tab.id, count];
+        }
+        return [tab.id, tab.match ? inScope.filter(tab.match).length : inScope.length];
+      }),
     );
-  }, [allRows, scopeFilter, config]);
+  }, [allRows, scopeFilter, config, currentWindowIds]);
   /**
    * Estaciones del usuario EFECTIVO para acotar catálogos (camiones/drivers
    * de SU estación): las cargas frías del teléfono de un BC dejan de
@@ -530,6 +541,55 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.id, isAdminView, captureInfo.occurrence, captureInfo.loading, allRows.length]);
+
+  /**
+   * Registros de la SEMANA VIGENTE (por sello de ventana; los viejos, por
+   * fecha de creación). Alimenta las pestañas y el control de repetidos.
+   */
+  const currentWindowRows = useMemo(() => {
+    const occurrence = captureInfo.occurrence;
+    if (!occurrence) return [] as EntityData[];
+    const key = `${occurrence.startAt}|${occurrence.endAt}`;
+    return allRows.filter((row) => {
+      if (typeof row.windowKey === 'string' && row.windowKey !== '') return row.windowKey === key;
+      return (
+        typeof row.createdAt === 'string' &&
+        row.createdAt >= occurrence.startAt &&
+        row.createdAt <= occurrence.endAt
+      );
+    });
+  }, [allRows, captureInfo.occurrence]);
+
+  // Se publican los ids para el contador de las pestañas.
+  useEffect(() => {
+    setCurrentWindowIds(currentWindowRows.map((row) => row.id));
+  }, [currentWindowRows]);
+
+  /**
+   * ¿El camión o el driver elegidos ya están usados esta semana? Devuelve el
+   * mensaje listo (con quién lo capturó) o null si está libre.
+   */
+  const findWindowClash = (
+    values: Record<string, FieldValue>,
+    ignoreId: string | null,
+  ): string | null => {
+    const keys = config.uniqueInWindow ?? [];
+    for (const key of keys) {
+      const value = values[key];
+      if (typeof value !== 'string' || value === '') continue;
+      const field = config.fields.find((f) => f.key === key);
+      const clash = currentWindowRows.find((row) => row.id !== ignoreId && row[key] === value);
+      if (!clash) continue;
+      const label =
+        field?.refCollection !== undefined ? refLabel(field.refCollection, value) : String(value);
+      const owner = config.autoUserField ? clash[config.autoUserField] : null;
+      const who = typeof owner === 'string' && owner !== '' ? refLabel(COLLECTIONS.users, owner) : '';
+      return `No se puede guardar: ${field?.label ?? key} "${label}" ya está en un ${config.title} de esta semana${
+        who && who !== '—' ? ` (capturado por ${who})` : ''
+      }. Cada camión y cada driver van UNA sola vez por semana.`;
+    }
+    return null;
+  };
 
   /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
   const captureLocked = lockMessageFor(captureInfo.status);
@@ -934,9 +994,23 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     [allowedFields],
   );
 
+  /**
+   * Pestañas "In progress" / "Historic": la primera son los registros de la
+   * semana vigente (por sello de ventana) y la segunda todo lo demás. Al
+   * cerrar la semana, sus registros pasan solos a Historic.
+   */
+  const tabbedRows = useMemo(() => {
+    if (!config.captureWindow) return rows;
+    if (activeTab !== 'current' && activeTab !== 'historic') return rows;
+    const currentIds = new Set(currentWindowRows.map((row) => row.id));
+    return activeTab === 'current'
+      ? rows.filter((row) => currentIds.has(row.id))
+      : rows.filter((row) => !currentIds.has(row.id));
+  }, [rows, activeTab, currentWindowRows, config.captureWindow]);
+
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    let result = rows;
+    let result = tabbedRows;
     const activeFilters = Object.entries(filters);
     if (activeFilters.length > 0) {
       result = result.filter((row) =>
@@ -956,7 +1030,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, search, filters, config.fields, refMaps]);
+  }, [tabbedRows, search, filters, config.fields, refMaps]);
 
   /** Ciclo de ordenamiento por columna: asc -> desc -> orden original. */
   const handleSort = (key: string) => {
@@ -1262,6 +1336,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setFormOpen(true);
   };
 
+  // Llegada desde el mantenimiento: abrir el Fleet Report de origen.
+  useEffect(() => {
+    const state = location.state as { focusId?: string } | null;
+    if (!state?.focusId) return;
+    const target = allRows.find((row) => row.id === state.focusId);
+    if (target) setViewing(target);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, allRows.length]);
+
   // Llegada con prellenado (p. ej. "Add corrective maintenance" desde el
   // Fleet Report): se abre el alta con esos datos y se limpia el estado de
   // navegación para que un refresco no vuelva a abrirla.
@@ -1321,6 +1405,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
       }
       if (editing) {
+        if (captureSpec && !config.detail) {
+          const clash = findWindowClash(payload, editing.id);
+          if (clash) {
+            setFormError(clash);
+            setBusy(false);
+            return;
+          }
+        }
         await updateDocument(config.collection, editing.id, payload);
         notifyModuleSave({
           moduleId: config.id,
@@ -1375,24 +1467,26 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
         // Modo propio (Fleet Report): el CAMIÓN del registro debe estar libre
         // en esta ventana — ni capturado ya por otro, ni en taller/correctivo.
-        if (captureSpec && !config.detail && !exemptFromWindow) {
-          const key = captureSpec.once.detailKey;
-          const chosen = payload[key];
-          if (typeof chosen === 'string' && chosen !== '') {
-            const label = detailRefLabel(captureSpec.once.sourceCollection, chosen);
-            const takenBy = captureInfo.taken.get(chosen);
-            if (takenBy) {
-              setFormError(
-                `No se puede guardar: el camión ${label} ya tiene su ${config.title} en esta ventana (${describeParent(takenBy.parent)}). Abre ese registro para corregirlo.`,
-              );
-              setBusy(false);
-              return;
-            }
-            const blockedReason = captureInfo.blocked.get(chosen);
-            if (blockedReason) {
-              setFormError(`No se puede guardar: el camión ${label} está bloqueado — ${blockedReason}.`);
-              setBusy(false);
-              return;
+        if (captureSpec && !config.detail) {
+          // Unicidad semanal SIN EXCEPCIONES (aplica también a admin y a los
+          // exentos de la ventana): ni el camión ni el driver se repiten.
+          const clash = findWindowClash(payload, null);
+          if (clash) {
+            setFormError(clash);
+            setBusy(false);
+            return;
+          }
+          if (!exemptFromWindow) {
+            const key = captureSpec.once.detailKey;
+            const chosen = payload[key];
+            if (typeof chosen === 'string' && chosen !== '') {
+              const label = detailRefLabel(captureSpec.once.sourceCollection, chosen);
+              const blockedReason = captureInfo.blocked.get(chosen);
+              if (blockedReason) {
+                setFormError(`No se puede guardar: el camión ${label} está bloqueado — ${blockedReason}.`);
+                setBusy(false);
+                return;
+              }
             }
           }
         }
@@ -1461,7 +1555,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           payload.windowStart = captureInfo.occurrence.startAt;
           payload.windowEnd = captureInfo.occurrence.endAt;
           // Nombre del horario con el que se capturó ("Tue - Wed - 08:00 - 23:59").
-          if (captureInfo.window) payload.windowName = windowName(captureInfo.window);
+          // Nombre de la semana con FECHAS REALES: "Tue 09/22/2026 → Tue
+          // 09/29/2026". Cada martes pasa solo a la semana siguiente.
+          payload.windowName = `${formatUsDate(captureInfo.occurrence.startAt.slice(0, 10))} → ${formatUsDate(
+            captureInfo.occurrence.endAt.slice(0, 10),
+          )}`;
+          if (captureInfo.window) payload.windowSchedule = windowName(captureInfo.window);
         }
         const newId = await createDocument(config.collection, payload);
         notifyModuleSave({
@@ -1489,6 +1588,39 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         });
         // Fleet Report recién guardado: se ofrece crear el mantenimiento con
         // los datos ya capturados (no hay que volver a escribirlos).
+        if (config.id === 'fleetReports' && payload.needsCorrective === true) {
+          // Salto DIRECTO al correctivo: lleva el problema escrito y de dónde
+          // viene, para poder volver al Fleet Report desde el mantenimiento.
+          const direct: Record<string, FieldValue> = {
+            type: 'Corrective',
+            diagnostic: typeof payload.correctiveIssue === 'string' ? payload.correctiveIssue : '',
+            originModule: 'fleetReports',
+            originId: newId,
+            originLabel: `Fleet Report ${
+              typeof payload.date === 'string' ? formatUsDate(payload.date) : ''
+            } · ${displayValue(config.fields[1], payload[config.fields[1].key] ?? null, refLabel)}`,
+          };
+          [
+            'idTruck',
+            'idEntity',
+            'idStation',
+            'idScanner',
+            'mileage',
+            'frontLDriver',
+            'frontRPass',
+            'backLDriverOut',
+            'backLDriverIn',
+            'backRPassOut',
+            'backRPassIn',
+          ].forEach((key) => {
+            const value = payload[key];
+            if (value !== undefined && value !== null && value !== '') direct[key] = value;
+          });
+          setFormOpen(false);
+          navigate('/maintenance', { state: { prefill: direct } });
+          setBusy(false);
+          return;
+        }
         if (config.id === 'fleetReports') {
           const carry: Record<string, FieldValue> = {};
           [
@@ -2303,6 +2435,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           refLabels={refLabel}
           headerExtra={
             <>
+              {config.id === 'maintenance' && typeof viewing.originId === 'string' && viewing.originId !== '' ? (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  title="Open the Fleet Report this maintenance came from"
+                  onClick={() => {
+                    setViewing(null);
+                    navigate('/fleetReports', { state: { focusId: viewing.originId } });
+                  }}
+                >
+                  Came from: {String(viewing.originLabel ?? 'Fleet Report')}
+                </button>
+              ) : null}
               {config.id === 'fleetReports' && can('maintenance', 'crear') ? (
               <div className="crud-maint-actions">
                 {(['Corrective', 'Preventive'] as const).map((kind) => (

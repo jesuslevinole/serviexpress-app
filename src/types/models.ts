@@ -520,6 +520,11 @@ export interface ModuleConfig {
    */
   verifyToggle?: string;
   /**
+   * Campos que NO se pueden repetir dentro de la misma ventana semanal
+   * (Fleet Report: ni el camión ni el driver, sin excepciones).
+   */
+  uniqueInWindow?: string[];
+  /**
    * Los usuarios acotados a estaciones se suscriben SOLO a los registros de
    * sus estaciones (cláusula "in" por servidor): menos lecturas por sesión.
    */

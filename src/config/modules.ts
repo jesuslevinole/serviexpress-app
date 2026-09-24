@@ -1,4 +1,5 @@
 import type { EntityData, FieldConfig, FieldValue, ModuleConfig } from '../types/models';
+import { texasToday } from '../services/captureWindow';
 
 /**
  * Fórmula de AppSheet para estatus de vencimiento:
@@ -1055,6 +1056,10 @@ export const maintenanceModule: ModuleConfig = {
   /** Solo los más recientes: la colección completa agota la cuota diaria. */
   listLimit: 500,
   fields: [
+    /** Origen: cuando el mantenimiento nace de un Fleet Report. */
+    { key: 'originLabel', label: 'Comes from', type: 'text', form: false },
+    { key: 'originModule', label: 'Origin module', type: 'text', form: false, table: false },
+    { key: 'originId', label: 'Origin record', type: 'text', form: false, table: false },
     {
       key: 'type',
       label: 'Type',
@@ -2008,31 +2013,22 @@ const fleetReportExtraFields: FieldConfig[] = [
   { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number' },
   { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number' },
   { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number' },
+  /** Correctivo desde el propio reporte: al guardar con "Yes" se abre el
+   *  alta de Maintenance con el problema ya escrito y el enlace de origen. */
   {
-    key: 'windowName',
-    label: 'Schedule used',
-    type: 'text',
-    form: false,
-  },
-  {
-    key: 'verified',
-    label: 'Verified',
+    key: 'needsCorrective',
+    label: 'Add corrective maintenance?',
     type: 'bool',
-    form: false,
-    badge: true,
-    badgeTones: { Yes: 'positive', No: 'neutral' },
+    defaultValue: false,
   },
   {
-    key: 'verifiedResult',
-    label: 'Verification',
-    type: 'text',
-    form: false,
-    badge: true,
-    badgeTones: { ok: 'positive', issues: 'warning', wrong: 'negative' },
+    key: 'correctiveIssue',
+    label: 'Specify the problem',
+    type: 'textarea',
+    table: false,
+    visibleWhen: { field: 'needsCorrective', value: true },
   },
-  { key: 'verifiedNote', label: 'Verification note', type: 'text', form: false, table: false },
-  { key: 'verifiedBy', label: 'Verified by', type: 'text', form: false, table: false },
-  { key: 'verifiedAt', label: 'Verified at', type: 'text', form: false, table: false },
+  { key: 'windowName', label: 'Week (schedule)', type: 'text', form: false },
 ];
 
 export const fleetReportsModule: ModuleConfig = {
@@ -2045,12 +2041,23 @@ export const fleetReportsModule: ModuleConfig = {
   scopeServerSide: true,
   /** Mismo horario que BC Reports (id compartido = mismo reloj). */
   captureWindow: { ...bcReportsModule.captureWindow!, label: 'Fleet Report window' },
-  /** Check solo-admin: "información correcta". */
-  verifyToggle: 'verified',
+  /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
+  uniqueInWindow: ['idTruck', 'idDriver'],
+  /** En curso = los de la semana vigente; históricos = el resto. */
+  viewTabs: [
+    { id: 'current', label: 'In progress', tone: 'info' },
+    { id: 'historic', label: 'Historic', tone: 'neutral' },
+  ],
   fields: [
+    {
+      key: 'date',
+      label: 'Date',
+      type: 'date',
+      required: true,
+      defaultValue: texasToday(),
+    },
     ...fleetModule.fields.filter((field) => field.key !== 'observation'),
     ...fleetReportExtraFields,
-    ...fleetModule.fields.filter((field) => field.key === 'observation'),
   ],
 };
 
