@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import {
+import { Wrench,
   FileDown,
   FileSpreadsheet,
   FileUp,
@@ -22,7 +22,6 @@ import {
   createDocument,
   fetchCollection,
   setDocument,
-  fetchDocument,
   deleteDocument,
   updateDocument,
 } from '../../services/firestoreService';
@@ -334,6 +333,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [verifying, setVerifying] = useState<EntityData | null>(null);
   /** Panel del detalle abierto en modal (archivos, cambios, relacionados). */
   const [detailPanel, setDetailPanel] = useState<string | null>(null);
+  /** Reparación masiva de la Current station a partir de Sch/B. */
+  const [fixStationsOpen, setFixStationsOpen] = useState(false);
+  const [fixBusy, setFixBusy] = useState(false);
   /** Alta bloqueada por valor único repetido: se ofrece editar el existente. */
   const [uniqueClash, setUniqueClash] = useState<{ row: EntityData; label: string } | null>(null);
   /** Camión abierto en el visor rápido desde una lista informativa. */
@@ -461,101 +463,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   }, [allRows, config.uniqueBy]);
 
   /**
-   * BARRIDO SEMANAL (Fleet Report): al cerrar una ventana, los camiones que
-   * NO se capturaron pasan a la estación "Maintenance". Corre una sola vez
-   * por ventana — queda una marca en settings_sweeps — y solo lo dispara el
-   * admin real (nunca en View as), para que no se repita entre usuarios.
+   * Aviso informativo del módulo (resultados de acciones masivas).
+   * NOTA: el barrido semanal automático se RETIRÓ en V00074 — movía camiones
+   * de estación sin que nadie lo pidiera. Ahora es una acción manual con
+   * confirmación previa.
    */
   const [sweepNote, setSweepNote] = useState<string | null>(null);
-  const sweepRunning = useRef(false);
-  useEffect(() => {
-    if (config.id !== 'fleetReports' || !isAdminView) return;
-    const occurrence = captureInfo.occurrence;
-    if (!occurrence || captureInfo.loading || sweepRunning.current) return;
-    // Ventana ANTERIOR: la misma, siete días atrás.
-    const shift = (iso: string) => new Date(new Date(iso).getTime() - 7 * 86400000).toISOString();
-    const prevStart = shift(occurrence.startAt);
-    const prevEnd = shift(occurrence.endAt);
-    // Solo se barre una ventana YA CERRADA.
-    if (new Date(prevEnd).getTime() > Date.now()) return;
-    const prevKey = `${prevStart}|${prevEnd}`;
-    const markerId = `fleetReports_${prevStart.slice(0, 10)}_${prevEnd.slice(0, 10)}`;
-    sweepRunning.current = true;
-    void (async () => {
-      try {
-        const done = await fetchDocument('settings_sweeps', markerId);
-        if (done) return;
-        const stations = refMaps[COLLECTIONS.stations]?.rows ?? [];
-        const target = stations.find(
-          (row) => String(row.name ?? '').trim().toLowerCase() === 'maintenance',
-        );
-        if (!target) {
-          setSweepNote(
-            'Weekly sweep pending: there is no station named "Maintenance" in Catalogs. Create it and reload to move the trucks that were not captured.',
-          );
-          return;
-        }
-        // Camiones capturados en la ventana anterior (por sello o por fecha).
-        const captured = new Set(
-          allRows
-            .filter((row) => {
-              if (typeof row.windowKey === 'string' && row.windowKey !== '') {
-                return row.windowKey === prevKey;
-              }
-              return (
-                typeof row.createdAt === 'string' &&
-                row.createdAt >= prevStart &&
-                row.createdAt <= prevEnd
-              );
-            })
-            .map((row) => String(row.idTruck ?? '')),
-        );
-        const pending = captureInfo.sourceRows.filter(
-          (truck) => !captured.has(truck.id) && truck.idStationActual !== target.id,
-        );
-        // La marca se escribe ANTES de mover: si algo falla, no se repite el
-        // barrido completo en cada recarga.
-        await setDocument('settings_sweeps', markerId, {
-          module: 'fleetReports',
-          windowKey: prevKey,
-          trucks: pending.length,
-          runBy: firebaseUser?.uid ?? '',
-          runAt: new Date().toISOString(),
-        });
-        for (const truck of pending) {
-          const fromLabel = detailRefLabel(COLLECTIONS.stations, String(truck.idStationActual ?? ''));
-          await updateDocument(COLLECTIONS.trucks, truck.id, { idStationActual: target.id });
-          void logRecordChange({
-            collection: COLLECTIONS.trucks,
-            recordId: truck.id,
-            action: 'update',
-            moduleTitle: 'Trucks',
-            recordLabel: detailRefLabel(COLLECTIONS.trucks, truck.id),
-            byUid: firebaseUser?.uid ?? '',
-            byName: 'Weekly sweep (no Fleet Report in the window)',
-            changes: [
-              {
-                key: 'idStationActual',
-                label: 'Current station',
-                from: fromLabel,
-                to: String(target.name ?? 'Maintenance'),
-              },
-            ],
-          });
-        }
-        if (pending.length > 0) {
-          setSweepNote(
-            `${pending.length} truck${pending.length === 1 ? '' : 's'} had no Fleet Report in the previous window and moved to the Maintenance station.`,
-          );
-        }
-      } catch (error) {
-        console.error('[sweep] no se pudo completar el barrido semanal', error);
-      } finally {
-        sweepRunning.current = false;
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.id, isAdminView, captureInfo.occurrence, captureInfo.loading, allRows.length]);
 
   /**
    * Registros de la SEMANA VIGENTE (por sello de ventana; los viejos, por
@@ -604,6 +517,66 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }. Cada camión y cada driver van UNA sola vez por semana.`;
     }
     return null;
+  };
+
+  /**
+   * Plan de reparación: el número de estación del Sch/B ("771 RED" -> 771)
+   * se busca en el catálogo; se listan solo los camiones que HOY tienen otra
+   * estación.
+   */
+  const stationFixPlan = useMemo(() => {
+    if (config.id !== 'trucks') return [] as { id: string; label: string; to: string; toId: string }[];
+    const stations = refMaps[COLLECTIONS.stations]?.rows ?? [];
+    const byNumber = new Map<string, EntityData>();
+    stations.forEach((station) => {
+      const name = String(station.name ?? '').trim();
+      const digits = /\d{3,}/.exec(name)?.[0];
+      if (digits) byNumber.set(digits, station);
+    });
+    const plan: { id: string; label: string; to: string; toId: string }[] = [];
+    allRows.forEach((truck) => {
+      const digits = /\d{3,}/.exec(String(truck.schB ?? ''))?.[0];
+      if (!digits) return;
+      const station = byNumber.get(digits);
+      if (!station || truck.idStationActual === station.id) return;
+      plan.push({
+        id: truck.id,
+        label: String(truck.unitN ?? truck.id),
+        to: String(station.name ?? ''),
+        toId: station.id,
+      });
+    });
+    return plan;
+  }, [config.id, allRows, refMaps]);
+
+  const applyStationFix = async () => {
+    setFixBusy(true);
+    try {
+      for (const item of stationFixPlan) {
+        const truck = allRows.find((row) => row.id === item.id);
+        const fromLabel = detailRefLabel(COLLECTIONS.stations, String(truck?.idStationActual ?? ''));
+        await updateDocument(COLLECTIONS.trucks, item.id, { idStationActual: item.toId });
+        void logRecordChange({
+          collection: COLLECTIONS.trucks,
+          recordId: item.id,
+          action: 'update',
+          moduleTitle: 'Trucks',
+          recordLabel: item.label,
+          byUid: firebaseUser?.uid ?? '',
+          byName: `${auditName()} · Fix stations from Sch/B`,
+          changes: [
+            { key: 'idStationActual', label: 'Current station', from: fromLabel, to: item.to },
+          ],
+        });
+      }
+      setSweepNote(`${stationFixPlan.length} trucks were moved back to the station in their Sch/B.`);
+    } catch (error) {
+      console.error('[fix-stations] fallo', error);
+      setSweepNote('The stations could not be rebuilt. Check the connection and try again.');
+    } finally {
+      setFixBusy(false);
+      setFixStationsOpen(false);
+    }
   };
 
   /** Bloqueo según el reloj compartido (botones); al guardar se vuelve a medir. */
@@ -2150,6 +2123,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               ) : null}
             </button>
           ) : null}
+          {config.id === 'trucks' && isAdminView ? (
+            <button
+              type="button"
+              className="btn btn-outline"
+              title="Rebuild Current station from the Sch/B column (e.g. 771 RED -> 771)"
+              onClick={() => setFixStationsOpen(true)}
+            >
+              <Wrench size={16} />
+              <span className="crud-btn-text">Fix stations</span>
+            </button>
+          ) : null}
           {!historicView && config.dedupe && isAdminView ? (
             <button
               type="button"
@@ -2803,6 +2787,24 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               ],
             });
           }}
+        />
+      ) : null}
+
+      {fixStationsOpen ? (
+        <ConfirmDialog
+          open
+          busy={fixBusy}
+          title="Rebuild Current station from Sch/B"
+          message={
+            stationFixPlan.length === 0
+              ? 'Every truck already matches the station in its Sch/B — nothing to change.'
+              : `${stationFixPlan.length} trucks will be moved to the station shown in their Sch/B (for example ${stationFixPlan
+                  .slice(0, 3)
+                  .map((item) => `${item.label} → ${item.to}`)
+                  .join(', ')}). Each change is recorded in the truck history. Continue?`
+          }
+          onConfirm={() => void applyStationFix()}
+          onCancel={() => setFixStationsOpen(false)}
         />
       ) : null}
 
