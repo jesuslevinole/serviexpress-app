@@ -22,6 +22,7 @@ import type {
   Role,
   UserProfile,
 } from '../types/models';
+import { OVERRIDABLE_ACTIONS, parsePermissionOverrides } from '../services/permissionOverrides';
 
 const FULL_PERMISSIONS: Record<string, ModulePermissions> = Object.fromEntries(
   PERMISSION_MODULES.map((m) => [
@@ -51,10 +52,7 @@ async function loadProfile(uid: string): Promise<UserProfile | null> {
       ? data.scopeStations.filter((v): v is string => typeof v === 'string')
       : [],
     isOffice: data.isOffice === true,
-    permissionOverrides:
-      data.permissionOverrides && typeof data.permissionOverrides === 'object'
-        ? (data.permissionOverrides as UserProfile['permissionOverrides'])
-        : {},
+    permissionOverrides: parsePermissionOverrides(data.permissionOverrides),
   };
 }
 
@@ -210,14 +208,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const canOr = useCallback(
     (moduleId: string, action: PermissionAction, fallback: PermissionAction): boolean => {
+      // Accesos extra de la persona (o de la simulada en View as).
+      const extra = (viewAs ?? profile)?.permissionOverrides?.[moduleId];
+      if (extra?.[action] === true) return true;
       const effective = viewAs ? viewRole : role;
-      if (!effective) return false;
-      const perms = effective.permissions[moduleId];
-      if (!perms) return false;
+      const perms = effective?.permissions[moduleId];
+      if (!perms) {
+        // Módulo dado SOLO como acceso extra: las acciones de barra que no
+        // existen en el modal (filtrar, plantilla…) heredan del permiso base.
+        return !OVERRIDABLE_ACTIONS.includes(action) && extra?.[fallback] === true;
+      }
       if (perms[action] !== undefined) return perms[action] === true;
       return perms[fallback] === true;
     },
-    [role, viewAs, viewRole],
+    [role, viewAs, viewRole, profile],
   );
 
   /**

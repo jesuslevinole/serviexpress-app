@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { parsePermissionOverrides } from '../../services/permissionOverrides';
 import { Eye } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { SearchableSelect } from '../ui/SearchableSelect';
@@ -52,10 +53,7 @@ export function ViewAsModal({ onClose }: ViewAsModalProps) {
       isOffice: row.isOffice === true,
       // Sin esto, los ACCESOS EXTRA de la persona no se aplicaban al
       // simularla y su vista salía más pobre que la real.
-      permissionOverrides:
-        row.permissionOverrides && typeof row.permissionOverrides === 'object'
-          ? (row.permissionOverrides as unknown as UserProfile['permissionOverrides'])
-          : {},
+      permissionOverrides: parsePermissionOverrides(row.permissionOverrides),
     };
     await startViewAs(profile);
     setBusy(false);

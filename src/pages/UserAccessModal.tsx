@@ -4,6 +4,7 @@ import { Modal } from '../components/ui/Modal';
 import { PERMISSION_MODULES } from '../config/modules';
 import { COLLECTIONS } from '../config/collections';
 import { updateDocument } from '../services/firestoreService';
+import { parsePermissionOverrides } from '../services/permissionOverrides';
 import type { EntityData, PermissionAction } from '../types/models';
 import './UserAccessModal.css';
 
@@ -31,10 +32,11 @@ type Overrides = Record<string, Partial<Record<PermissionAction, boolean>>>;
  * Report) sin tocar el rol del resto. Nunca quita lo que el rol ya concede.
  */
 export function UserAccessModal({ user, roleName, onClose }: UserAccessModalProps) {
-  const initial = useMemo<Overrides>(() => {
-    const raw = user.permissionOverrides;
-    return raw && typeof raw === 'object' ? ({ ...raw } as Overrides) : {};
-  }, [user.permissionOverrides]);
+  // Llega como texto JSON desde la lista de Users: se interpreta aquí.
+  const initial = useMemo<Overrides>(
+    () => parsePermissionOverrides(user.permissionOverrides),
+    [user.permissionOverrides],
+  );
   const [overrides, setOverrides] = useState<Overrides>(initial);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -103,12 +105,15 @@ export function UserAccessModal({ user, roleName, onClose }: UserAccessModalProp
       }
     >
       <div className="uaccess">
-        <p className="uaccess-hint">
-          <KeyRound size={14} /> These permissions are given to <strong>this person only</strong>,
-          on top of the role <strong>{roleName}</strong>. Use it to give someone a module early
-          without changing the role of everyone else. It never takes away what the role already
-          grants — to remove something, change the role.
-        </p>
+        <div className="uaccess-hint">
+          <KeyRound size={14} className="uaccess-hint-icon" />
+          <p className="uaccess-hint-text">
+            These permissions are given to <strong>this person only</strong>, on top of the role{' '}
+            <strong>{roleName}</strong>. Use it to give someone a module early without changing
+            the role of everyone else. It never takes away what the role already grants — to
+            remove something, change the role.
+          </p>
+        </div>
         {error ? <p className="uaccess-error">{error}</p> : null}
         {saved ? <p className="uaccess-saved">Saved. The person sees it on their next load.</p> : null}
         <input

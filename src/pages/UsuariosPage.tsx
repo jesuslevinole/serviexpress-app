@@ -6,6 +6,7 @@ import { useCollection } from '../hooks/useCollection';
 import { COLLECTIONS } from '../config/collections';
 import { USER_STATUS } from '../config/enums';
 import { createUserWithProfile, sendSetPasswordEmail } from '../services/userService';
+import { countPermissionOverrides } from '../services/permissionOverrides';
 import { updateDocument } from '../services/firestoreService';
 import {
   downloadExcelTemplate,
@@ -167,14 +168,7 @@ export function UsuariosPage() {
       key: '__access',
       label: 'Extra access',
       render: (row) => {
-        const overrides = row.permissionOverrides;
-        const count =
-          overrides && typeof overrides === 'object'
-            ? Object.values(overrides as Record<string, Record<string, boolean>>).reduce(
-                (total, actions) => total + Object.values(actions).filter(Boolean).length,
-                0,
-              )
-            : 0;
+        const count = countPermissionOverrides(row.permissionOverrides);
         return (
           <button
             type="button"
