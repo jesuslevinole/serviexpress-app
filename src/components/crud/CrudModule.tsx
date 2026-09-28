@@ -2798,6 +2798,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           open
           busy={fixBusy}
           title="Rebuild Current station from Sch/B"
+          confirmLabel="Update trucks"
+          busyLabel="Updating…"
+          danger={false}
           message={
             stationFixPlan.length === 0
               ? `Nothing to change: every truck already matches its Sch/B, or no Sch/B value matches a station in Catalogs (${
