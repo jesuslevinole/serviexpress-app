@@ -529,15 +529,18 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const stations = refMaps[COLLECTIONS.stations]?.rows ?? [];
     const byNumber = new Map<string, EntityData>();
     stations.forEach((station) => {
+      // La estación puede llamarse "771", "771 RED" o "Station 771": se
+      // indexa por su número y también por su nombre completo.
       const name = String(station.name ?? '').trim();
-      const digits = /\d{3,}/.exec(name)?.[0];
-      if (digits) byNumber.set(digits, station);
+      const digits = /\d{2,}/.exec(name)?.[0];
+      if (digits && !byNumber.has(digits)) byNumber.set(digits, station);
+      if (name !== '') byNumber.set(name.toLowerCase(), station);
     });
     const plan: { id: string; label: string; to: string; toId: string }[] = [];
     allRows.forEach((truck) => {
-      const digits = /\d{3,}/.exec(String(truck.schB ?? ''))?.[0];
-      if (!digits) return;
-      const station = byNumber.get(digits);
+      const sch = String(truck.schB ?? '').trim();
+      const digits = /\d{2,}/.exec(sch)?.[0];
+      const station = digits ? byNumber.get(digits) : byNumber.get(sch.toLowerCase());
       if (!station || truck.idStationActual === station.id) return;
       plan.push({
         id: truck.id,
@@ -2123,7 +2126,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               ) : null}
             </button>
           ) : null}
-          {config.id === 'trucks' && isAdminView ? (
+          {config.id === 'trucks' && (isAdminView || canEdit) ? (
             <button
               type="button"
               className="btn btn-outline"
@@ -2797,7 +2800,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           title="Rebuild Current station from Sch/B"
           message={
             stationFixPlan.length === 0
-              ? 'Every truck already matches the station in its Sch/B — nothing to change.'
+              ? `Nothing to change: every truck already matches its Sch/B, or no Sch/B value matches a station in Catalogs (${
+                  refMaps[COLLECTIONS.stations]?.rows.length ?? 0
+                } stations found). Check that stations are named with their number, e.g. "771".`
               : `${stationFixPlan.length} trucks will be moved to the station shown in their Sch/B (for example ${stationFixPlan
                   .slice(0, 3)
                   .map((item) => `${item.label} → ${item.to}`)
