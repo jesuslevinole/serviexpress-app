@@ -534,6 +534,12 @@ export interface ModuleConfig {
    */
   uniqueInWindow?: string[];
   /**
+   * Catálogo que TODOS ven completo: no se filtra por entidad ni por
+   * estación, sin importar la visibilidad del rol (Drivers: cualquier BC
+   * debe poder elegir o consultar a cualquier conductor).
+   */
+  alwaysVisible?: boolean;
+  /**
    * Los usuarios acotados a estaciones se suscriben SOLO a los registros de
    * sus estaciones (cláusula "in" por servidor): menos lecturas por sesión.
    */

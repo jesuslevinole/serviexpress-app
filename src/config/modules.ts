@@ -295,6 +295,8 @@ export const trucksModule: ModuleConfig = {
 /** Módulo BD_DRIVER — Drivers. */
 export const driversModule: ModuleConfig = {
   id: 'drivers',
+  /** Todos ven a TODOS los conductores, sin filtrar por estación. */
+  alwaysVisible: true,
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */

@@ -27,6 +27,8 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
   return useCallback(
     (config: ModuleConfig, row: EntityData): boolean => {
       if (adminUnrestricted || isOffice) return true;
+      // Catálogos abiertos a todos (Drivers): sin filtro de estación/entidad.
+      if (config.alwaysVisible === true) return true;
       const alcance: ViewScope = permissions[config.id]?.alcance ?? 'all';
       if (alcance === 'all') return true;
 
