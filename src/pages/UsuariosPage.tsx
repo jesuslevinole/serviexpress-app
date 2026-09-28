@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileUp, MailPlus, Plus, Search } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FileUp, KeyRound, MailPlus, Plus, Search } from 'lucide-react';
+import { UserAccessModal } from './UserAccessModal';
 import { useAuth } from '../hooks/useAuth';
 import { useCollection } from '../hooks/useCollection';
 import { COLLECTIONS } from '../config/collections';
@@ -86,6 +87,8 @@ const USER_SUMMARY_FIELDS: FieldConfig[] = [
  * nombre/rol/estatus y export a Excel. Un usuario INACTIVO no puede entrar.
  */
 export function UsuariosPage() {
+  /** Usuario cuyos accesos extra se están editando. */
+  const [accessFor, setAccessFor] = useState<EntityData | null>(null);
   const { can } = useAuth();
   const users = useCollection(COLLECTIONS.users);
   const roles = useCollection(COLLECTIONS.roles);
@@ -160,6 +163,31 @@ export function UsuariosPage() {
       render: (r) => roleName.get(String(r.roleId ?? '')) ?? '—',
     },
     { key: 'status', label: 'Status', render: (r) => <Badge value={String(r.status ?? '—')} /> },
+    {
+      key: '__access',
+      label: 'Extra access',
+      render: (row) => {
+        const overrides = row.permissionOverrides;
+        const count =
+          overrides && typeof overrides === 'object'
+            ? Object.values(overrides as Record<string, Record<string, boolean>>).reduce(
+                (total, actions) => total + Object.values(actions).filter(Boolean).length,
+                0,
+              )
+            : 0;
+        return (
+          <button
+            type="button"
+            className="btn btn-outline uaccess-btn"
+            title="Give this person access to a module without changing their role"
+            onClick={() => setAccessFor(row as EntityData)}
+          >
+            <KeyRound size={14} />
+            {count > 0 ? `${count} extra` : 'Set up'}
+          </button>
+        );
+      },
+    },
   ];
 
   const openCreate = () => {
@@ -634,6 +662,14 @@ export function UsuariosPage() {
         />
         </div>
       </Modal>
+      {accessFor ? (
+        <UserAccessModal
+          user={accessFor}
+          roleName={roleName.get(String(accessFor.roleId ?? '')) ?? '—'}
+          onClose={() => setAccessFor(null)}
+        />
+      ) : null}
+
     </div>
   );
 }

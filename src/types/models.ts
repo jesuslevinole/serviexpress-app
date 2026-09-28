@@ -104,6 +104,13 @@ export interface UserProfile {
   scopeStations?: string[];
   /** Office: acceso a los registros de TODAS las entidades y estaciones. */
   isOffice?: boolean;
+  /**
+   * ACCESOS EXTRA de esta persona, además de lo que da su rol: por módulo,
+   * las acciones concedidas. Sirve para adelantarle una vista a alguien sin
+   * cambiar el rol de todo su grupo (p. ej. dos BC que ya usan Fleet Report
+   * mientras los demás siguen sin verlo). Nunca QUITA lo que da el rol.
+   */
+  permissionOverrides?: Record<string, Partial<Record<PermissionAction, boolean>>>;
 }
 
 /** Tipos de campo soportados por el motor de formularios. */

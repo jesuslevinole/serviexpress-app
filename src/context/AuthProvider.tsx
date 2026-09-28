@@ -51,6 +51,10 @@ async function loadProfile(uid: string): Promise<UserProfile | null> {
       ? data.scopeStations.filter((v): v is string => typeof v === 'string')
       : [],
     isOffice: data.isOffice === true,
+    permissionOverrides:
+      data.permissionOverrides && typeof data.permissionOverrides === 'object'
+        ? (data.permissionOverrides as UserProfile['permissionOverrides'])
+        : {},
   };
 }
 
@@ -187,11 +191,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** Con "View as" activo, los permisos efectivos son los del usuario simulado. */
   const can = useCallback(
     (moduleId: string, action: PermissionAction): boolean => {
+      // Los ACCESOS EXTRA del usuario se suman a los de su rol (en "View as"
+      // se evalúan los de la persona simulada, para que la vista sea fiel).
+      const person = viewAs ?? profile;
+      if (person?.permissionOverrides?.[moduleId]?.[action] === true) return true;
       const effective = viewAs ? viewRole : role;
       if (!effective) return false;
       return effective.permissions[moduleId]?.[action] === true;
     },
-    [role, viewAs, viewRole],
+    [role, viewAs, viewRole, profile],
   );
 
   /**

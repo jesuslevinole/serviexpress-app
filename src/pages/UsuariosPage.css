@@ -246,3 +246,8 @@
     grid-template-columns: 1fr;
   }
 }
+/* Botón de accesos extra por usuario. */
+.uaccess-btn {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
