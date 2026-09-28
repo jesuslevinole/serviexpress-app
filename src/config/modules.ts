@@ -74,6 +74,11 @@ const contextFields = (
 /** Módulo BD_TRUCK — Camiones. */
 export const trucksModule: ModuleConfig = {
   id: 'trucks',
+  /**
+   * Si el rol restringe la visibilidad (Own / Station / Entity+Station), la
+   * ÚNICA regla que aplica es la Current station: ni entidad ni usuario.
+   */
+  stationOnlyScope: true,
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */
@@ -295,7 +300,7 @@ export const trucksModule: ModuleConfig = {
 /** Módulo BD_DRIVER — Drivers. */
 export const driversModule: ModuleConfig = {
   id: 'drivers',
-  /** Todos ven a TODOS los conductores, sin filtrar por estación. */
+  /** Todos ven a TODOS los conductores, sin filtrar por estación, entidad ni usuario. */
   alwaysVisible: true,
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
@@ -385,6 +390,8 @@ export const driversModule: ModuleConfig = {
 /** Módulo BD_ASSET — Assets. */
 export const assetsModule: ModuleConfig = {
   id: 'assets',
+  /** Todos ven TODOS los escáneres/equipos, sin filtrar por estación, entidad ni usuario. */
+  alwaysVisible: true,
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */

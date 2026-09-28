@@ -27,12 +27,17 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
   return useCallback(
     (config: ModuleConfig, row: EntityData): boolean => {
       if (adminUnrestricted || isOffice) return true;
-      // Catálogos abiertos a todos (Drivers): sin filtro de estación/entidad.
+      // Catálogos abiertos a todos (Drivers, Assets/escáneres): sin filtro de
+      // estación, entidad ni usuario, diga lo que diga la Visibility del rol.
       if (config.alwaysVisible === true) return true;
       const alcance: ViewScope = permissions[config.id]?.alcance ?? 'all';
       if (alcance === 'all') return true;
 
-      if (alcance === 'own') {
+      // Trucks: cualquier restricción del rol se reduce a "misma estación".
+      const effectiveAlcance: ViewScope =
+        config.stationOnlyScope === true ? 'station' : alcance;
+
+      if (effectiveAlcance === 'own') {
         const key = config.autoUserField;
         if (!key) return true;
         return row[key] === userId;
@@ -56,7 +61,7 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
           return typeof value === 'string' && scopeStations.includes(value);
         });
 
-      if (alcance === 'station') return matchesStation;
+      if (effectiveAlcance === 'station') return matchesStation;
 
       // entity_station: deben coincidir ambas dimensiones
       const matchesEntity =

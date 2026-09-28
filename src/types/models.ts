@@ -540,6 +540,12 @@ export interface ModuleConfig {
    */
   alwaysVisible?: boolean;
   /**
+   * Con visibilidad restringida en el rol (own / station / entity_station),
+   * el módulo se filtra SOLO por su campo de estación (scopeKey 'station'):
+   * se ignoran la entidad y el capturista (Trucks: Current station).
+   */
+  stationOnlyScope?: boolean;
+  /**
    * Los usuarios acotados a estaciones se suscriben SOLO a los registros de
    * sus estaciones (cláusula "in" por servidor): menos lecturas por sesión.
    */

@@ -315,8 +315,11 @@ export function CrudForm({
       // debe poder ELEGIR algo de otra. Se filtra por el campo de estación
       // del catálogo apuntado (el marcado con scopeKey, o cualquiera que
       // apunte al catálogo de estaciones).
-      if (scopeStations.length > 0) {
-        const target = CRUD_MODULES.find((m) => m.collection === field.refCollection);
+      // Los catálogos abiertos a todos (Drivers, Assets/escáneres) NO se
+      // acotan aunque el rol marque Station/Entity+Station.
+      const targetModule = CRUD_MODULES.find((m) => m.collection === field.refCollection);
+      if (scopeStations.length > 0 && targetModule?.alwaysVisible !== true) {
+        const target = targetModule;
         const stationKeys = (target?.fields ?? [])
           .filter(
             (f) =>
