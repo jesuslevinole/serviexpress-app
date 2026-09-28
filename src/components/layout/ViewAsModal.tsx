@@ -50,6 +50,12 @@ export function ViewAsModal({ onClose }: ViewAsModalProps) {
         ? (row.scopeStations as unknown[]).filter((v): v is string => typeof v === 'string')
         : [],
       isOffice: row.isOffice === true,
+      // Sin esto, los ACCESOS EXTRA de la persona no se aplicaban al
+      // simularla y su vista salía más pobre que la real.
+      permissionOverrides:
+        row.permissionOverrides && typeof row.permissionOverrides === 'object'
+          ? (row.permissionOverrides as unknown as UserProfile['permissionOverrides'])
+          : {},
     };
     await startViewAs(profile);
     setBusy(false);
