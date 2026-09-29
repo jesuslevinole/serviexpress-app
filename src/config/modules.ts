@@ -2058,7 +2058,22 @@ export const fleetReportsModule: ModuleConfig = {
   listLimit: 500,
   scopeServerSide: true,
   /** Mismo horario que BC Reports (id compartido = mismo reloj). */
-  captureWindow: { ...bcReportsModule.captureWindow!, label: 'Fleet Report window' },
+  captureWindow: {
+    ...bcReportsModule.captureWindow!,
+    label: 'Fleet Report window',
+    // El BC SÍ puede cargar camiones en Shop o con correctivo pendiente.
+    blockedSelectable: true,
+  },
+  /**
+   * Al elegir el camión se precarga lo de su Fleet Report anterior (o de su
+   * registro en Fleet). Las LECTURAS de la semana (millaje, llantas) y el
+   * correctivo no se copian: se capturan nuevas cada vez.
+   */
+  prefillFromPrevious: {
+    field: 'idTruck',
+    keys: ['unitType', 'route', 'idDriver', 'idScanner', 'gasCard', 'sNumber', 'vTruck', 'stop'],
+    fallbackCollection: COLLECTIONS.fleet,
+  },
   /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
   uniqueInWindow: ['idTruck', 'idDriver'],
   /** En curso = los de la semana vigente; históricos = el resto. */
@@ -2090,9 +2105,12 @@ export const fleetReportsModule: ModuleConfig = {
       label: 'Date',
       type: 'date',
       required: true,
-      // Hoy en Texas, calculado al ABRIR el formulario (no al cargar el app).
+      // Hoy en Texas, lo fija el sistema: NADIE la cambia (ni al crear ni al editar).
       defaultToday: true,
+      fixedOnCreate: true,
     },
+    // Nombre del BC que cargó el registro, visible en la tabla junto a la fecha.
+    { ...capturedByField, label: 'BC' },
     {
       key: 'unitType',
       label: 'Type',
@@ -2101,7 +2119,9 @@ export const fleetReportsModule: ModuleConfig = {
       required: true,
       defaultValue: 'TRUCK + SCANNER',
     },
-    ...fleetModule.fields.filter((field) => field.key !== 'observation'),
+    ...fleetModule.fields.filter(
+      (field) => field.key !== 'observation' && field.key !== capturedByField.key,
+    ),
     ...fleetReportExtraFields,
   ],
 };

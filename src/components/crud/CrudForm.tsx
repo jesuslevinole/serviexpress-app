@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Columns3, Settings2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormField } from '../ui/FormField';
 import {
@@ -78,6 +78,15 @@ interface CrudFormProps {
    * de la misma ventana, o el que está en taller.
    */
   blockedRefs?: Record<string, Map<string, string>>;
+  /**
+   * Alta: al elegir un valor en `field` (el camión), se trae la información
+   * del registro ANTERIOR y se precarga en los campos que el usuario aún no
+   * tocó. `load` devuelve los valores y un texto de origen para el aviso.
+   */
+  prefillOnPick?: {
+    field: string;
+    load: (id: string) => Promise<{ values: Record<string, FieldValue>; source: string } | null>;
+  };
   onClose: () => void;
   onSubmit: (values: Record<string, FieldValue>, keepOpen: boolean) => void;
 }
@@ -133,6 +142,7 @@ export function CrudForm({
   renderBanner,
   contextEditable = true,
   blockedRefs,
+  prefillOnPick,
   onClose,
   onSubmit,
 }: CrudFormProps) {
@@ -140,6 +150,11 @@ export function CrudForm({
   const [touchedSubmit, setTouchedSubmit] = useState(false);
   /** Motivo por el que no se dejó guardar (p. ej. camión ya capturado). */
   const [blockedError, setBlockedError] = useState<string | null>(null);
+  /** Valores con que abrió el alta y los que puso la precarga (para no pisar lo tecleado). */
+  const openedWith = useRef<Record<string, FieldValue>>({});
+  const prefilledWith = useRef<Record<string, FieldValue>>({});
+  const prefillSeq = useRef(0);
+  const [prefillNote, setPrefillNote] = useState<string | null>(null);
 
   /** Campos que sí se capturan (los form:false los llena el sistema),
       más el capturista cuando el rol tiene permiso de editarlo. */
@@ -211,6 +226,10 @@ export function CrudForm({
         }
       }
       setValues(base);
+      openedWith.current = base;
+      prefilledWith.current = {};
+      prefillSeq.current += 1;
+      setPrefillNote(null);
       setTouchedSubmit(false);
       setBlockedError(null);
     }
@@ -446,6 +465,51 @@ export function CrudForm({
       }
       return next;
     });
+    if (
+      prefillOnPick &&
+      initial === null &&
+      key === prefillOnPick.field &&
+      typeof value === 'string' &&
+      value !== ''
+    ) {
+      void runPrefill(value);
+    }
+  };
+
+  /**
+   * Trae el registro anterior del camión y lo vuelca en el formulario. Solo
+   * rellena campos que siguen como abrieron (o como los dejó una precarga
+   * previa): lo que el usuario ya tecleó se respeta.
+   */
+  const runPrefill = async (id: string) => {
+    if (!prefillOnPick) return;
+    const seq = ++prefillSeq.current;
+    let result: Awaited<ReturnType<typeof prefillOnPick.load>> = null;
+    try {
+      result = await prefillOnPick.load(id);
+    } catch (err) {
+      console.warn('[prefill] previous record could not be loaded', err);
+    }
+    if (seq !== prefillSeq.current) return; // eligieron otro camión mientras cargaba
+    const previousPrefill = prefilledWith.current;
+    const nextPrefill: Record<string, FieldValue> = {};
+    setValues((prev) => {
+      const next = { ...prev };
+      // Lo que puso la precarga anterior (otro camión) vuelve a como abrió.
+      Object.entries(previousPrefill).forEach(([k, v]) => {
+        if (next[k] === v) next[k] = openedWith.current[k] ?? null;
+      });
+      Object.entries(result?.values ?? {}).forEach(([k, v]) => {
+        if (!(k in next) || v === null || v === '' || v === undefined) return;
+        const untouched = next[k] === (openedWith.current[k] ?? null) || isEmpty(next[k]);
+        if (!untouched) return;
+        next[k] = v;
+        nextPrefill[k] = v;
+      });
+      return next;
+    });
+    prefilledWith.current = nextPrefill;
+    setPrefillNote(result ? result.source : null);
   };
 
   /**
@@ -738,6 +802,11 @@ export function CrudForm({
       ) : null}
 
       {renderBanner ? <div className="crudform-banner">{renderBanner(values)}</div> : null}
+      {prefillNote ? (
+        <div className="crudform-banner">
+          <div className="cwin-note is-ok">{prefillNote}</div>
+        </div>
+      ) : null}
 
       {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
 

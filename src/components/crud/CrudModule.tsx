@@ -572,6 +572,59 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * ¿El camión o el driver elegidos ya están usados esta semana? Devuelve el
    * mensaje listo (con quién lo capturó) o null si está libre.
    */
+  /**
+   * Precarga del alta: lo del registro ANTERIOR del camión en este módulo
+   * (o, si no hay, su registro en Fleet). Solo las claves configuradas.
+   */
+  const loadPreviousForPrefill = async (
+    id: string,
+  ): Promise<{ values: Record<string, FieldValue>; source: string } | null> => {
+    const spec = config.prefillFromPrevious;
+    if (!spec) return null;
+    const pick = (row: EntityData): Record<string, FieldValue> =>
+      Object.fromEntries(
+        spec.keys
+          .map((key) => [key, scalar(row[key])] as const)
+          .filter(([, value]) => value !== null && value !== '' && value !== undefined),
+      );
+    const newest = (list: EntityData[]) =>
+      [...list].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0];
+    const previous = newest(
+      (await fetchDocumentsWhere(config.collection, { field: spec.field, value: id })).filter(
+        (row) => row.id !== editing?.id,
+      ),
+    );
+    if (previous) {
+      const values = pick(previous);
+      if (Object.keys(values).length > 0) {
+        const date = previous[primaryDateKey ?? 'date'];
+        const owner = config.autoUserField ? previous[config.autoUserField] : null;
+        const who = typeof owner === 'string' && owner !== '' ? refLabel(COLLECTIONS.users, owner) : '';
+        return {
+          values,
+          source: `Prefilled from this truck's previous ${config.title}${
+            typeof date === 'string' ? ` of ${formatUsDate(date)}` : ''
+          }${who && who !== '—' ? ` (by ${who})` : ''}. Review it and capture this week's readings before saving.`,
+        };
+      }
+    }
+    if (spec.fallbackCollection) {
+      const record = newest(
+        await fetchDocumentsWhere(spec.fallbackCollection, { field: spec.field, value: id }),
+      );
+      if (record) {
+        const values = pick(record);
+        if (Object.keys(values).length > 0) {
+          return {
+            values,
+            source: `Prefilled from this truck's record in Fleet (no previous ${config.title} yet). Review it before saving.`,
+          };
+        }
+      }
+    }
+    return null;
+  };
+
   /** Mensaje de repetido, con quién lo capturó y cuándo. */
   const clashMessage = (key: string, value: string, clash: EntityData): string => {
     const field = config.fields.find((f) => f.key === key);
@@ -904,9 +957,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         map.set(id, `already added in this window: ${describeParent(info.parent)}`);
       });
     }
-    captureInfo.blocked.forEach((reason, id) => {
-      if (!map.has(id)) map.set(id, reason);
-    });
+    // Taller / correctivo: fuera del desplegable, salvo en los módulos que
+    // permiten cargarlos (Fleet Report).
+    if (captureSpec.blockedSelectable !== true) {
+      captureInfo.blocked.forEach((reason, id) => {
+        if (!map.has(id)) map.set(id, reason);
+      });
+    }
     // Cada camión solo entra por SU estación: los de otra estación quedan
     // fuera del desplegable (los exentos —admin y roles con permiso— no).
     if (!exemptFromWindow && typeof stationId === 'string' && stationId !== '') {
@@ -1577,6 +1634,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setFormError(null);
     try {
       const payload = { ...values };
+      // Fechas que fija el sistema (fixedOnCreate + hoy): al crear se toma el
+      // día de hoy en Texas, no lo que venga del
+      // formulario; al editar no se tocan.
+      config.fields.forEach((field) => {
+        if (!field.fixedOnCreate || !field.defaultToday) return;
+        if (editing) delete payload[field.key];
+        else payload[field.key] = texasToday();
+      });
       // Copia el nombre resuelto de las referencias marcadas con copyLabelTo.
       config.fields.forEach((field) => {
         if (!field.copyLabelTo || !field.refCollection) return;
@@ -1666,7 +1731,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             setBusy(false);
             return;
           }
-          if (!exemptFromWindow) {
+          if (!exemptFromWindow && captureSpec.blockedSelectable !== true) {
             const key = captureSpec.once.detailKey;
             const chosen = payload[key];
             if (typeof chosen === 'string' && chosen !== '') {
@@ -2954,6 +3019,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
         userScopes={userScopes}
         contextEditable={canEditContext}
+        prefillOnPick={
+          config.prefillFromPrevious
+            ? { field: config.prefillFromPrevious.field, load: loadPreviousForPrefill }
+            : undefined
+        }
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
       />

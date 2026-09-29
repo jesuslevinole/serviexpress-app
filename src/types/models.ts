@@ -475,6 +475,12 @@ export interface CaptureWindowConfig {
    * los estatus abiertos, y `match` afina en el cliente (p. ej. solo los
    * mantenimientos correctivos).
    */
+  /**
+   * true = los camiones bloqueados (taller / correctivo) SÍ se pueden
+   * capturar: siguen marcados como "no exigidos", pero no salen del
+   * desplegable ni se rechazan al guardar (Fleet Report).
+   */
+  blockedSelectable?: boolean;
   blockedBy: {
     collection: string;
     /** Campo de esa colección que apunta al catálogo (idTruck). */
@@ -508,6 +514,16 @@ export interface ModuleConfig {
   id: string;
   /** Iconos de estado del camión (taller / correctivo / estación Maintenance). */
   unitStatus?: UnitStatusConfig;
+  /**
+   * Alta con PRECARGA: al elegir `field` (el camión) se traen `keys` del
+   * último registro de ese camión en este módulo; si no hay, del registro
+   * del camión en `fallbackCollection` (Fleet).
+   */
+  prefillFromPrevious?: {
+    field: string;
+    keys: string[];
+    fallbackCollection?: string;
+  };
   collection: string;
   title: string;
   /** Nombre del ícono de lucide-react. */
