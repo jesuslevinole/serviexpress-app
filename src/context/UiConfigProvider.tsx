@@ -120,11 +120,20 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
             ...(override.required !== undefined && field.compute === undefined
               ? { required: override.required }
               : {}),
-            ...(override.table !== undefined ? { table: override.table } : {}),
-            ...(override.adminOnly !== undefined ? { adminOnly: override.adminOnly } : {}),
+            ...(override.table !== undefined && field.lockedInLayout !== true
+              ? { table: override.table }
+              : {}),
+            ...(override.adminOnly !== undefined && field.lockedInLayout !== true
+              ? { adminOnly: override.adminOnly }
+              : {}),
           };
         }
-        return { field: next, order: override?.order ?? index, hidden: override?.hidden === true };
+        return {
+          field: next,
+          order: override?.order ?? index,
+          // Un campo bloqueado en el layout nunca se oculta.
+          hidden: override?.hidden === true && field.lockedInLayout !== true,
+        };
       })
       .filter((item) => !item.hidden)
       .sort((a, b) => a.order - b.order)

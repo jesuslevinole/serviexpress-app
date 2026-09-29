@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
 import { displayCell, effectiveValue } from './displayValue';
 import { MODULE_BY_COLLECTION } from '../../config/modules';
+import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
 import type { EntityData, FieldConfig } from '../../types/models';
 import './RecordDetailModal.css';
@@ -20,6 +21,8 @@ interface RecordDetailModalProps {
   headerExtra?: ReactNode;
   /** Si se define, muestra el botón Editar. */
   onEdit?: () => void;
+  /** Campo con el uid de quien capturó: el pie dice "Captured … by <nombre>". */
+  capturedByKey?: string;
   onClose: () => void;
 }
 
@@ -60,9 +63,13 @@ export function RecordDetailModal({
   refLabels,
   extra,
   onEdit,
+  capturedByKey,
   onClose,
 }: RecordDetailModalProps) {
   const createdAt = typeof record.createdAt === 'string' ? record.createdAt : '';
+  const ownerId = capturedByKey ? record[capturedByKey] : null;
+  const ownerName =
+    typeof ownerId === 'string' && ownerId !== '' ? refLabels(COLLECTIONS.users, ownerId) : '';
   const navigate = useNavigate();
   const { can } = useAuth();
 
@@ -94,7 +101,15 @@ export function RecordDetailModal({
       footer={
         <>
           {createdAt ? (
-            <span className="rdetail-meta">Captured: {formatDateTime(createdAt)}</span>
+            <span className="rdetail-meta">
+              Captured: {formatDateTime(createdAt)}
+              {ownerName && ownerName !== '—' ? (
+                <>
+                  {' '}
+                  by <strong>{ownerName}</strong>
+                </>
+              ) : null}
+            </span>
           ) : null}
           <button type="button" className="btn btn-outline" onClick={onClose}>
             Close

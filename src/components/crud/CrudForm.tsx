@@ -225,6 +225,23 @@ export function CrudForm({
           });
         }
       }
+      // Alta que llega con la referencia YA elegida (p. ej. "+ Add" junto a un
+      // camión del aviso): se copian sus datos dependientes (entidad/estación)
+      // como si el usuario lo hubiera elegido en el desplegable.
+      if (!initial) {
+        fields.forEach((target) => {
+          const spec = target.copyFromRefField;
+          if (!spec || !(target.key in base) || !isEmpty(base[target.key])) return;
+          const sourceId = base[spec.field];
+          if (typeof sourceId !== 'string' || sourceId === '') return;
+          const sourceField = fields.find((f) => f.key === spec.field);
+          const row = sourceField?.refCollection
+            ? refMaps[sourceField.refCollection]?.rows.find((r) => r.id === sourceId)
+            : undefined;
+          const copied = row?.[spec.sourceField];
+          if (typeof copied === 'number' || typeof copied === 'string') base[target.key] = copied;
+        });
+      }
       setValues(base);
       openedWith.current = base;
       prefilledWith.current = {};
@@ -232,7 +249,12 @@ export function CrudForm({
       setPrefillNote(null);
       setTouchedSubmit(false);
       setBlockedError(null);
+      // ...y se precarga lo del registro anterior de ese camión.
+      const pickedAtOpen = !initial && prefillOnPick ? base[prefillOnPick.field] : null;
+      if (typeof pickedAtOpen === 'string' && pickedAtOpen !== '') void runPrefill(pickedAtOpen);
     }
+    // refMaps/fields/prefillOnPick se leen al abrir; no deben reabrir el formulario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
     valueFields,

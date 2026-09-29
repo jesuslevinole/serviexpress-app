@@ -248,6 +248,12 @@ export interface FieldConfig {
    */
   fixedOnCreate?: boolean;
   /**
+   * El layout del admin (Customize) NO puede ocultar este campo ni quitarlo
+   * de la tabla o del detalle: una configuración vieja que escondía
+   * "Captured by" hacía desaparecer la columna BC al recargar.
+   */
+  lockedInLayout?: boolean;
+  /**
    * El campo no se pide al CREAR (toma su defaultValue), pero sí aparece al
    * editar. Para datos que siempre nacen igual y solo cambian después, como el
    * estatus de una solicitud: quita un paso del alta sin perder el control.

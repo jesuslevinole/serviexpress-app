@@ -2110,7 +2110,7 @@ export const fleetReportsModule: ModuleConfig = {
       fixedOnCreate: true,
     },
     // Nombre del BC que cargó el registro, visible en la tabla junto a la fecha.
-    { ...capturedByField, label: 'BC' },
+    { ...capturedByField, label: 'BC', table: true, lockedInLayout: true },
     {
       key: 'unitType',
       label: 'Type',

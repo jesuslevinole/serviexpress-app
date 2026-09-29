@@ -2559,6 +2559,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             info={captureInfo}
             extraTaken={extraTakenList}
             onTruckClick={openTruckPeek}
+            onTruckAdd={
+              // Modo propio (Fleet Report): "+" abre el alta con ese camión.
+              !config.detail && canCreate && !captureLocked && !historicView
+                ? (id) => {
+                    openCreate();
+                    setExternalPrefill({ [captureSpec.once.detailKey]: id });
+                  }
+                : undefined
+            }
             refLabel={detailRefLabel}
             describeParent={describeParent}
             scopeStations={pendingStations}
@@ -2802,6 +2811,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           fields={allowedFields}
           record={viewing}
           refLabels={refLabel}
+          capturedByKey={config.autoUserField}
           headerExtra={
             <>
               {config.id === 'maintenance' && typeof viewing.originId === 'string' && viewing.originId !== '' ? (

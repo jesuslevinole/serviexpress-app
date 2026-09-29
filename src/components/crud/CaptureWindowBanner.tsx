@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, ChevronDown, ChevronUp, Clock, Lock, Settings2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ChevronDown, ChevronUp, Clock, Lock, Plus, Settings2 } from 'lucide-react';
 import {
   describeSchedule,
   formatDuration,
@@ -34,6 +34,24 @@ interface CaptureWindowBannerProps {
   extraTaken?: { id: string; label: string; reason: string }[];
   /** Clic en un camión de cualquier lista del aviso: abre su detalle. */
   onTruckClick?: (id: string) => void;
+  /** "+" junto a un camión pendiente: abre el alta con ese camión ya elegido. */
+  onTruckAdd?: (id: string) => void;
+}
+
+/** Botón "+" para cargar ese camión directamente. */
+function AddTruckButton({ id, onTruckAdd }: { id: string; onTruckAdd?: (id: string) => void }) {
+  if (!onTruckAdd) return null;
+  return (
+    <button
+      type="button"
+      className="cwin-add-btn"
+      title="Add this truck now"
+      aria-label="Add this truck now"
+      onClick={() => onTruckAdd(id)}
+    >
+      <Plus size={12} />
+    </button>
+  );
 }
 
 type PendingKind = 'missing' | 'done' | 'blocked';
@@ -78,6 +96,7 @@ export function CaptureWindowBanner({
   stationBcs,
   extraTaken = [],
   onTruckClick,
+  onTruckAdd,
 }: CaptureWindowBannerProps) {
   const [open, setOpen] = useState(false);
   const [showDone, setShowDone] = useState(false);
@@ -130,6 +149,8 @@ export function CaptureWindowBanner({
   const reportName = spec.label.replace(/ window$/i, '');
   const unit = spec.once.sourceLabel;
   const stationView = scopeStations.length > 0;
+  /** Taller/correctivo se PUEDEN cargar (Fleet Report): solo no son obligatorios. */
+  const optionalBlocked = spec.blockedSelectable === true;
 
   /** Con varias estaciones a la vista (admin/oficina) se agrupa por estación. */
   const stationIds = [...new Set(items.map((item) => item.stationId))];
@@ -253,7 +274,9 @@ export function CaptureWindowBanner({
             {blocked.length > 0 ? (
               <>
                 {' '}
-                · {blocked.length} not required (in shop / corrective)
+                · {blocked.length} {optionalBlocked
+                  ? 'in shop / corrective (optional — they can still be added)'
+                  : 'not required (in shop / corrective)'}
               </>
             ) : null}
             {extraTaken.length > 0 ? (
@@ -293,6 +316,7 @@ export function CaptureWindowBanner({
                       {group.missing.map((item) => (
                         <li key={item.row.id}>
                           <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} />
+                          <AddTruckButton id={item.row.id} onTruckAdd={onTruckAdd} />
                         </li>
                       ))}
                     </ul>
@@ -306,6 +330,7 @@ export function CaptureWindowBanner({
                   {missing.map((item) => (
                     <li key={item.row.id}>
                       <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} />
+                      <AddTruckButton id={item.row.id} onTruckAdd={onTruckAdd} />
                     </li>
                   ))}
                 </ul>
@@ -315,12 +340,17 @@ export function CaptureWindowBanner({
 
           {blocked.length > 0 ? (
             <div className="cwin-group">
-              <span className="cwin-group-title">Not available (can't be added)</span>
+              <span className="cwin-group-title">
+                {optionalBlocked
+                  ? 'In shop / corrective — optional, they can be added'
+                  : "Not available (can't be added)"}
+              </span>
               <ul className="cwin-list is-blocked">
                 {blocked.map((item) => (
                   <li key={item.row.id} title={info.blocked.get(item.row.id)}>
                     <TruckLabel id={item.row.id} label={item.label} onTruckClick={onTruckClick} /> —{' '}
                     {info.blocked.get(item.row.id)}
+                    {optionalBlocked ? <AddTruckButton id={item.row.id} onTruckAdd={onTruckAdd} /> : null}
                   </li>
                 ))}
               </ul>
