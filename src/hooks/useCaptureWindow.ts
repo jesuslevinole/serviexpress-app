@@ -39,6 +39,8 @@ export interface CaptureWindowInfo {
   taken: Map<string, TakenInfo>;
   /** id del catálogo -> motivo por el que hoy no se puede capturar (taller, correctivo). */
   blocked: Map<string, string>;
+  /** id del catálogo -> colección que lo bloquea (shop_orders, maintenance…). */
+  blockedSource: Map<string, string>;
   /** Registros activos del catálogo a cubrir (los camiones). */
   sourceRows: EntityData[];
   /** TODOS los registros del catálogo, incluidos inactivos (para explicar motivos). */
@@ -291,18 +293,20 @@ export function useCaptureWindow(
     return map;
   }, [spec, windowRows, parentKey, parentById, extraParents, selfMode, selfWindowRows]);
 
-  const blocked = useMemo(() => {
+  const { blocked, blockedSource } = useMemo(() => {
     const map = new Map<string, string>();
-    if (!spec) return map;
+    const source = new Map<string, string>();
+    if (!spec) return { blocked: map, blockedSource: source };
     spec.blockedBy.forEach((block) => {
       (blockedRows[block.collection] ?? []).forEach((row) => {
         if (block.match && !block.match(row)) return;
         const target = row[block.refKey];
         if (typeof target !== 'string' || target === '' || map.has(target)) return;
         map.set(target, block.label);
+        source.set(target, block.collection);
       });
     });
-    return map;
+    return { blocked: map, blockedSource: source };
   }, [spec, blockedRows]);
 
   const save = useCallback(
@@ -329,6 +333,7 @@ export function useCaptureWindow(
     occurrence,
     taken,
     blocked,
+    blockedSource,
     sourceRows,
     sourceRowsAll: sourceAll,
     save,

@@ -527,6 +527,24 @@ export async function fetchDocumentsWhere(
 }
 
 /**
+ * Lectura puntual con condiciones del servidor ("in" y/o un rango), sin
+ * listener: para consultas bajo demanda como el histórico por fechas.
+ */
+export async function fetchWithClauses(
+  collectionName: string,
+  clauses: QueryClause[],
+): Promise<EntityData[]> {
+  const constraints: QueryConstraint[] = [];
+  clauses.forEach((clause) => {
+    if (clause.op === 'in') constraints.push(where(clause.field, 'in', clause.values));
+    else constraints.push(where(clause.field, '>=', clause.from), where(clause.field, '<=', clause.to));
+  });
+  const snapshot = await getDocs(query(collection(db, collectionName), ...constraints));
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (range)`, snapshot.size);
+  return snapshot.docs.map((d) => toEntity(d.id, d.data()));
+}
+
+/**
  * Lectura puntual de UN documento, CACHÉ PRIMERO: si el navegador ya lo
  * tiene (IndexedDB), no cuesta lectura; solo va al servidor si no está.
  * Para documentos que casi no cambian (encabezados de reportes viejos).

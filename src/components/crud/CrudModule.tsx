@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Wrench,
+  CalendarRange,
   FileDown,
   FileSpreadsheet,
   FileUp,
@@ -17,6 +18,7 @@ import { useCollection } from '../../hooks/useCollection';
 import { useRefMaps } from '../../hooks/useRefMaps';
 import {
   fetchDocumentsWhere,
+  fetchWithClauses,
   adjustCounter,
   countDocuments,
   createDocument,
@@ -277,6 +279,62 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
   }, [activeTab, canSeeHistoric, config.viewTabs]);
 
+  /**
+   * HISTÓRICO POR RANGO DE FECHAS (módulos con ventana semanal): la pestaña
+   * "Historic" no muestra nada hasta que el usuario elige Desde/Hasta y
+   * busca. Se consulta al servidor por la fecha del registro (hora de Texas)
+   * — así se ve cualquier semana, no solo las que cabían en la lista.
+   */
+  const historicByRange =
+    config.captureWindow !== undefined && (config.viewTabs ?? []).some((tab) => tab.id === 'historic');
+  const historicDateKey =
+    config.fields.find((f) => f.key === 'date' && f.type === 'date')?.key ??
+    config.fields.find((f) => f.type === 'date')?.key ??
+    null;
+  const [histFrom, setHistFrom] = useState(() => {
+    const [y, m, d] = texasToday().split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d - 7)).toISOString().slice(0, 10);
+  });
+  const [histTo, setHistTo] = useState(() => texasToday());
+  const [histApplied, setHistApplied] = useState<{ from: string; to: string } | null>(null);
+  const [histRows, setHistRows] = useState<EntityData[] | null>(null);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histError, setHistError] = useState<string | null>(null);
+
+  const runHistoricSearch = async () => {
+    if (!historicDateKey || histFrom === '' || histTo === '' || histFrom > histTo) return;
+    setHistLoading(true);
+    setHistError(null);
+    const range = { field: historicDateKey, op: 'range' as const, from: histFrom, to: histTo };
+    try {
+      let found: EntityData[];
+      try {
+        // Con alcance por estación (BC): estación + rango (índice compuesto).
+        found = await fetchWithClauses(config.collection, [...(scopeClauses ?? []), range]);
+      } catch (err) {
+        if (!scopeClauses || !(err instanceof Error) || !/index|precondition/i.test(err.message)) throw err;
+        // Sin índice aún: solo el rango y el alcance se aplica aquí.
+        console.warn('[historic] composite index missing, filtering stations locally', err.message);
+        const stationClause = scopeClauses[0];
+        found = (await fetchWithClauses(config.collection, [range])).filter((row) =>
+          stationClause.values.includes(row[stationClause.field] as never),
+        );
+      }
+      found.sort((a, b) =>
+        `${String(b[historicDateKey] ?? '')}${String(b.createdAt ?? '')}`.localeCompare(
+          `${String(a[historicDateKey] ?? '')}${String(a.createdAt ?? '')}`,
+        ),
+      );
+      setHistRows(found);
+      setHistApplied({ from: histFrom, to: histTo });
+      setPage(1);
+    } catch (err) {
+      setHistError(err instanceof Error ? err.message : 'The records could not be loaded');
+    } finally {
+      setHistLoading(false);
+    }
+  };
+
   /** Conteo por pestaña, calculado sobre lo que el usuario puede ver. */
   const tabCounts = useMemo(() => {
     if (!config.viewTabs) return {};
@@ -284,6 +342,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const currentIds = new Set(currentWindowIds);
     return Object.fromEntries(
       config.viewTabs.map((tab) => {
+        if (historicByRange && tab.id === 'historic') {
+          const range = (histRows ?? []).filter(
+            (row) => !currentIds.has(row.id) && scopeFilter(config, row),
+          );
+          return [tab.id, range.length];
+        }
         if (config.captureWindow && (tab.id === 'current' || tab.id === 'historic')) {
           const count = inScope.filter((row) =>
             tab.id === 'current' ? currentIds.has(row.id) : !currentIds.has(row.id),
@@ -293,7 +357,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         return [tab.id, tab.match ? inScope.filter(tab.match).length : inScope.length];
       }),
     );
-  }, [allRows, scopeFilter, config, currentWindowIds]);
+  }, [allRows, scopeFilter, config, currentWindowIds, historicByRange, histRows]);
   /**
    * Estaciones del usuario EFECTIVO para acotar catálogos (camiones/drivers
    * de SU estación): las cargas frías del teléfono de un BC dejan de
@@ -1076,10 +1140,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     if (activeTab !== 'current' && activeTab !== 'historic') return rows;
     const currentIds = new Set(currentWindowRows.map((row) => row.id));
+    if (activeTab === 'historic' && historicByRange) {
+      // Solo lo del rango elegido; con la versión más fresca si ya está en la lista.
+      const latest = new Map(allRows.map((row) => [row.id, row]));
+      return (histRows ?? [])
+        .map((row) => latest.get(row.id) ?? row)
+        .filter((row) => !currentIds.has(row.id) && scopeFilter(config, row));
+    }
     return activeTab === 'current'
       ? rows.filter((row) => currentIds.has(row.id))
       : rows.filter((row) => !currentIds.has(row.id));
-  }, [rows, activeTab, currentWindowRows, config.captureWindow, canSeeHistoric]);
+  }, [rows, activeTab, currentWindowRows, config, canSeeHistoric, historicByRange, histRows, allRows, scopeFilter]);
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1791,6 +1862,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       for (const id of selectedIds) {
         await deleteDocument(config.collection, id);
       }
+      setHistRows((prev) => (prev ? prev.filter((row) => !selectedIds.has(row.id)) : prev));
       setSelectedIds(new Set());
       setBulkDeleting(false);
     } finally {
@@ -1823,6 +1895,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
       }
       await deleteDocument(config.collection, deleting.id);
+      const deletedId = deleting.id;
+      setHistRows((prev) => (prev ? prev.filter((row) => row.id !== deletedId) : prev));
       void logRecordChange({
         collection: config.collection,
         recordId: deleting.id,
@@ -2324,6 +2398,51 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             one. Deleting here does not affect the truck history in Trucks.
           </p>
         ) : null}
+        {historicView && historicByRange ? (
+          <div className="crud-histrange">
+            <span className="crud-histrange-title">
+              <CalendarRange size={16} />
+              Choose the date range to look up (Texas dates)
+            </span>
+            <label className="crud-histrange-field">
+              <span>From</span>
+              <input
+                type="date"
+                className="field-input"
+                value={histFrom}
+                max={histTo || undefined}
+                onChange={(e) => setHistFrom(e.target.value)}
+              />
+            </label>
+            <label className="crud-histrange-field">
+              <span>To</span>
+              <input
+                type="date"
+                className="field-input"
+                value={histTo}
+                min={histFrom || undefined}
+                onChange={(e) => setHistTo(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={histLoading || histFrom === '' || histTo === '' || histFrom > histTo}
+              onClick={() => void runHistoricSearch()}
+            >
+              <Search size={16} />
+              {histLoading ? 'Searching…' : 'Search'}
+            </button>
+            {histApplied ? (
+              <span className="crud-histrange-note">
+                Showing <strong>{tabbedRows.length}</strong> record
+                {tabbedRows.length === 1 ? '' : 's'} from {formatUsDate(histApplied.from)} to{' '}
+                {formatUsDate(histApplied.to)}
+              </span>
+            ) : null}
+            {histError ? <span className="crud-histrange-error">{histError}</span> : null}
+          </div>
+        ) : null}
         {captureSpec ? (
           <CaptureWindowBanner
             spec={captureSpec}
@@ -2381,6 +2500,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <DataTable
           columns={columns}
           rows={pageRows}
+          emptyMessage={
+            historicView && historicByRange && !histApplied
+              ? 'Choose a date range above and press Search to see the historic records.'
+              : undefined
+          }
           canEdit={canEdit}
           canDelete={canDelete}
           onEdit={openEdit}
@@ -2957,6 +3081,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                   id: row.id,
                   label: detailRefLabel(once.sourceCollection, row.id),
                   state,
+                  blockKind: blockedReason
+                    ? captureInfo.blockedSource.get(row.id) === COLLECTIONS.shopOrders
+                      ? ('shop' as const)
+                      : ('corrective' as const)
+                    : undefined,
                   detail: takenInfo
                     ? `in ${describeParent(takenInfo.parent)}`
                     : (blockedReason ?? 'not yet added in this window'),
