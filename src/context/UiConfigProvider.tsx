@@ -135,6 +135,14 @@ export function UiConfigProvider({ children }: { children: ReactNode }) {
           hidden: override?.hidden === true && field.lockedInLayout !== true,
         };
       })
+      .map((item, index, all) => {
+        // Un campo bloqueado conserva SU lugar del código (justo después del
+        // campo que lo precede, p. ej. BC tras Date): un orden viejo guardado
+        // lo mandaba al final de la tabla, fuera de la vista.
+        if (item.field.lockedInLayout !== true) return item;
+        const before = index > 0 ? all[index - 1].order : -1;
+        return { ...item, order: before + 0.5 };
+      })
       .filter((item) => !item.hidden)
       .sort((a, b) => a.order - b.order)
       .map((item) => item.field);

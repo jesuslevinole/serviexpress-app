@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { AlertTriangle, History, Search, Wrench } from 'lucide-react';
+import { AlertTriangle, History, Plus, Search, Wrench } from 'lucide-react';
 import type { AssignedTruck, RemovedTruck } from '../../hooks/useStationTruckChanges';
 import './MyTrucksModal.css';
 
@@ -31,6 +31,8 @@ interface MyTrucksModalProps {
   removed?: RemovedTruck[];
   /** Abre el histórico de movimientos de estación de un camión. */
   onShowHistory?: (id: string, label: string) => void;
+  /** Abre el alta con ese camión ya elegido (pendientes, taller y correctivo). */
+  onAdd?: (id: string) => void;
   /** Clic en un camión: abre su detalle. */
   onTruckClick?: (id: string) => void;
   onClose: () => void;
@@ -86,6 +88,7 @@ export function MyTrucksModal({
   assigned = [],
   removed = [],
   onShowHistory,
+  onAdd,
   onTruckClick,
   onClose,
 }: MyTrucksModalProps) {
@@ -226,7 +229,20 @@ export function MyTrucksModal({
             )}
             <span className="mytrucks-state">{stateLabel(truck)}</span>
             <span className="mytrucks-detail">{truck.detail}</span>
-            <HistoryButton id={truck.id} label={truck.label} onShowHistory={onShowHistory} />
+            <span className="mytrucks-actions">
+              {onAdd && truck.state !== 'added' ? (
+                <button
+                  type="button"
+                  className="mytrucks-history-btn is-add"
+                  title="Add this truck to the Fleet Report now"
+                  onClick={() => onAdd(truck.id)}
+                >
+                  <Plus size={13} />
+                  Add
+                </button>
+              ) : null}
+              <HistoryButton id={truck.id} label={truck.label} onShowHistory={onShowHistory} />
+            </span>
           </li>
         ))}
         {filtered.length === 0 ? <li className="mytrucks-empty">No match for “{search}”</li> : null}

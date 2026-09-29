@@ -305,3 +305,20 @@
 .mytrucks-list li.is-blocked {
   border-color: var(--danger-bg);
 }
+
+.mytrucks-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mytrucks-history-btn.is-add {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.mytrucks-history-btn.is-add:hover {
+  background: var(--primary);
+  color: #fff;
+}

@@ -1744,6 +1744,30 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               }
             }
           }
+          // Las ÚNICAS reglas para el BC: el camión es de SU estación (Current
+          // station) y nadie lo cargó ya esta semana (arriba). Taller y
+          // correctivo NO impiden cargarlo.
+          if (!exemptFromWindow && pendingStations.length > 0) {
+            const key = captureSpec.once.detailKey;
+            const chosen = payload[key];
+            const truck =
+              typeof chosen === 'string'
+                ? captureInfo.sourceRowsAll.find((row) => row.id === chosen)
+                : undefined;
+            const truckStation = truck?.[captureSpec.once.sourceStationKey];
+            if (
+              truck &&
+              typeof truckStation === 'string' &&
+              truckStation !== '' &&
+              !pendingStations.includes(truckStation)
+            ) {
+              setFormError(
+                `No se puede guardar: el camión ${detailRefLabel(captureSpec.once.sourceCollection, truck.id)} pertenece a la estación ${refLabel(COLLECTIONS.stations, truckStation)}, no a la tuya.`,
+              );
+              setBusy(false);
+              return;
+            }
+          }
         }
         // Prohibido guardar un BC Report VACÍO: debe traer al menos un
         // renglón de mantenimiento (los exentos pueden, para correcciones).
@@ -3253,7 +3277,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
                     : undefined,
                   detail: takenInfo
                     ? `in ${describeParent(takenInfo.parent)}`
-                    : (blockedReason ?? 'not yet added in this window'),
+                    : blockedReason
+                      ? captureSpec.blockedSelectable === true
+                        ? `${blockedReason} — you can still add it`
+                        : blockedReason
+                      : 'not yet added in this window',
                 };
               })
               .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
@@ -3262,6 +3290,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           assigned={stationChanges.assigned}
           removed={stationChanges.removed}
           onShowHistory={(id, label) => setHistoryTruck({ id, label })}
+          onAdd={
+            !config.detail && canCreate && !captureLocked
+              ? (id) => {
+                  stationChanges.acknowledge();
+                  setMyTrucksOpen(false);
+                  openCreate();
+                  setExternalPrefill({ [captureSpec.once.detailKey]: id });
+                }
+              : undefined
+          }
           onTruckClick={openTruckPeek}
           onClose={() => {
             // Revisado: el botón deja de alumbrarse hasta el próximo cambio.

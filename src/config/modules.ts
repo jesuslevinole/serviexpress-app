@@ -2065,14 +2065,14 @@ export const fleetReportsModule: ModuleConfig = {
     blockedSelectable: true,
   },
   /**
-   * Al elegir el camión se precarga lo de su Fleet Report anterior (o de su
-   * registro en Fleet). Las LECTURAS de la semana (millaje, llantas) y el
-   * correctivo no se copian: se capturan nuevas cada vez.
+   * Al elegir el camión se precarga lo de su ÚLTIMO Fleet Report. Nada de
+   * Fleet ni de BC Report: si el camión aún no tiene Fleet Report, el
+   * formulario queda en blanco. Las lecturas de la semana (millaje, llantas)
+   * y el correctivo no se copian.
    */
   prefillFromPrevious: {
     field: 'idTruck',
     keys: ['unitType', 'route', 'idDriver', 'idScanner', 'gasCard', 'sNumber', 'vTruck', 'stop'],
-    fallbackCollection: COLLECTIONS.fleet,
   },
   /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
   uniqueInWindow: ['idTruck', 'idDriver'],
