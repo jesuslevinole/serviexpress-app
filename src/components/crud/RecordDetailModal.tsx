@@ -37,6 +37,8 @@ function formatDateTime(iso: string): string {
   if (Number.isNaN(date.getTime())) return iso;
   // Todo el app muestra MES/DÍA/AÑO, también los sellos de captura.
   return date.toLocaleString('en-US', {
+    // Siempre hora de Texas, sin importar la zona del equipo.
+    timeZone: 'America/Chicago',
     month: '2-digit',
     day: '2-digit',
     year: 'numeric',

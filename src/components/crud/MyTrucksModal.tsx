@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { Search } from 'lucide-react';
+import { History, Search } from 'lucide-react';
+import type { AssignedTruck, RemovedTruck } from '../../hooks/useStationTruckChanges';
 import './MyTrucksModal.css';
 
 export interface MyTruckRow {
@@ -17,9 +18,38 @@ interface MyTrucksModalProps {
   trucks: MyTruckRow[];
   /** Camiones capturados por su estación que ya no cuentan (movidos/baja). */
   moved: { id: string; label: string; reason: string }[];
+  /** Camiones que le ASIGNARON / QUITARON desde la última vez que revisó. */
+  assigned?: AssignedTruck[];
+  removed?: RemovedTruck[];
+  /** Abre el histórico de movimientos de estación de un camión. */
+  onShowHistory?: (id: string, label: string) => void;
   /** Clic en un camión: abre su detalle. */
   onTruckClick?: (id: string) => void;
   onClose: () => void;
+}
+
+/** Botón de histórico de estaciones de un camión. */
+function HistoryButton({
+  id,
+  label,
+  onShowHistory,
+}: {
+  id: string;
+  label: string;
+  onShowHistory?: (id: string, label: string) => void;
+}) {
+  if (!onShowHistory) return null;
+  return (
+    <button
+      type="button"
+      className="mytrucks-history-btn"
+      title="Station history of this truck"
+      onClick={() => onShowHistory(id, label)}
+    >
+      <History size={13} />
+      History
+    </button>
+  );
 }
 
 const STATE_LABEL: Record<MyTruckRow['state'], string> = {
@@ -39,6 +69,9 @@ export function MyTrucksModal({
   stationNames,
   trucks,
   moved,
+  assigned = [],
+  removed = [],
+  onShowHistory,
   onTruckClick,
   onClose,
 }: MyTrucksModalProps) {
@@ -51,6 +84,43 @@ export function MyTrucksModal({
 
   return (
     <Modal open title={`My trucks · Station ${stationNames}`} onClose={onClose} size="lg">
+      {assigned.length + removed.length > 0 ? (
+        <div className="mytrucks-changes">
+          <strong>Changes at your station since you last checked</strong>
+          {assigned.length > 0 ? (
+            <div className="mytrucks-changes-group is-in">
+              <span className="mytrucks-changes-title">
+                Assigned to your station ({assigned.length})
+              </span>
+              <ul>
+                {assigned.map((item) => (
+                  <li key={item.id}>
+                    <span className="mytrucks-changes-label">{item.label}</span>
+                    <HistoryButton id={item.id} label={item.label} onShowHistory={onShowHistory} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {removed.length > 0 ? (
+            <div className="mytrucks-changes-group is-out">
+              <span className="mytrucks-changes-title">
+                Taken away from your station ({removed.length})
+              </span>
+              <ul>
+                {removed.map((item) => (
+                  <li key={item.id}>
+                    <span className="mytrucks-changes-label">{item.label}</span>
+                    <span className="mytrucks-detail">— {item.reason}</span>
+                    <HistoryButton id={item.id} label={item.label} onShowHistory={onShowHistory} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <small>These notices are cleared when you close this window.</small>
+        </div>
+      ) : null}
       {moved.length > 0 ? (
         <div className="mytrucks-alert">
           <strong>
@@ -107,6 +177,7 @@ export function MyTrucksModal({
             )}
             <span className="mytrucks-state">{STATE_LABEL[truck.state]}</span>
             <span className="mytrucks-detail">{truck.detail}</span>
+            <HistoryButton id={truck.id} label={truck.label} onShowHistory={onShowHistory} />
           </li>
         ))}
         {filtered.length === 0 ? <li className="mytrucks-empty">No match for “{search}”</li> : null}

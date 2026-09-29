@@ -28,10 +28,11 @@ export interface CaptureWindow {
   /** Hora de Texas en que cierra, "HH:MM". */
   endTime: string;
   /**
-   * true = el cierre cae en la SEMANA SIGUIENTE a la apertura (martes ->
-   * miércoles de la próxima semana). Con más de 7 días la siguiente ventana
-   * abre antes de que cierre la anterior: la captura nunca queda cerrada y
-   * cada elemento se puede capturar una vez por ciclo semanal.
+   * OBSOLETO (V00080): antes permitía cerrar en la semana siguiente y la
+   * ventana duraba más de 7 días (miércoles -> martes daba 13 días). Hoy se
+   * IGNORA en los cálculos: la ventana cierra siempre en la PRIMERA vez que
+   * llega el día/hora de cierre después de abrir (máximo una semana exacta).
+   * Se conserva solo para leer el historial de horarios viejos.
    */
   endNextWeek: boolean;
   /** Uid de quien la configuró y cuándo (ISO). */
@@ -181,6 +182,11 @@ export function plusOneWeekTexas(iso: string): string {
   );
 }
 
+/** Fecha en Texas ("YYYY-MM-DD") de un instante ISO; '' si no es fecha. */
+export function texasDateOf(iso: string): string {
+  return isoToTexasLocal(iso).slice(0, 10);
+}
+
 /** Fecha de hoy en Texas ("YYYY-MM-DD"): la que deben tomar los registros. */
 export function texasToday(): string {
   return isoToTexasLocal(new Date().toISOString()).slice(0, 10);
@@ -243,14 +249,15 @@ export function windowSpanDays(window: CaptureWindow): number {
   let spanDays = (window.endDay - window.startDay + 7) % 7;
   // Mismo día con hora de cierre no posterior: la ventana da la vuelta a la
   // semana completa (lunes 08:00 -> lunes 07:59 de la siguiente).
+  // (endNextWeek ya no suma una semana: el cierre es el PRIMERO después de
+  // abrir. Miércoles 00:00 -> martes 23:59 = una semana exacta.)
   if (spanDays === 0 && window.endTime <= window.startTime) spanDays = 7;
-  if (window.endNextWeek) spanDays += 7;
   return spanDays;
 }
 
 /** ¿El cierre cae en una semana posterior a la de la apertura? */
 export function closesInLaterWeek(window: CaptureWindow): boolean {
-  return window.endNextWeek || window.endDay < window.startDay ||
+  return window.endDay < window.startDay ||
     (window.endDay === window.startDay && window.endTime <= window.startTime);
 }
 
@@ -262,10 +269,10 @@ export function windowsOverlap(window: CaptureWindow): boolean {
 
 /** "Every week from Monday 8:00 AM to Sunday 11:59 PM (Texas time)". */
 export function describeSchedule(window: CaptureWindow): string {
-  const laterWeek = closesInLaterWeek(window) ? ' of the following week' : ' of that same week';
-  return `every week from ${DAY_NAMES[window.startDay]} ${formatClock(window.startTime)} to ${
+  const next = closesInLaterWeek(window) ? 'the next ' : '';
+  return `every week from ${DAY_NAMES[window.startDay]} ${formatClock(window.startTime)} to ${next}${
     DAY_NAMES[window.endDay]
-  }${laterWeek} at ${formatClock(window.endTime)} (Texas time)`;
+  } ${formatClock(window.endTime)} (Texas time)`;
 }
 
 /**
@@ -293,7 +300,10 @@ export function resolveOccurrence(
 
   const occurrenceFrom = (startFake: number): WindowOccurrence | null => {
     const startAt = texasLocalToIso(`${fakeDateIso(startFake)}T${window.startTime}`);
-    const endAt = texasLocalToIso(`${fakeDateIso(startFake + spanDays * DAY_MS)}T${window.endTime}`);
+    const endMinute = texasLocalToIso(`${fakeDateIso(startFake + spanDays * DAY_MS)}T${window.endTime}`);
+    // El minuto de cierre cuenta COMPLETO: "11:59 PM" cierra a las 11:59:59,
+    // pegado a la apertura de las 12:00 AM (sin un minuto muerto en medio).
+    const endAt = endMinute ? new Date(new Date(endMinute).getTime() + 59_999).toISOString() : null;
     return startAt && endAt ? { startAt, endAt } : null;
   };
 
@@ -392,7 +402,7 @@ export async function saveCaptureWindow(
   if (!isTime(window.startTime) || !isTime(window.endTime)) {
     throw new Error('Both the opening and the closing time are required');
   }
-  const signature = windowSignature(window);
+  const signature = windowSignature({ ...window, endNextWeek: false });
   const history = [...(previous?.history ?? [])];
   if (previous) {
     if (windowSignature(previous) === signature) {
@@ -418,7 +428,8 @@ export async function saveCaptureWindow(
     startTime: window.startTime,
     endDay: window.endDay,
     endTime: window.endTime,
-    endNextWeek: window.endNextWeek,
+    // Ya no existe "cierra la semana siguiente": siempre una semana máximo.
+    endNextWeek: false,
     timeZone: APP_TIME_ZONE,
     updatedBy,
     updatedAt: new Date().toISOString(),

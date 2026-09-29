@@ -62,7 +62,7 @@
 
 .mytrucks-list li {
   display: grid;
-  grid-template-columns: 150px 110px 1fr;
+  grid-template-columns: 150px 110px 1fr auto;
   align-items: baseline;
   gap: 10px;
   padding: 7px 12px;
@@ -135,4 +135,143 @@
   text-align: left;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+/* Botón que "se alumbra" cuando le asignan o le quitan un camión. */
+.mytrucks-btn.is-alert {
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: mytrucks-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes mytrucks-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--danger-bg);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--danger-bg);
+  }
+}
+
+/* Novedades de la estación (asignados / quitados). */
+.mytrucks-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--info);
+  border-radius: var(--radius);
+  background: var(--info-bg);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mytrucks-changes small {
+  color: var(--text-soft);
+}
+
+.mytrucks-changes ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mytrucks-changes li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mytrucks-changes-title {
+  font-weight: 800;
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.mytrucks-changes-group.is-in .mytrucks-changes-title {
+  color: var(--success);
+}
+
+.mytrucks-changes-group.is-out .mytrucks-changes-title {
+  color: var(--danger);
+}
+
+.mytrucks-changes-label {
+  font-weight: 700;
+}
+
+.mytrucks-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mytrucks-history-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Histórico de estaciones de un camión. */
+.mytrucks-history-scroll {
+  max-height: 55vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.mytrucks-history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.mytrucks-history th,
+.mytrucks-history td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.mytrucks-history th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.mytrucks-history-to {
+  font-weight: 700;
+}
+
+.mytrucks-history-note {
+  color: var(--text-soft);
+}
+
+.mytrucks-history-empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.mytrucks-history-error {
+  margin: 0 0 10px;
+  color: var(--danger);
+  font-size: 13px;
 }

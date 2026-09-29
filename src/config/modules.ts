@@ -1,5 +1,5 @@
 import type { EntityData, FieldConfig, FieldValue, ModuleConfig } from '../types/models';
-import { texasToday } from '../services/captureWindow';
+import { texasDateOf } from '../services/captureWindow';
 
 /**
  * Fórmula de AppSheet para estatus de vencimiento:
@@ -1349,7 +1349,7 @@ export const accidentsModule: ModuleConfig = {
       type: 'date',
       form: false,
       table: false,
-      compute: (row) => (typeof row.createdAt === 'string' ? row.createdAt.slice(0, 10) : ''),
+      compute: (row) => (typeof row.createdAt === 'string' ? texasDateOf(row.createdAt) : ''),
     },
 
     // ── Contexto: llega resuelto desde el alcance del usuario ──
@@ -2081,7 +2081,8 @@ export const fleetReportsModule: ModuleConfig = {
       label: 'Date',
       type: 'date',
       required: true,
-      defaultValue: texasToday(),
+      // Hoy en Texas, calculado al ABRIR el formulario (no al cargar el app).
+      defaultToday: true,
     },
     {
       key: 'unitType',

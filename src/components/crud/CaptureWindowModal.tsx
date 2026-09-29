@@ -12,7 +12,7 @@ import {
   formatDuration,
   formatTexas,
   resolveOccurrence,
-  windowsOverlap,
+  closesInLaterWeek,
   type CaptureWindow,
 } from '../../services/captureWindow';
 import './CaptureWindow.css';
@@ -50,7 +50,6 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
   const [startTime, setStartTime] = useState(window?.startTime ?? '08:00');
   const [endDay, setEndDay] = useState(String(window?.endDay ?? 0));
   const [endTime, setEndTime] = useState(window?.endTime ?? '23:59');
-  const [endNextWeek, setEndNextWeek] = useState(window?.endNextWeek ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -62,22 +61,22 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
   }, []);
 
   /**
-   * ¿"Cierra el miércoles" admite dos lecturas (mismo o siguiente semana)?
-   * Solo cuando el día de cierre va DESPUÉS del de apertura en la misma
-   * semana; si va antes o es el mismo, el cierre cae solo en la siguiente.
+   * La ventana cierra SIEMPRE la primera vez que llega el día/hora de cierre
+   * después de abrir: miércoles 00:00 -> martes 23:59 es una semana exacta.
+   * Ya no existe la opción "de la semana siguiente" (hacía ventanas de 13
+   * días que se encimaban).
    */
-  const spanBase = (Number(endDay) - Number(startDay) + 7) % 7;
-  const weekChoiceApplies = spanBase !== 0;
   const draft: Omit<CaptureWindow, 'updatedBy'> = useMemo(
     () => ({
       startDay: Number(startDay),
       startTime,
       endDay: Number(endDay),
       endTime,
-      endNextWeek: weekChoiceApplies ? endNextWeek : false,
+      endNextWeek: false,
     }),
-    [startDay, startTime, endDay, endTime, endNextWeek, weekChoiceApplies],
+    [startDay, startTime, endDay, endTime],
   );
+  const closesNextCalendarWeek = closesInLaterWeek({ ...draft, updatedBy: null });
 
   /** Cómo quedaría la ventana con lo capturado, medida en este instante. */
   /**
@@ -206,7 +205,7 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
                     <strong>{windowName(entry)}</strong>
                     <em> · {describeWindow(entry)}</em>
                   </td>
-                  <td>{new Date(entry.usedUntil).toLocaleDateString('en-US')}</td>
+                  <td>{formatTexasDate(entry.usedUntil)}</td>
                   <td>
                     <button
                       type="button"
@@ -219,7 +218,6 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
                         setStartTime(entry.startTime);
                         setEndDay(String(entry.endDay));
                         setEndTime(entry.endTime);
-                        setEndNextWeek(entry.endNextWeek);
                       }}
                     >
                       Use this one
@@ -265,21 +263,11 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
           <div className="cwin-modal-field">
             <span>Closes on</span>
             <SearchableSelect value={endDay} options={DAY_OPTIONS} onChange={setEndDay} />
-            {weekChoiceApplies ? (
-              <SearchableSelect
-                value={endNextWeek ? 'next' : 'same'}
-                options={[
-                  { value: 'same', label: `${DAY_NAMES[Number(endDay)]} of that SAME week` },
-                  { value: 'next', label: `${DAY_NAMES[Number(endDay)]} of the FOLLOWING week` },
-                ]}
-                onChange={(v) => setEndNextWeek(v === 'next')}
-              />
-            ) : (
-              <small className="cwin-modal-hint">
-                {DAY_NAMES[Number(endDay)]} lands on the following week (it comes before the
-                opening day).
-              </small>
-            )}
+            <small className="cwin-modal-hint">
+              Closes on the FIRST {DAY_NAMES[Number(endDay)]} after it opens
+              {closesNextCalendarWeek ? ' (the next one on the calendar)' : ''} — a window never
+              lasts more than one week.
+            </small>
           </div>
           <label className="cwin-modal-field">
             <span>At (Texas time)</span>
@@ -313,13 +301,6 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
             </>
           )}
         </p>
-        {windowsOverlap({ ...draft, updatedBy: null }) ? (
-          <p className="cwin-modal-preview is-overlap">
-            Heads up: with more than 7 days, each week the next window opens BEFORE the previous
-            one closes, so capture never fully closes — each truck can still be added only once
-            per weekly cycle.
-          </p>
-        ) : null}
       </div>
 
       <ConfirmDialog

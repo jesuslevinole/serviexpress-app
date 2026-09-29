@@ -125,7 +125,11 @@ export function CaptureWindowBanner({
   const missing = items.filter((item) => item.kind === 'missing');
   const done = items.filter((item) => item.kind === 'done');
   const blocked = items.filter((item) => item.kind === 'blocked');
-  const required = missing.length + done.length;
+  /** Todos los camiones activos en el alcance (incluye taller/correctivo). */
+  const total = items.length;
+  const reportName = spec.label.replace(/ window$/i, '');
+  const unit = spec.once.sourceLabel;
+  const stationView = scopeStations.length > 0;
 
   /** Con varias estaciones a la vista (admin/oficina) se agrupa por estación. */
   const stationIds = [...new Set(items.map((item) => item.stationId))];
@@ -213,21 +217,39 @@ export function CaptureWindowBanner({
         {configureButton}
       </div>
 
-      {required + blocked.length > 0 ? (
+      {total > 0 ? (
         <div className="cwin-progress">
           {missing.length > 0 ? <AlertTriangle size={15} /> : null}
           <span className="cwin-text">
-            <strong>{done.length}</strong> of <strong>{required}</strong> {spec.once.sourceLabel}s
-            {scopeStations.length > 0 ? ' at your station' : ''}{' '}
-            {status === 'before' ? 'added for the window that opens next' : 'added in this window'}
-            {missing.length > 0 ? (
+            {stationView ? (
+              // BC: por su CURRENT STATION.
               <>
-                {' '}
-                · <strong>{missing.length}</strong> still missing
+                Of the <strong>{total}</strong> {unit}s registered at your station,{' '}
+                {missing.length > 0 ? (
+                  <>
+                    <strong>{missing.length}</strong> still need to be loaded in {reportName}
+                  </>
+                ) : (
+                  <>all are loaded in {reportName}</>
+                )}{' '}
+                · <strong>{done.length}</strong> loaded
               </>
             ) : (
-              ' · all done'
+              // Admin / quien ve todo: contra el TOTAL del catálogo de camiones.
+              <>
+                <strong>{done.length}</strong> of <strong>{total}</strong> {unit}s loaded in{' '}
+                {reportName}
+                {missing.length > 0 ? (
+                  <>
+                    {' '}
+                    · <strong>{missing.length}</strong> still missing
+                  </>
+                ) : (
+                  ' · all done'
+                )}
+              </>
             )}
+            {status === 'before' ? ' (for the window that opens next)' : ''}
             {blocked.length > 0 ? (
               <>
                 {' '}

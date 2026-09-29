@@ -1,4 +1,5 @@
 import type { EntityData, FieldConfig, FieldValue } from '../../types/models';
+import { texasDateOf } from '../../services/captureWindow';
 
 /** Colapsa un posible arreglo (asignaciones) a un valor escalar mostrable. */
 export function scalar(value: FieldValue | string[] | undefined): FieldValue {
@@ -18,6 +19,12 @@ export function effectiveValue(field: FieldConfig, row: EntityData): FieldValue 
  * que se muestra. Un valor que no sea fecha ISO se deja tal cual.
  */
 export function formatUsDate(iso: string): string {
+  // Un sello con hora ("2026-09-30T04:30:00Z") se lee en HORA DE TEXAS: en
+  // UTC ya sería el día siguiente y la fecha mostrada saldría corrida.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso)) {
+    const texas = texasDateOf(iso);
+    if (texas !== '') iso = texas;
+  }
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return match ? `${match[2]}/${match[3]}/${match[1]}` : iso;
 }

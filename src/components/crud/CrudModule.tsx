@@ -51,6 +51,8 @@ import { notifyModuleSave } from '../../services/emailNotifications';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
+import { TruckStationHistoryModal } from './TruckStationHistoryModal';
+import { useStationTruckChanges } from '../../hooks/useStationTruckChanges';
 import { RecordPeekModal } from './RecordPeekModal';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
@@ -67,6 +69,7 @@ import {
   formatTexas,
   plusOneWeekTexas,
   texasToday,
+  texasDateOf,
   windowStatus,
 } from '../../services/captureWindow';
 import { ImportCsvModal } from './ImportCsvModal';
@@ -321,6 +324,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);
   const [myTrucksOpen, setMyTrucksOpen] = useState(false);
+  /** Camión cuyo histórico de estaciones se está viendo. */
+  const [historyTruck, setHistoryTruck] = useState<{ id: string; label: string } | null>(null);
   /** Umbrales de alerta (rojo cuando el número es <= umbral), configurables. */
   const alertThresholds = useAlertThresholds();
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -497,6 +502,29 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * ¿El camión o el driver elegidos ya están usados esta semana? Devuelve el
    * mensaje listo (con quién lo capturó) o null si está libre.
    */
+  /** Mensaje de repetido, con quién lo capturó y cuándo. */
+  const clashMessage = (key: string, value: string, clash: EntityData): string => {
+    const field = config.fields.find((f) => f.key === key);
+    const label =
+      field?.refCollection !== undefined ? refLabel(field.refCollection, value) : String(value);
+    const owner = config.autoUserField ? clash[config.autoUserField] : null;
+    const who = typeof owner === 'string' && owner !== '' ? refLabel(COLLECTIONS.users, owner) : '';
+    const when = typeof clash.createdAt === 'string' ? ` el ${formatTexas(clash.createdAt)}` : '';
+    const occ = captureInfo.occurrence;
+    const range = occ ? ` (${formatTexas(occ.startAt)} → ${formatTexas(occ.endAt)})` : '';
+    return `No se puede guardar: ${field?.label ?? key} "${label}" ya está en un ${config.title} de esta semana${range}${
+      who && who !== '—' ? `, capturado por ${who}` : ''
+    }${when}. Cada camión y cada driver van UNA sola vez por semana.`;
+  };
+
+  /** ¿El registro pertenece a la semana vigente? (sello, o fecha de creación). */
+  const isInCurrentWindow = (row: EntityData): boolean => {
+    const occ = captureInfo.occurrence;
+    if (!occ) return false;
+    if (typeof row.windowKey === 'string' && row.windowKey === `${occ.startAt}|${occ.endAt}`) return true;
+    return typeof row.createdAt === 'string' && row.createdAt >= occ.startAt && row.createdAt <= occ.endAt;
+  };
+
   const findWindowClash = (
     values: Record<string, FieldValue>,
     ignoreId: string | null,
@@ -505,16 +533,38 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     for (const key of keys) {
       const value = values[key];
       if (typeof value !== 'string' || value === '') continue;
-      const field = config.fields.find((f) => f.key === key);
       const clash = currentWindowRows.find((row) => row.id !== ignoreId && row[key] === value);
-      if (!clash) continue;
-      const label =
-        field?.refCollection !== undefined ? refLabel(field.refCollection, value) : String(value);
-      const owner = config.autoUserField ? clash[config.autoUserField] : null;
-      const who = typeof owner === 'string' && owner !== '' ? refLabel(COLLECTIONS.users, owner) : '';
-      return `No se puede guardar: ${field?.label ?? key} "${label}" ya está en un ${config.title} de esta semana${
-        who && who !== '—' ? ` (capturado por ${who})` : ''
-      }. Cada camión y cada driver van UNA sola vez por semana.`;
+      if (clash) return clashMessage(key, value, clash);
+    }
+    return null;
+  };
+
+  /**
+   * Misma regla, pero contra TODA la base: la lista del BC solo trae los
+   * registros de SU estación, así que un camión capturado esta semana desde
+   * otra estación (o antes de que se lo movieran) no se veía. Se consulta al
+   * servidor por igualdad del camión/driver — pocos documentos, sin índice.
+   * Sin conexión, queda la validación local.
+   */
+  const findWindowClashServer = async (
+    values: Record<string, FieldValue>,
+    ignoreId: string | null,
+  ): Promise<string | null> => {
+    const keys = config.uniqueInWindow ?? [];
+    for (const key of keys) {
+      const value = values[key];
+      if (typeof value !== 'string' || value === '') continue;
+      let same: EntityData[];
+      try {
+        same = await fetchDocumentsWhere(config.collection, { field: key, value });
+      } catch (err) {
+        console.warn('[unique-in-window] server check failed, local check only', err);
+        continue;
+      }
+      const clash = same
+        .filter((row) => row.id !== ignoreId && isInCurrentWindow(row))
+        .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))[0];
+      if (clash) return clashMessage(key, value, clash);
     }
     return null;
   };
@@ -559,6 +609,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         const truck = allRows.find((row) => row.id === item.id);
         const fromLabel = detailRefLabel(COLLECTIONS.stations, String(truck?.idStationActual ?? ''));
         await updateDocument(COLLECTIONS.trucks, item.id, { idStationActual: item.toId });
+        // También en el histórico de estaciones del camión (lo ve el BC).
+        void createDocument(COLLECTIONS.truckHistory, {
+          idTruck: item.id,
+          date: texasToday(),
+          field: 'idStationActual',
+          fieldLabel: 'Current station',
+          fromLabel,
+          toLabel: item.to,
+          idUsers: firebaseUser?.uid ?? null,
+          note: 'Fix stations from Sch/B',
+        });
         void logRecordChange({
           collection: COLLECTIONS.trucks,
           recordId: item.id,
@@ -854,6 +915,21 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- detailRefLabel es estable en la práctica
   }, [captureSpec, pendingStations, captureInfo.sourceRows, captureInfo.sourceRowsAll, captureInfo.taken, reportStationKey]);
+
+  /**
+   * Novedades de la estación del BC (le asignaron / le quitaron camiones):
+   * encienden el botón "My trucks" hasta que las revisa.
+   */
+  const stationChanges = useStationTruckChanges({
+    userId: effectiveUser?.id ?? '',
+    stations: captureSpec ? pendingStations : [],
+    trucksAll: captureInfo.sourceRowsAll,
+    stationKey: captureSpec?.once.sourceStationKey ?? 'idStationActual',
+    activeKey: captureSpec?.once.sourceActiveKey ?? 'status',
+    truckLabel: (id) => detailRefLabel(COLLECTIONS.trucks, id),
+    stationLabel: (id) => detailRefLabel(COLLECTIONS.stations, id),
+  });
+  const stationChangeCount = stationChanges.assigned.length + stationChanges.removed.length;
 
 
   /**
@@ -1403,7 +1479,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }
       if (editing) {
         if (captureSpec && !config.detail) {
-          const clash = findWindowClash(payload, editing.id);
+          const clash =
+            findWindowClash(payload, editing.id) ?? (await findWindowClashServer(payload, editing.id));
           if (clash) {
             setFormError(clash);
             setBusy(false);
@@ -1467,7 +1544,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         if (captureSpec && !config.detail) {
           // Unicidad semanal SIN EXCEPCIONES (aplica también a admin y a los
           // exentos de la ventana): ni el camión ni el driver se repiten.
-          const clash = findWindowClash(payload, null);
+          const clash = findWindowClash(payload, null) ?? (await findWindowClashServer(payload, null));
           if (clash) {
             setFormError(clash);
             setBusy(false);
@@ -1554,8 +1631,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           // Nombre del horario con el que se capturó ("Tue - Wed - 08:00 - 23:59").
           // Nombre de la semana con FECHAS REALES: "Tue 09/22/2026 → Tue
           // 09/29/2026". Cada martes pasa solo a la semana siguiente.
-          payload.windowName = `${formatUsDate(captureInfo.occurrence.startAt.slice(0, 10))} → ${formatUsDate(
-            captureInfo.occurrence.endAt.slice(0, 10),
+          // Fechas en HORA DE TEXAS (el cierre 11:59 PM CT ya es el día
+          // siguiente en UTC y salía corrido).
+          payload.windowName = `${formatUsDate(texasDateOf(captureInfo.occurrence.startAt))} → ${formatUsDate(
+            texasDateOf(captureInfo.occurrence.endAt),
           )}`;
           if (captureInfo.window) payload.windowSchedule = windowName(captureInfo.window);
         }
@@ -2115,14 +2194,18 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           {!historicView && captureSpec && pendingStations.length > 0 ? (
             <button
               type="button"
-              className="btn btn-outline mytrucks-btn"
-              title="Your station's trucks: added, pending, in shop, and the ones that were moved away"
+              className={`btn btn-outline mytrucks-btn${stationChangeCount > 0 ? ' is-alert' : ''}`}
+              title={
+                stationChangeCount > 0
+                  ? 'Trucks were assigned to or taken away from your station — open to see them'
+                  : "Your station's trucks: added, pending, in shop, and the ones that were moved away"
+              }
               onClick={() => setMyTrucksOpen(true)}
             >
               <Truck size={16} />
               <span className="crud-btn-text">My trucks</span>
-              {extraTakenList.length > 0 ? (
-                <span className="mytrucks-badge">{extraTakenList.length}</span>
+              {stationChangeCount + extraTakenList.length > 0 ? (
+                <span className="mytrucks-badge">{stationChangeCount + extraTakenList.length}</span>
               ) : null}
             </button>
           ) : null}
@@ -2882,8 +2965,24 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
           })()}
           moved={extraTakenList}
+          assigned={stationChanges.assigned}
+          removed={stationChanges.removed}
+          onShowHistory={(id, label) => setHistoryTruck({ id, label })}
           onTruckClick={openTruckPeek}
-          onClose={() => setMyTrucksOpen(false)}
+          onClose={() => {
+            // Revisado: el botón deja de alumbrarse hasta el próximo cambio.
+            stationChanges.acknowledge();
+            setMyTrucksOpen(false);
+          }}
+        />
+      ) : null}
+
+      {historyTruck ? (
+        <TruckStationHistoryModal
+          truckId={historyTruck.id}
+          truckLabel={historyTruck.label}
+          userLabel={(id) => refLabel(COLLECTIONS.users, id)}
+          onClose={() => setHistoryTruck(null)}
         />
       ) : null}
 
