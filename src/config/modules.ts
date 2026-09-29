@@ -2119,9 +2119,14 @@ export const fleetReportsModule: ModuleConfig = {
       required: true,
       defaultValue: 'TRUCK + SCANNER',
     },
-    ...fleetModule.fields.filter(
-      (field) => field.key !== 'observation' && field.key !== capturedByField.key,
-    ),
+    ...fleetModule.fields
+      .filter((field) => field.key !== 'observation' && field.key !== capturedByField.key)
+      // Entidad y estación son SIEMPRE las del camión: nadie las edita.
+      .map((field) =>
+        field.key === 'idEntity' || field.key === 'idStation'
+          ? { ...field, lockedFromRef: true }
+          : field,
+      ),
     ...fleetReportExtraFields,
   ],
 };

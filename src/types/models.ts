@@ -254,6 +254,12 @@ export interface FieldConfig {
    */
   lockedInLayout?: boolean;
   /**
+   * Valor que SIEMPRE sale de la referencia (`copyFromRefField`): se ve
+   * bloqueado y al guardar (alta y edición) el sistema lo vuelve a tomar del
+   * registro referenciado. Entidad y estación del Fleet Report = las del camión.
+   */
+  lockedFromRef?: boolean;
+  /**
    * El campo no se pide al CREAR (toma su defaultValue), pero sí aparece al
    * editar. Para datos que siempre nacen igual y solo cambian después, como el
    * estatus de una solicitud: quita un paso del alta sin perder el control.

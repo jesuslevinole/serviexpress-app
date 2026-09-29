@@ -543,6 +543,51 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const [sweepNote, setSweepNote] = useState<string | null>(null);
 
   /**
+   * SEGURO CONTRA EL BARRIDO VIEJO (V00064–V00073): esas versiones movían a
+   * MAINTENANCE los camiones sin Fleet Report al cerrar la semana, y una
+   * pestaña vieja abierta en el equipo de un admin todavía podría hacerlo.
+   * Aquel código saltaba el barrido si ya existía su marca en
+   * settings_sweeps; aquí se dejan puestas esas marcas para las semanas
+   * pasadas y las próximas, así ninguna copia vieja mueve un solo camión.
+   * Lo hace el admin real, una vez por equipo.
+   */
+  useEffect(() => {
+    if (config.id !== 'fleetReports' || !isAdminView || viewAs !== null) return;
+    const occurrence = captureInfo.occurrence;
+    if (!occurrence) return;
+    const GUARD_KEY = 'sx_sweep_guard_v1';
+    try {
+      if (globalThis.localStorage?.getItem(GUARD_KEY) === occurrence.startAt) return;
+    } catch {
+      /* sin almacenamiento: se escriben igual (son idempotentes) */
+    }
+    const addDays = (ymd: string, days: number) => {
+      const [y, m, d] = ymd.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+    };
+    const base = occurrence.startAt.slice(0, 10);
+    void (async () => {
+      try {
+        for (let week = -6; week <= 16; week += 1) {
+          const start = addDays(base, week * 7);
+          // Semana de 7 días y la antigua de 13 días (dos formatos de marca).
+          for (const span of [7, 14]) {
+            await setDocument(
+              'settings_sweeps',
+              `fleetReports_${start}_${addDays(start, span)}`,
+              { module: 'fleetReports', disabled: true, note: 'Weekly sweep retired (V00074)' },
+              true,
+            );
+          }
+        }
+        globalThis.localStorage?.setItem(GUARD_KEY, occurrence.startAt);
+      } catch (err) {
+        console.warn('[sweep-guard] markers could not be written', err);
+      }
+    })();
+  }, [config.id, isAdminView, viewAs, captureInfo.occurrence]);
+
+  /**
    * Registros de la SEMANA VIGENTE (por sello de ventana; los viejos, por
    * fecha de creación). Alimenta las pestañas y el control de repetidos.
    */
@@ -669,11 +714,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * servidor por igualdad del camión/driver — pocos documentos, sin índice.
    * Sin conexión, queda la validación local.
    */
+  /**
+   * Devuelve el mensaje de repetido, null si está libre, o undefined si NO
+   * se pudo consultar al servidor (sin conexión): solo entonces se usa la
+   * lista local, que puede traer registros ya BORRADOS por otro usuario.
+   */
   const findWindowClashServer = async (
     values: Record<string, FieldValue>,
     ignoreId: string | null,
-  ): Promise<string | null> => {
+  ): Promise<string | null | undefined> => {
     const keys = config.uniqueInWindow ?? [];
+    let failed = false;
     for (const key of keys) {
       const value = values[key];
       if (typeof value !== 'string' || value === '') continue;
@@ -682,6 +733,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         same = await fetchDocumentsWhere(config.collection, { field: key, value });
       } catch (err) {
         console.warn('[unique-in-window] server check failed, local check only', err);
+        failed = true;
         continue;
       }
       const clash = same
@@ -689,7 +741,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))[0];
       if (clash) return clashMessage(key, value, clash);
     }
-    return null;
+    return failed ? undefined : null;
+  };
+
+  /** Servidor primero (manda: un registro borrado ya no cuenta); local solo sin conexión. */
+  const resolveWindowClash = async (
+    values: Record<string, FieldValue>,
+    ignoreId: string | null,
+  ): Promise<string | null> => {
+    const server = await findWindowClashServer(values, ignoreId);
+    return server === undefined ? findWindowClash(values, ignoreId) : server;
   };
 
   /**
@@ -1634,6 +1695,23 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     setFormError(null);
     try {
       const payload = { ...values };
+      // Campos que SIEMPRE salen de la referencia (entidad/estación del
+      // camión): se recalculan al guardar, en alta y en edición, aunque el
+      // formulario no los mande o alguien los manipule.
+      config.fields.forEach((field) => {
+        const spec = field.copyFromRefField;
+        if (!field.lockedFromRef || !spec) return;
+        const sourceId = payload[spec.field] ?? editing?.[spec.field] ?? null;
+        if (typeof sourceId !== 'string' || sourceId === '') return;
+        const sourceField = config.fields.find((f) => f.key === spec.field);
+        const collection = sourceField?.refCollection ?? '';
+        const row =
+          refMaps[collection]?.rows.find((r) => r.id === sourceId) ??
+          captureInfo.sourceRowsAll.find((r) => r.id === sourceId);
+        if (!row) return;
+        const value = row[spec.sourceField];
+        payload[field.key] = typeof value === 'string' || typeof value === 'number' ? value : null;
+      });
       // Fechas que fija el sistema (fixedOnCreate + hoy): al crear se toma el
       // día de hoy en Texas, no lo que venga del
       // formulario; al editar no se tocan.
@@ -1660,8 +1738,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       }
       if (editing) {
         if (captureSpec && !config.detail) {
-          const clash =
-            findWindowClash(payload, editing.id) ?? (await findWindowClashServer(payload, editing.id));
+          const clash = await resolveWindowClash(payload, editing.id);
           if (clash) {
             setFormError(clash);
             setBusy(false);
@@ -1725,7 +1802,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         if (captureSpec && !config.detail) {
           // Unicidad semanal SIN EXCEPCIONES (aplica también a admin y a los
           // exentos de la ventana): ni el camión ni el driver se repiten.
-          const clash = findWindowClash(payload, null) ?? (await findWindowClashServer(payload, null));
+          const clash = await resolveWindowClash(payload, null);
           if (clash) {
             setFormError(clash);
             setBusy(false);

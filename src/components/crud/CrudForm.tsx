@@ -434,6 +434,7 @@ export function CrudForm({
     (field.key === capturedByKey && field.key !== editableCapturedByKey) ||
     field.readOnly === true ||
     field.fixedOnCreate === true ||
+    field.lockedFromRef === true ||
     (field.lockedAfterCreate === true && initial !== null) ||
     // Campo protegido: se ve, pero solo lo edita quien tenga el permiso.
     (field.editRequiresAction === true && !canEditProtected);
@@ -767,6 +768,8 @@ export function CrudForm({
                     title={
                       field.key === capturedByKey
                         ? 'The record is saved under this user'
+                        : field.lockedFromRef
+                        ? 'Taken from the truck — it cannot be changed here'
                         : field.readOnly
                         ? 'Kept up to date by the system'
                         : field.fixedOnCreate

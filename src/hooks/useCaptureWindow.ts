@@ -253,9 +253,18 @@ export function useCaptureWindow(
     const inWindow = (row: EntityData) =>
       (typeof row.windowKey === 'string' && row.windowKey === key) ||
       (typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt);
+    // Lo capturado dentro del rango lo dice el SERVIDOR en vivo (así un
+    // registro BORRADO libera su camión al instante para todos). De la lista
+    // local solo se suman los sellados con la semana pero capturados fuera
+    // del rango (altas de un admin con la ventana cerrada).
+    const inRange = (row: EntityData) =>
+      typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt;
     const byId = new Map<string, EntityData>();
-    [...selfServerRows, ...parents].forEach((row) => {
+    selfServerRows.forEach((row) => {
       if (inWindow(row)) byId.set(row.id, row);
+    });
+    parents.forEach((row) => {
+      if (!inRange(row) && inWindow(row)) byId.set(row.id, row);
     });
     return [...byId.values()];
   }, [selfMode, parents, selfServerRows, startAt, endAt]);
