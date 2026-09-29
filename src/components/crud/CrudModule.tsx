@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Wrench,
+  AlertTriangle,
+  Warehouse,
   CalendarRange,
   FileDown,
   FileSpreadsheet,
@@ -55,6 +57,7 @@ import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
 import { TruckStationHistoryModal } from './TruckStationHistoryModal';
 import { useStationTruckChanges } from '../../hooks/useStationTruckChanges';
+import { useUnitStatus, type UnitStatusKind, type UnitStatusMark } from '../../hooks/useUnitStatus';
 import { RecordPeekModal } from './RecordPeekModal';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
@@ -837,6 +840,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     return refMaps[name]?.labels.get(id) ?? '—';
   };
 
+  /**
+   * Estado del camión (Trucks): en Shop, con correctivo pendiente o con
+   * Current station = Maintenance. Se marca con un icono junto al número y
+   * la leyenda de arriba sirve de filtro rápido.
+   */
+  const unitStatus = useUnitStatus(config, (id) => refLabel(COLLECTIONS.stations, id));
+  const [unitStatusFilter, setUnitStatusFilter] = useState<UnitStatusKind | null>(null);
+
   /** Campo de fecha principal del módulo (orden por defecto y avisos). */
   const primaryDateKey = useMemo(() => {
     const named = config.fields.find((f) => f.type === 'date' && f.key === 'date');
@@ -1158,6 +1169,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     let result = tabbedRows;
+    if (unitStatus.enabled && unitStatusFilter) {
+      result = result.filter((row) =>
+        unitStatus.marksOf(row).some((mark) => mark.kind === unitStatusFilter),
+      );
+    }
     const activeFilters = Object.entries(filters);
     if (activeFilters.length > 0) {
       result = result.filter((row) =>
@@ -1177,7 +1193,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabbedRows, search, filters, config.fields, refMaps]);
+  }, [tabbedRows, search, filters, config.fields, refMaps, unitStatusFilter, unitStatus.marksOf]);
+
+  /** Cuántos camiones (visibles en la pestaña) hay en cada estado. */
+  const unitStatusCounts = useMemo(() => {
+    const counts: Record<UnitStatusKind, number> = { shop: 0, corrective: 0, maintenanceStation: 0 };
+    if (!unitStatus.enabled) return counts;
+    tabbedRows.forEach((row) => {
+      unitStatus.marksOf(row).forEach((mark) => {
+        counts[mark.kind] += 1;
+      });
+    });
+    return counts;
+  }, [tabbedRows, unitStatus]);
 
   /** Ciclo de ordenamiento por columna: asc -> desc -> orden original. */
   const handleSort = (key: string) => {
@@ -1456,6 +1484,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         label: field.label,
         render: (row) => {
           const text = displayCell(field, row as EntityData, refLabel);
+          // Número de unidad con su icono de estado (Shop / correctivo / Maintenance).
+          if (unitStatus.enabled && field.key === unitStatus.columnKey) {
+            const marks = unitStatus.marksOf(row as EntityData);
+            if (marks.length > 0) {
+              return (
+                <span className="unit-status">
+                  {marks.map((mark) => (
+                    <UnitStatusIcon key={mark.kind} mark={mark} />
+                  ))}
+                  {text}
+                </span>
+              );
+            }
+          }
           if ((STATUS_KEYS.has(field.key) || field.badge === true) && text !== '—') {
             return <Badge value={text} tone={field.badgeTones?.[text]} />;
           }
@@ -1467,7 +1509,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         },
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tableFields, refMaps, alertThresholds],
+    [tableFields, refMaps, alertThresholds, unitStatus.marksOf],
   );
 
   const openCreate = () => {
@@ -2470,6 +2512,46 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             }
           />
         ) : null}
+        {unitStatus.enabled &&
+        unitStatusCounts.shop + unitStatusCounts.corrective + unitStatusCounts.maintenanceStation > 0 ? (
+          <div className="unit-status-legend">
+            {(
+              [
+                ['shop', 'in Shop'],
+                ['corrective', 'corrective pending'],
+                ['maintenanceStation', 'at Maintenance station'],
+              ] as [UnitStatusKind, string][]
+            )
+              .filter(([kind]) => unitStatusCounts[kind] > 0)
+              .map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={`unit-status-chip is-${kind}${unitStatusFilter === kind ? ' is-active' : ''}`}
+                  title={unitStatusFilter === kind ? 'Show all trucks' : `Show only the trucks ${label}`}
+                  onClick={() => {
+                    setUnitStatusFilter((prev) => (prev === kind ? null : kind));
+                    setPage(1);
+                  }}
+                >
+                  <UnitStatusIcon mark={{ kind, title: label }} />
+                  <strong>{unitStatusCounts[kind]}</strong> {label}
+                </button>
+              ))}
+            {unitStatusFilter ? (
+              <button
+                type="button"
+                className="unit-status-clear"
+                onClick={() => {
+                  setUnitStatusFilter(null);
+                  setPage(1);
+                }}
+              >
+                <X size={13} /> Show all
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {config.coverage ? (
           <CoverageBanner
             config={config.coverage}
@@ -3132,5 +3214,14 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         />
       ) : null}
     </section>
+  );
+}
+/** Icono de estado del camión: llave = Shop, triángulo = correctivo, bodega = estación Maintenance. */
+function UnitStatusIcon({ mark }: { mark: UnitStatusMark }) {
+  const Icon = mark.kind === 'shop' ? Wrench : mark.kind === 'corrective' ? AlertTriangle : Warehouse;
+  return (
+    <span className={`unit-status-icon is-${mark.kind}`} title={mark.title} aria-label={mark.title}>
+      <Icon size={14} />
+    </span>
   );
 }

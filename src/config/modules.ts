@@ -87,6 +87,13 @@ export const trucksModule: ModuleConfig = {
   title: 'Trucks',
   icon: 'Truck',
   autoUserField: 'idUsers',
+  /** Icono junto al número: en Shop, correctivo pendiente o estación Maintenance. */
+  unitStatus: {
+    windowModuleId: 'fleetReports',
+    stationKey: 'idStationActual',
+    maintenanceStationName: 'MAINTENANCE',
+    columnKey: 'unitN',
+  },
   coverage: {
     /** Alcance por BC: su Current station y lo agregado por él. */
     sourceStationKey: 'idStationActual',

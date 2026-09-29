@@ -488,9 +488,26 @@ export interface CaptureWindowConfig {
   }[];
 }
 
+/**
+ * Icono de estado junto al número de unidad (Trucks): taller abierto,
+ * correctivo pendiente o Current station = la estación de mantenimiento.
+ */
+export interface UnitStatusConfig {
+  /** Módulo con ventana cuyos bloqueos (taller/correctivo) se reutilizan. */
+  windowModuleId: string;
+  /** Campo de estación del registro (Current station). */
+  stationKey: string;
+  /** Nombre de la estación que significa "en mantenimiento". */
+  maintenanceStationName: string;
+  /** Columna donde se dibuja el icono (número de unidad). */
+  columnKey: string;
+}
+
 export interface ModuleConfig {
   /** Id estable del módulo (se usa en permisos y rutas). */
   id: string;
+  /** Iconos de estado del camión (taller / correctivo / estación Maintenance). */
+  unitStatus?: UnitStatusConfig;
   collection: string;
   title: string;
   /** Nombre del ícono de lucide-react. */

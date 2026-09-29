@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCollection } from '../../hooks/useCollection';
-import { useCaptureWindow } from '../../hooks/useCaptureWindow';
+import { NO_CAPTURE_MODULE, useCaptureWindow } from '../../hooks/useCaptureWindow';
 import { CRUD_MODULES } from '../../config/modules';
 import { texasDateOf } from '../../services/captureWindow';
 import { formatUsDate } from './displayValue';
-import type { CoverageConfig, EntityData, ModuleConfig } from '../../types/models';
+import type { CoverageConfig, EntityData } from '../../types/models';
 import { ACTIVE_FLAG_BY_COLLECTION, isActiveRecord } from '../../services/activeStatus';
 import './CoverageBanner.css';
 
@@ -23,8 +23,6 @@ interface CoverageBannerProps {
   onSourceClick?: (row: EntityData) => void;
 }
 
-/** Módulo "vacío" para cuando la cobertura no depende de una ventana. */
-const NO_WINDOW_MODULE: ModuleConfig = { id: '__coverage', collection: '', title: '', icon: '', fields: [] };
 const NO_ROWS: EntityData[] = [];
 
 /** Texto que identifica un registro de la lista de referencia. */
@@ -86,7 +84,7 @@ export function CoverageBanner({
     [config.targetWindowModuleId],
   );
   const windowed = windowModule !== null && rowsAreSource;
-  const windowInfo = useCaptureWindow(windowed ? windowModule : NO_WINDOW_MODULE, NO_ROWS);
+  const windowInfo = useCaptureWindow(windowed ? windowModule : NO_CAPTURE_MODULE, NO_ROWS);
 
   // Se lee la colección que no viene por props; la otra ya está en pantalla.
   // (Con semana, lo capturado lo trae el cálculo de la ventana.)

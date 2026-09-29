@@ -41,6 +41,8 @@ export interface CaptureWindowInfo {
   blocked: Map<string, string>;
   /** id del catálogo -> colección que lo bloquea (shop_orders, maintenance…). */
   blockedSource: Map<string, string>;
+  /** id del catálogo -> TODAS las colecciones que lo bloquean (taller y correctivo a la vez). */
+  blockedSources: Map<string, Set<string>>;
   /** Registros activos del catálogo a cubrir (los camiones). */
   sourceRows: EntityData[];
   /** TODOS los registros del catálogo, incluidos inactivos (para explicar motivos). */
@@ -48,6 +50,15 @@ export interface CaptureWindowInfo {
   save: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
   clear: () => Promise<void>;
 }
+
+/** Módulo "vacío": para llamar al hook sin ventana (las reglas de hooks). */
+export const NO_CAPTURE_MODULE: ModuleConfig = {
+  id: '__none',
+  collection: '',
+  title: '',
+  icon: '',
+  fields: [],
+};
 
 /** Cada cuánto se refresca el reloj compartido del módulo. */
 const TICK_MS = 15 * 1000;
@@ -318,20 +329,25 @@ export function useCaptureWindow(
     return map;
   }, [spec, windowRows, parentKey, parentById, extraParents, selfMode, selfWindowRows]);
 
-  const { blocked, blockedSource } = useMemo(() => {
+  const { blocked, blockedSource, blockedSources } = useMemo(() => {
     const map = new Map<string, string>();
     const source = new Map<string, string>();
-    if (!spec) return { blocked: map, blockedSource: source };
+    const all = new Map<string, Set<string>>();
+    if (!spec) return { blocked: map, blockedSource: source, blockedSources: all };
     spec.blockedBy.forEach((block) => {
       (blockedRows[block.collection] ?? []).forEach((row) => {
         if (block.match && !block.match(row)) return;
         const target = row[block.refKey];
-        if (typeof target !== 'string' || target === '' || map.has(target)) return;
+        if (typeof target !== 'string' || target === '') return;
+        const set = all.get(target) ?? new Set<string>();
+        set.add(block.collection);
+        all.set(target, set);
+        if (map.has(target)) return;
         map.set(target, block.label);
         source.set(target, block.collection);
       });
     });
-    return { blocked: map, blockedSource: source };
+    return { blocked: map, blockedSource: source, blockedSources: all };
   }, [spec, blockedRows]);
 
   const save = useCallback(
@@ -359,6 +375,7 @@ export function useCaptureWindow(
     taken,
     blocked,
     blockedSource,
+    blockedSources,
     sourceRows,
     sourceRowsAll: sourceAll,
     save,
