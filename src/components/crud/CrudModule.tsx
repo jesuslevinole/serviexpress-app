@@ -547,14 +547,17 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const occurrence = captureInfo.occurrence;
     if (!occurrence) return [] as EntityData[];
     const key = `${occurrence.startAt}|${occurrence.endAt}`;
-    return allRows.filter((row) => {
-      if (typeof row.windowKey === 'string' && row.windowKey !== '') return row.windowKey === key;
-      return (
-        typeof row.createdAt === 'string' &&
-        row.createdAt >= occurrence.startAt &&
-        row.createdAt <= occurrence.endAt
-      );
-    });
+    // Es de la semana vigente si se CAPTURÓ dentro de su rango (hora de
+    // Texas) o trae su mismo sello. Antes mandaba solo el sello: los
+    // registros sellados con el horario viejo de 13 días caían en Historic
+    // aunque fueran de esta semana, y no se quitaban del desplegable.
+    return allRows.filter(
+      (row) =>
+        (typeof row.windowKey === 'string' && row.windowKey === key) ||
+        (typeof row.createdAt === 'string' &&
+          row.createdAt >= occurrence.startAt &&
+          row.createdAt <= occurrence.endAt),
+    );
   }, [allRows, captureInfo.occurrence]);
 
   // Se publican los ids para el contador de las pestañas.

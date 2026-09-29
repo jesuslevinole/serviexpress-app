@@ -213,16 +213,41 @@ export function useCaptureWindow(
    * registros del módulo (ya descargados): cero lecturas extra.
    */
   const selfMode = detail === null;
+  /**
+   * Registros de la semana leídos del SERVIDOR (todas las estaciones), por
+   * fecha de captura: la lista del BC solo trae su estación, y un camión
+   * capturado desde otra estación tiene que salir igual del desplegable y
+   * contar en los avisos. Solo viaja la semana vigente.
+   */
+  const [selfServerRows, setSelfServerRows] = useState<EntityData[]>([]);
+  const selfCollection = selfMode && spec ? config.collection : '';
+  useEffect(() => {
+    if (selfCollection === '' || startAt === '' || endAt === '') {
+      setSelfServerRows([]);
+      return;
+    }
+    return subscribeToCollection(
+      selfCollection,
+      setSelfServerRows,
+      () => setSelfServerRows([]),
+      undefined,
+      { clauses: [{ field: 'createdAt', op: 'range', from: startAt, to: endAt }] },
+    );
+  }, [selfCollection, startAt, endAt]);
+
   const selfWindowRows = useMemo(() => {
     if (!selfMode || startAt === '' || endAt === '') return [];
     const key = `${startAt}|${endAt}`;
-    return parents.filter((row) => {
-      // Manda el SELLO de ventana si el registro lo trae (así un cambio de
-      // horario no reasigna registros viejos); si no, la fecha de creación.
-      if (typeof row.windowKey === 'string' && row.windowKey !== '') return row.windowKey === key;
-      return typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt;
+    // De la semana = capturado dentro del rango, o con el mismo sello.
+    const inWindow = (row: EntityData) =>
+      (typeof row.windowKey === 'string' && row.windowKey === key) ||
+      (typeof row.createdAt === 'string' && row.createdAt >= startAt && row.createdAt <= endAt);
+    const byId = new Map<string, EntityData>();
+    [...selfServerRows, ...parents].forEach((row) => {
+      if (inWindow(row)) byId.set(row.id, row);
     });
-  }, [selfMode, parents, startAt, endAt]);
+    return [...byId.values()];
+  }, [selfMode, parents, selfServerRows, startAt, endAt]);
   const missingParentIds = useMemo(() => {
     if (parentKey === '') return [];
     const ids = new Set<string>();

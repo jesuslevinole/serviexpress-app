@@ -430,6 +430,13 @@ export interface CoverageConfig {
   sourceStationKey?: string;
   /** Campo "agregado por" (uid) en la colección destino, para el conteo personal. */
   targetOwnerKey?: string;
+  /**
+   * Si se define, la cobertura se mide contra la SEMANA VIGENTE de ese
+   * módulo con ventana de captura (Fleet Report): cuenta solo lo capturado
+   * dentro del horario asignado y se recalcula sola al cambiar la semana o
+   * el horario.
+   */
+  targetWindowModuleId?: string;
 }
 
 /**

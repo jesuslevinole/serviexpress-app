@@ -92,11 +92,13 @@ export const trucksModule: ModuleConfig = {
     sourceStationKey: 'idStationActual',
     targetOwnerKey: 'idUsers',
     sourceCollection: COLLECTIONS.trucks,
-    targetCollection: COLLECTIONS.fleet,
+    // Ligado a FLEET REPORT (la semana vigente), no a Fleet.
+    targetCollection: COLLECTIONS.fleetReports,
+    targetWindowModuleId: 'fleetReports',
     targetKey: 'idTruck',
     sourceLabelKeys: ['unitN'],
     sourceLabel: 'registered trucks',
-    coveredLabel: 'are already in Fleet',
+    coveredLabel: "are already in this week's Fleet Report",
     missingLabel: 'are not',
   },
   fields: [

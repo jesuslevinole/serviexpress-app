@@ -73,3 +73,21 @@
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
+
+/* Grupos de la cobertura semanal (faltantes / no exigidos). */
+.coverage-group-title {
+  display: block;
+  margin-top: 12px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.coverage-group-title + .coverage-list {
+  margin-top: 6px;
+}
+
+.coverage-list.is-muted li {
+  color: var(--text-soft);
+}
