@@ -12,7 +12,34 @@ const DOC_PATH = ['settings_alerts', 'thresholds'] as const;
 /** Umbrales de fábrica (aplican mientras el admin no configure otros). */
 export const DEFAULT_THRESHOLDS: Record<string, number> = {
   differenceMileage: 0,
+  // Difference mileage calculado (Next mant − Actual Mileage): en 0 o menos
+  // el camión ya se pasó de su mantenimiento.
+  diffMileage: 0,
 };
+
+/**
+ * Sufijo del VALOR MÁXIMO de un campo: `frontLDriver__max = 120` pinta en
+ * rojo lo que pase de 120. El mínimo sigue en la clave del campo (`<=`).
+ */
+export const MAX_SUFFIX = '__max';
+
+/** Mínimo (rojo si es <=) y máximo (rojo si es >) configurados para un campo. */
+export function alertRule(
+  key: string,
+  thresholds: Record<string, number>,
+): { min?: number; max?: number } {
+  return { min: thresholds[key], max: thresholds[key + MAX_SUFFIX] };
+}
+
+/** Regla en palabras: "Red when ≤ 30 or > 120"; null si el campo no alerta. */
+export function describeAlertRule(key: string, thresholds: Record<string, number>): string | null {
+  const { min, max } = alertRule(key, thresholds);
+  const fmt = (n: number) => n.toLocaleString('en-US');
+  if (min !== undefined && max !== undefined) return `Red when ≤ ${fmt(min)} or > ${fmt(max)}`;
+  if (min !== undefined) return `Red when ≤ ${fmt(min)}`;
+  if (max !== undefined) return `Red when > ${fmt(max)}`;
+  return null;
+}
 
 export type AlertThresholds = Record<string, number>;
 

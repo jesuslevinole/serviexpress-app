@@ -62,6 +62,7 @@ import { RecordPeekModal } from './RecordPeekModal';
 import { ChangeHistoryList } from './ChangeHistoryList';
 import { buildFieldChanges, logRecordChange } from '../../services/changeLog';
 import { isAlertValue, useAlertThresholds } from '../../hooks/useAlertThresholds';
+import { describeAlertRule } from '../../services/alertThresholds';
 import { Gauge, Mail, Truck } from 'lucide-react';
 import { Merge } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
@@ -1621,7 +1622,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
           // Umbral de alerta: el número en o bajo el límite se pinta en rojo.
           if (isAlertValue(field, effectiveValue(field, row as EntityData), alertThresholds)) {
-            return <span className="num-alert">{text}</span>;
+            return (
+              <span className="num-alert" title={describeAlertRule(field.key, alertThresholds) ?? undefined}>
+                {text}
+              </span>
+            );
           }
           return text;
         },
@@ -2306,6 +2311,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             ? isAlertValue(column.field, effectiveValue(column.field, source), alertThresholds)
             : false;
         }),
+        rule:
+          column.field.type === 'number'
+            ? describeAlertRule(column.field.key, alertThresholds)
+            : null,
       })),
       {
         generatedBy: profile?.name ?? undefined,
@@ -2339,6 +2348,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           alerts: rowsForExport.map((row) =>
             isAlertValue(field, effectiveValue(field, row), alertThresholds),
           ),
+          rule: field.type === 'number' ? describeAlertRule(field.key, alertThresholds) : null,
         })),
       { generatedBy: profile?.name ?? undefined },
     );

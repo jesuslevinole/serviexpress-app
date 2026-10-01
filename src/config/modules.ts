@@ -2025,6 +2025,28 @@ export const catalogModules: ModuleConfig[] = [
  */
 const fleetReportExtraFields: FieldConfig[] = [
   { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+  {
+    // Lo trae el camión al elegirlo; queda fijo en el registro.
+    key: 'nextMant',
+    label: 'Next mant (from truck)',
+    type: 'number',
+    copyFromRefField: { field: 'idTruck', sourceField: 'nextMant' },
+    fixedOnCreate: true,
+    table: false,
+  },
+  {
+    key: 'diffMileage',
+    label: 'Difference mileage',
+    type: 'number',
+    form: false,
+    highlight: 'balance',
+    // Millas que le quedan hasta su mantenimiento: Next mant − Actual Mileage.
+    compute: (row) => {
+      const next = typeof row.nextMant === 'number' ? row.nextMant : null;
+      const mileage = typeof row.mileage === 'number' ? row.mileage : null;
+      return next === null || mileage === null ? null : next - mileage;
+    },
+  },
   { key: 'frontLDriver', label: 'Front L/Driver', type: 'number' },
   { key: 'frontRPass', label: 'Front R/Pass', type: 'number' },
   { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number' },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ALERT_EXEMPT_KEYS,
   DEFAULT_THRESHOLDS,
+  alertRule,
   subscribeAlertThresholds,
   type AlertThresholds,
 } from '../services/alertThresholds';
@@ -46,8 +47,11 @@ export function isAlertValue(
 ): boolean {
   if (field.type !== 'number') return false;
   if (ALERT_EXEMPT_KEYS.has(field.key)) return false;
-  const limit = thresholds[field.key];
-  if (limit === undefined) return false;
+  const { min, max } = alertRule(field.key, thresholds);
+  if (min === undefined && max === undefined) return false;
+  if (value === null || value === undefined || value === '') return false;
   const numeric = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(numeric) && numeric <= limit;
+  if (!Number.isFinite(numeric)) return false;
+  // Rojo si está en o bajo el MÍNIMO, o si pasa del MÁXIMO permitido.
+  return (min !== undefined && numeric <= min) || (max !== undefined && numeric > max);
 }

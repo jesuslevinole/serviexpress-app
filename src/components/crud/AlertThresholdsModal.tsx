@@ -4,6 +4,7 @@ import {
   saveAlertThresholds,
   ALERT_EXEMPT_KEYS,
   DEFAULT_THRESHOLDS,
+  MAX_SUFFIX,
 } from '../../services/alertThresholds';
 import type { AlertThresholds } from '../../services/alertThresholds';
 import type { FieldConfig, ModuleConfig } from '../../types/models';
@@ -16,12 +17,12 @@ interface AlertThresholdsModalProps {
   onClose: () => void;
 }
 
-/** Campos numéricos del módulo y de su detalle (los que pueden alertar). */
+/** Campos numéricos del módulo y de su detalle (los que pueden alertar), incluidos los calculados (Difference mileage). */
 function numericFields(config: ModuleConfig): FieldConfig[] {
   const seen = new Set<string>();
   const out: FieldConfig[] = [];
   [...config.fields, ...(config.detail?.fields ?? [])].forEach((field) => {
-    if (field.type !== 'number' || field.compute !== undefined) return;
+    if (field.type !== 'number') return;
     if (ALERT_EXEMPT_KEYS.has(field.key)) return;
     if (seen.has(field.key)) return;
     seen.add(field.key);
@@ -30,11 +31,25 @@ function numericFields(config: ModuleConfig): FieldConfig[] {
   return out;
 }
 
+/** Texto de un número guardado ("" si no hay). */
+const asText = (value: number | undefined) => (value !== undefined ? String(value) : '');
+
+/** Regla en palabras a partir de lo tecleado (vista previa en vivo). */
+function previewRule(minRaw: string, maxRaw: string): string {
+  const min = minRaw.trim() === '' ? null : Number(minRaw);
+  const max = maxRaw.trim() === '' ? null : Number(maxRaw);
+  const ok = (n: number | null): n is number => n !== null && Number.isFinite(n);
+  const fmt = (n: number) => n.toLocaleString('en-US');
+  if (ok(min) && ok(max)) return `Red when ${fmt(min)} or less, or above ${fmt(max)}`;
+  if (ok(min)) return `Red when ${fmt(min)} or less`;
+  if (ok(max)) return `Red when above ${fmt(max)}`;
+  return 'No alert';
+}
+
 /**
- * Configuración de alertas (solo admin): para cada campo numérico, el número
- * a partir del cual la casilla se pinta en ROJO (valor <= umbral). "Diff
- * mileage" viene de fábrica en 0; los cauchos se configuran aquí. Vacío =
- * sin alerta. Aplica para todos los usuarios, en todas las tablas.
+ * Configuración de alertas (solo admin): para cada campo numérico, un
+ * MÍNIMO (en o bajo él, rojo) y un VALOR MÁXIMO permitido (por encima, rojo).
+ * Vacío = sin ese límite. Aplica para todos, en todas las tablas y en Excel.
  */
 export function AlertThresholdsModal({
   config,
@@ -43,33 +58,50 @@ export function AlertThresholdsModal({
   onClose,
 }: AlertThresholdsModalProps) {
   const fields = useMemo(() => numericFields(config), [config]);
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {};
+  const [values, setValues] = useState<Record<string, { min: string; max: string }>>(() => {
+    const map: Record<string, { min: string; max: string }> = {};
     fields.forEach((field) => {
-      map[field.key] = current[field.key] !== undefined ? String(current[field.key]) : '';
+      map[field.key] = {
+        min: asText(current[field.key]),
+        max: asText(current[field.key + MAX_SUFFIX]),
+      };
     });
     return map;
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const setPart = (key: string, part: 'min' | 'max', raw: string) =>
+    setValues((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { min: '', max: '' }), [part]: raw } }));
+
   const handleSave = async () => {
+    // Un máximo menor o igual al mínimo no tiene sentido: todo saldría rojo.
+    for (const field of fields) {
+      const { min, max } = values[field.key] ?? { min: '', max: '' };
+      if (min.trim() !== '' && max.trim() !== '' && Number(max) <= Number(min)) {
+        setError(`${field.label}: the maximum must be greater than the minimum.`);
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
+    const managed = new Set(fields.flatMap((f) => [f.key, f.key + MAX_SUFFIX]));
     const payload: Record<string, number | null> = {};
     // Se conservan los umbrales de otros módulos que no aparecen aquí.
     Object.entries(current).forEach(([key, value]) => {
-      if (!fields.some((f) => f.key === key)) payload[key] = value;
+      if (!managed.has(key)) payload[key] = value;
     });
     fields.forEach((field) => {
-      const raw = values[field.key]?.trim() ?? '';
-      if (raw === '') {
-        // Vacío: sin alerta. Si era de fábrica, se anula explícitamente.
+      const { min, max } = values[field.key] ?? { min: '', max: '' };
+      if (min.trim() === '') {
+        // Vacío: sin mínimo. Si era de fábrica, se anula explícitamente.
         if (DEFAULT_THRESHOLDS[field.key] !== undefined) payload[field.key] = null;
-        return;
+      } else if (Number.isFinite(Number(min))) {
+        payload[field.key] = Number(min);
       }
-      const numeric = Number(raw);
-      if (Number.isFinite(numeric)) payload[field.key] = numeric;
+      if (max.trim() !== '' && Number.isFinite(Number(max))) {
+        payload[field.key + MAX_SUFFIX] = Number(max);
+      }
     });
     try {
       await saveAlertThresholds(payload, byUid);
@@ -86,7 +118,7 @@ export function AlertThresholdsModal({
       open
       title={`Alerts · ${config.title}`}
       onClose={onClose}
-      size="sm"
+      size="md"
       layer="top"
       footer={
         <>
@@ -107,26 +139,47 @@ export function AlertThresholdsModal({
       <div className="alerts-cfg">
         {error ? <p className="alerts-cfg-error">{error}</p> : null}
         <p className="alerts-cfg-hint">
-          A number <strong>at or below</strong> the limit shows in <span className="num-alert">red</span>{' '}
-          in every table, for everyone. Leave a limit empty for no alert.
+          For each field set a <strong>minimum</strong> (a value at or below it shows in{' '}
+          <span className="num-alert">red</span>) and/or the <strong>maximum allowed</strong>{' '}
+          (a value above it shows in <span className="num-alert">red</span>). It applies to every
+          table, the record detail and the Excel export, for everyone. Leave a box empty for no
+          limit.
         </p>
         <ul>
-          {fields.map((field) => (
-            <li key={field.key}>
-              <span className="alerts-cfg-label">{field.label}</span>
-              <label>
-                Red when ≤
-                <input
-                  type="number"
-                  value={values[field.key] ?? ''}
-                  placeholder="—"
-                  onChange={(e) =>
-                    setValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                  }
-                />
-              </label>
-            </li>
-          ))}
+          {fields.map((field) => {
+            const entry = values[field.key] ?? { min: '', max: '' };
+            const rule = previewRule(entry.min, entry.max);
+            return (
+              <li key={field.key}>
+                <div className="alerts-cfg-head">
+                  <span className="alerts-cfg-label">{field.label}</span>
+                  <span className={`alerts-cfg-rule${rule === 'No alert' ? '' : ' is-on'}`}>{rule}</span>
+                </div>
+                <div className="alerts-cfg-inputs">
+                  <label>
+                    Minimum (red when ≤)
+                    <input
+                      type="number"
+                      className="field-input"
+                      value={entry.min}
+                      placeholder="—"
+                      onChange={(e) => setPart(field.key, 'min', e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Maximum allowed (red when &gt;)
+                    <input
+                      type="number"
+                      className="field-input"
+                      value={entry.max}
+                      placeholder="—"
+                      onChange={(e) => setPart(field.key, 'max', e.target.value)}
+                    />
+                  </label>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </Modal>

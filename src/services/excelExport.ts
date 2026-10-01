@@ -3,6 +3,8 @@ export interface ExcelColumn {
   values: string[];
   /** Paralelo a values: true = esa celda va en ROJO (umbral de alerta). */
   alerts?: boolean[];
+  /** Regla de rojo de la columna ("Red when ≤ 30 or > 120"): va arriba del encabezado. */
+  rule?: string | null;
 }
 
 /**
@@ -90,6 +92,19 @@ async function writeWorkbook(
   dateRow.getCell(1).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF6F6D7C' } };
   sheet.mergeCells(2, 1, 2, Math.max(colCount, 1));
 
+  // Fila 3: cuándo se pinta en rojo cada columna con alerta.
+  if (columns.some((col) => col.rule)) {
+    const ruleRow = sheet.getRow(3);
+    columns.forEach((col, i) => {
+      if (!col.rule) return;
+      const cell = ruleRow.getCell(i + 1);
+      cell.value = col.rule;
+      cell.font = { name: 'Arial', size: 8, italic: true, bold: true, color: { argb: 'FFD93025' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+    ruleRow.height = 24;
+  }
+
   const headerRowIndex = 4;
   const headerRow = sheet.getRow(headerRowIndex);
   columns.forEach((col, i) => {
@@ -143,7 +158,12 @@ async function writeWorkbook(
   // Ancho por columna: se ajusta al encabezado y al contenido más largo.
   columns.forEach((col, i) => {
     const longest = col.values.reduce((max, value) => Math.max(max, value.length), 0);
-    const width = Math.max(col.header.length + 4, Math.min(longest + 3, 46), 9);
+    const width = Math.max(
+      col.header.length + 4,
+      Math.min(longest + 3, 46),
+      Math.min((col.rule ?? '').length * 0.75, 26),
+      9,
+    );
     sheet.getColumn(i + 1).width = width;
     sheet.getColumn(i + 1).alignment = { vertical: 'middle' };
   });
