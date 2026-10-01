@@ -59,6 +59,9 @@ export function FormField({
           <input
             className={inputClass}
             type="number"
+            // Sin sugerencias del navegador: las lecturas (millaje, llantas)
+            // se capturan nuevas cada vez, no se reusan las de otra semana.
+            autoComplete="off"
             step={field.type === 'currency' ? '0.01' : '1'}
             value={typeof value === 'number' ? value : value === null ? '' : String(value)}
             onChange={(e) =>

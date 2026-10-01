@@ -2072,7 +2072,10 @@ export const fleetReportsModule: ModuleConfig = {
    */
   prefillFromPrevious: {
     field: 'idTruck',
-    keys: ['unitType', 'route', 'idDriver', 'idScanner', 'gasCard', 'sNumber', 'vTruck', 'stop'],
+    // SOLO estos cinco vienen de la semana pasada. Millaje, las seis llantas
+    // y "Add corrective maintenance?" arrancan SIEMPRE vacíos: se capturan
+    // de nuevo cada semana.
+    keys: ['idDriver', 'route', 'idScanner', 'gasCard', 'stop'],
   },
   /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
   uniqueInWindow: ['idTruck', 'idDriver'],
