@@ -15,6 +15,8 @@ interface FormFieldProps {
   onQuickAdd?: () => void;
   /** Edición rápida del registro referenciado seleccionado (lápiz). */
   onQuickEdit?: () => void;
+  /** Lo más alto que acepta el campo numérico (se muestra debajo). */
+  maxValue?: number;
   onChange: (key: string, value: FieldValue) => void;
 }
 
@@ -29,6 +31,7 @@ export function FormField({
   refOptions,
   onQuickAdd,
   onQuickEdit,
+  maxValue,
   onChange,
 }: FormFieldProps) {
   const inputClass = `field-input ${invalid ? 'field-invalid' : ''}`;
@@ -62,6 +65,7 @@ export function FormField({
             // Sin sugerencias del navegador: las lecturas (millaje, llantas)
             // se capturan nuevas cada vez, no se reusan las de otra semana.
             autoComplete="off"
+            max={maxValue}
             step={field.type === 'currency' ? '0.01' : '1'}
             value={typeof value === 'number' ? value : value === null ? '' : String(value)}
             onChange={(e) =>
@@ -184,7 +188,21 @@ export function FormField({
         {field.required ? <span className="field-required">*</span> : null}
       </label>
       {renderControl()}
-      {invalid ? <span className="field-error">This field is required</span> : null}
+      {(() => {
+        const tooHigh = maxValue !== undefined && typeof value === 'number' && value > maxValue;
+        if (tooHigh) {
+          return (
+            <span className="field-error">
+              Maximum allowed: {maxValue.toLocaleString('en-US')}
+            </span>
+          );
+        }
+        if (invalid) return <span className="field-error">This field is required</span>;
+        if (maxValue !== undefined) {
+          return <span className="field-hint">Max {maxValue.toLocaleString('en-US')}</span>;
+        }
+        return null;
+      })()}
     </div>
   );
 }

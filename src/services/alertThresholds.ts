@@ -18,27 +18,42 @@ export const DEFAULT_THRESHOLDS: Record<string, number> = {
 };
 
 /**
- * Sufijo del VALOR MÁXIMO de un campo: `frontLDriver__max = 120` pinta en
- * rojo lo que pase de 120. El mínimo sigue en la clave del campo (`<=`).
+ * Cada campo numérico guarda hasta TRES datos en el mismo mapa:
+ *  - `<campo>`        = valor en el que se pone ROJO ("Turns red at").
+ *  - `<campo>__dir`   = 1 si el rojo es "ese valor o MÁS" (escala que sube);
+ *                       sin él, "ese valor o MENOS" (escala que baja, p. ej. llantas).
+ *  - `<campo>__max`   = valor MÁXIMO que acepta el campo: el formulario no deja
+ *                       guardar uno mayor (y uno viejo por encima se ve en rojo).
  */
 export const MAX_SUFFIX = '__max';
+export const DIR_SUFFIX = '__dir';
 
-/** Mínimo (rojo si es <=) y máximo (rojo si es >) configurados para un campo. */
-export function alertRule(
-  key: string,
-  thresholds: Record<string, number>,
-): { min?: number; max?: number } {
-  return { min: thresholds[key], max: thresholds[key + MAX_SUFFIX] };
+export interface AlertRule {
+  /** Valor en el que se pone rojo. */
+  redAt?: number;
+  /** true = rojo con ese valor o MÁS; false = con ese valor o MENOS. */
+  higher: boolean;
+  /** Máximo que acepta el campo. */
+  max?: number;
 }
 
-/** Regla en palabras: "Red when ≤ 30 or > 120"; null si el campo no alerta. */
+export function alertRule(key: string, thresholds: Record<string, number>): AlertRule {
+  return {
+    redAt: thresholds[key],
+    higher: thresholds[key + DIR_SUFFIX] === 1,
+    max: thresholds[key + MAX_SUFFIX],
+  };
+}
+
+const fmtNumber = (n: number) => n.toLocaleString('en-US');
+
+/** La regla en palabras simples ("Accepts up to 6 · Red at 1 or lower"); null si no hay nada. */
 export function describeAlertRule(key: string, thresholds: Record<string, number>): string | null {
-  const { min, max } = alertRule(key, thresholds);
-  const fmt = (n: number) => n.toLocaleString('en-US');
-  if (min !== undefined && max !== undefined) return `Red when ≤ ${fmt(min)} or > ${fmt(max)}`;
-  if (min !== undefined) return `Red when ≤ ${fmt(min)}`;
-  if (max !== undefined) return `Red when > ${fmt(max)}`;
-  return null;
+  const { redAt, higher, max } = alertRule(key, thresholds);
+  const parts: string[] = [];
+  if (max !== undefined) parts.push(`Accepts up to ${fmtNumber(max)}`);
+  if (redAt !== undefined) parts.push(`Red at ${fmtNumber(redAt)} or ${higher ? 'higher' : 'lower'}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 export type AlertThresholds = Record<string, number>;

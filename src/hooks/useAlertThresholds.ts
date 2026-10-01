@@ -47,11 +47,13 @@ export function isAlertValue(
 ): boolean {
   if (field.type !== 'number') return false;
   if (ALERT_EXEMPT_KEYS.has(field.key)) return false;
-  const { min, max } = alertRule(field.key, thresholds);
-  if (min === undefined && max === undefined) return false;
+  const { redAt, higher, max } = alertRule(field.key, thresholds);
+  if (redAt === undefined && max === undefined) return false;
   if (value === null || value === undefined || value === '') return false;
   const numeric = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numeric)) return false;
-  // Rojo si está en o bajo el MÍNIMO, o si pasa del MÁXIMO permitido.
-  return (min !== undefined && numeric <= min) || (max !== undefined && numeric > max);
+  // Rojo al llegar al valor configurado (bajando o subiendo, según el campo)
+  // o si un dato viejo quedó por encima del máximo que acepta el campo.
+  const hitsRed = redAt !== undefined && (higher ? numeric >= redAt : numeric <= redAt);
+  return hitsRed || (max !== undefined && numeric > max);
 }

@@ -13,6 +13,8 @@ import { CRUD_MODULES, catalogModules } from '../../config/modules';
 import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
 import { texasToday } from '../../services/captureWindow';
+import { useAlertThresholds } from '../../hooks/useAlertThresholds';
+import { MAX_SUFFIX } from '../../services/alertThresholds';
 import { SaveSummary } from './SaveSummary';
 import { displayCell, scalar } from './displayValue';
 import type { SelectOption } from '../ui/SearchableSelect';
@@ -617,6 +619,20 @@ export function CrudForm({
   const isLastStep = !activeGroups || stepIndex >= activeGroups.length - 1;
 
   /** Campos obligatorios sin llenar dentro de la pestaña actual. */
+  /** Máximos que acepta cada campo numérico (Alerts) y los que se pasan. */
+  const alertThresholds = useAlertThresholds();
+  const maxFor = (field: FieldConfig): number | undefined =>
+    field.type === 'number' ? alertThresholds[field.key + MAX_SUFFIX] : undefined;
+  const overMax = visibleFields
+    .map((field) => {
+      const max = maxFor(field);
+      const value = values[field.key];
+      return max !== undefined && typeof value === 'number' && value > max
+        ? { key: field.key, label: field.label, max, value }
+        : null;
+    })
+    .filter((item): item is { key: string; label: string; max: number; value: number } => item !== null);
+
   const missingHere = current
     ? missing.filter((key) => current.fields.some((field) => field.key === key))
     : missing;
@@ -624,6 +640,16 @@ export function CrudForm({
   const handleSubmit = (keepOpen: boolean) => {
     setTouchedSubmit(true);
     if (missing.length > 0) return;
+    // Valor MÁXIMO que acepta cada campo (se configura en Alerts).
+    if (overMax.length > 0) {
+      const first = overMax[0];
+      setBlockedError(
+        `${first.label} does not accept more than ${first.max.toLocaleString('en-US')} (you typed ${first.value.toLocaleString('en-US')}).${
+          overMax.length > 1 ? ` Also check: ${overMax.slice(1).map((f) => f.label).join(', ')}.` : ''
+        }`,
+      );
+      return;
+    }
     // Un valor que hoy no se puede capturar (el camión ya está en otro BC
     // Report de esta ventana, o está en taller): se explica y no se guarda.
     if (blockedRefs) {
@@ -802,7 +828,11 @@ export function CrudForm({
               key={field.key}
               field={field}
               value={values[field.key] ?? null}
-              invalid={touchedSubmit && missing.includes(field.key)}
+              invalid={
+                (touchedSubmit && missing.includes(field.key)) ||
+                overMax.some((item) => item.key === field.key)
+              }
+              maxValue={maxFor(field)}
               refOptions={refOptionsByField[field.key] ?? []}
               onQuickAdd={catalogFor(field) ? () => setQuickAdd(field) : undefined}
               onQuickEdit={catalogEditFor(field) ? () => setQuickEdit(field) : undefined}
