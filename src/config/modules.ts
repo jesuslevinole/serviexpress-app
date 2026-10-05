@@ -314,6 +314,8 @@ export const driversModule: ModuleConfig = {
   /** Tope de seguridad: nunca descargar la colección completa sin límite. */
   listLimit: 500,
   /** Botón activar/desactivar; los inactivos salen de los desplegables. */
+  /** Export Excel sin filtro por fechas: solo Activos / Inactivos / Todos. */
+  exportDateFilter: false,
   activeToggle: 'status',
   collection: COLLECTIONS.drivers,
   title: 'Drivers',

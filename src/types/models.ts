@@ -526,6 +526,8 @@ export interface ModuleConfig {
   id: string;
   /** Iconos de estado del camión (taller / correctivo / estación Maintenance). */
   unitStatus?: UnitStatusConfig;
+  /** false = el diálogo Export Excel no muestra el filtro por fechas (Drivers). */
+  exportDateFilter?: boolean;
   /**
    * Alta con PRECARGA: al elegir `field` (el camión) se traen `keys` del
    * último registro de ese camión en este módulo; si no hay, del registro

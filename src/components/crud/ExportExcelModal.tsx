@@ -13,6 +13,8 @@ interface ExportExcelModalProps {
   fields: FieldConfig[];
   /** true = el módulo tiene Activo/Inactivo: se pregunta cuáles exportar. */
   hasActiveStatus?: boolean;
+  /** false = sin el filtro por fechas (se exporta todo lo elegido). */
+  showDateFilter?: boolean;
   onClose: () => void;
   onExport: (dateField: string, from: string, to: string, activeMode: ActiveExportMode) => Promise<void>;
 }
@@ -31,6 +33,7 @@ export function ExportExcelModal({
   title,
   fields,
   hasActiveStatus = false,
+  showDateFilter = true,
   onClose,
   onExport,
 }: ExportExcelModalProps) {
@@ -107,6 +110,8 @@ export function ExportExcelModal({
             ) : null}
           </div>
         ) : null}
+        {showDateFilter ? (
+          <>
         <div className="expmodal-field">
           <label>Filter by date of</label>
           <SearchableSelect value={dateField} options={dateOptions} onChange={setDateField} />
@@ -123,6 +128,8 @@ export function ExportExcelModal({
           Leave the dates empty to export everything. This filter is independent from the search box
           and the table filters.
         </p>
+          </>
+        ) : null}
       </div>
     </Modal>
   );

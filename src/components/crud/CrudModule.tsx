@@ -3087,6 +3087,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           title={config.title}
           fields={allowedFields}
           hasActiveStatus={config.activeToggle !== undefined && !config.exportRows}
+          showDateFilter={config.exportDateFilter !== false}
           onClose={() => setExportOpen(false)}
           onExport={handleExport}
         />
