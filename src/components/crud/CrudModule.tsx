@@ -79,7 +79,7 @@ import {
   windowStatus,
 } from '../../services/captureWindow';
 import { ImportCsvModal } from './ImportCsvModal';
-import { ExportExcelModal } from './ExportExcelModal';
+import { ExportExcelModal, type ActiveExportMode } from './ExportExcelModal';
 import { RecordDetailModal } from './RecordDetailModal';
 import { TableLayoutModal } from './TableLayoutModal';
 import { FormStepsModal } from './FormStepsModal';
@@ -2323,25 +2323,59 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     );
   };
 
-  const handleExport = async (dateField: string, from: string, to: string) => {
+  const handleExport = async (
+    dateField: string,
+    from: string,
+    to: string,
+    activeMode: ActiveExportMode = 'all',
+  ) => {
     if (config.exportRows) {
       await exportLinkedRows(dateField, from, to);
       return;
     }
-    const rowsForExport = rows.filter((row) => {
+    const activeKey = config.activeToggle;
+    const isActive = (row: EntityData) => isActiveRecord(row, activeKey);
+    let rowsForExport = rows.filter((row) => {
       const raw = row[dateField];
       const value = typeof raw === 'string' ? raw.slice(0, 10) : '';
       if (from && (value === '' || value < from)) return false;
       if (to && (value === '' || value > to)) return false;
       return true;
     });
+    // Activos / inactivos: solo los pedidos; con "todos", los ACTIVOS arriba.
+    if (activeKey) {
+      if (activeMode === 'active') rowsForExport = rowsForExport.filter(isActive);
+      else if (activeMode === 'inactive') rowsForExport = rowsForExport.filter((row) => !isActive(row));
+      else {
+        rowsForExport = [
+          ...rowsForExport.filter(isActive),
+          ...rowsForExport.filter((row) => !isActive(row)),
+        ];
+      }
+    }
     const rangeSuffix = from || to ? ` (${from || 'start'} to ${to || 'today'})` : '';
+    const activeSuffix = activeKey
+      ? activeMode === 'active'
+        ? ' - Active'
+        : activeMode === 'inactive'
+          ? ' - Inactive'
+          : ' - All'
+      : '';
+    // Primera columna: ACTIVE / INACTIVE, clara y con color (reemplaza el Sí/No).
+    const statusColumn = activeKey
+      ? [
+          {
+            header: 'Status',
+            values: rowsForExport.map((row) => (isActive(row) ? 'ACTIVE' : 'INACTIVE')),
+          },
+        ]
+      : [];
     await exportToExcel(
-      `${config.title}${rangeSuffix}`,
+      `${config.title}${activeSuffix}${rangeSuffix}`,
       // Los campos marcados exportable:false quedan fuera, para que el archivo
       // salga con las columnas exactas que espera quien lo recibe.
-      allowedFields
-        .filter((field) => field.exportable !== false)
+      [...statusColumn, ...allowedFields
+        .filter((field) => field.exportable !== false && field.key !== activeKey)
         .map((field) => ({
           header: field.label,
           values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
@@ -2349,7 +2383,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             isAlertValue(field, effectiveValue(field, row), alertThresholds),
           ),
           rule: field.type === 'number' ? describeAlertRule(field.key, alertThresholds) : null,
-        })),
+        }))],
       { generatedBy: profile?.name ?? undefined },
     );
   };
@@ -3052,6 +3086,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <ExportExcelModal
           title={config.title}
           fields={allowedFields}
+          hasActiveStatus={config.activeToggle !== undefined && !config.exportRows}
           onClose={() => setExportOpen(false)}
           onExport={handleExport}
         />

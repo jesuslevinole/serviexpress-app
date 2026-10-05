@@ -123,6 +123,8 @@ async function writeWorkbook(
 
   const STATUS_COLORS: Record<string, string> = {
     OK: 'FF1E8E3E',
+    ACTIVE: 'FF1E8E3E',
+    INACTIVE: 'FFD93025',
     ALERT: 'FFD93025',
     CAUTION: 'FFE8710A',
   };

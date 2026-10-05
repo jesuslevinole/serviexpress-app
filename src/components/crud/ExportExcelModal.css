@@ -35,3 +35,37 @@
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
+
+/* Activos / inactivos / todos. */
+.expmodal-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.expmodal-field .expmodal-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.expmodal-field .expmodal-choice:hover,
+.expmodal-field .expmodal-choice.is-active {
+  border-color: var(--primary);
+}
+
+.expmodal-field .expmodal-choice.is-active {
+  background: var(--primary-bg);
+}
+
+.expmodal-field .expmodal-choice input {
+  padding: 0;
+  border: none;
+}
