@@ -865,7 +865,10 @@ export function CrudForm({
 
       {extraSection ? <div className="crudform-extra">{extraSection}</div> : null}
 
-      {renderExtra ? <div className="crudform-extra">{renderExtra(values)}</div> : null}
+      {renderExtra ? (
+        // Pegado al fondo de la ventana: siempre a la vista, sin hacer scroll.
+        <div className="crudform-extra is-sticky">{renderExtra(values)}</div>
+      ) : null}
 
       {quickEdit
         ? (() => {

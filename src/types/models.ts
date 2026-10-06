@@ -320,6 +320,10 @@ export interface FieldConfig {
 export interface DetailConfig {
   /** Texto del botón de alta (por omisión "Add"). */
   addLabel?: string;
+  /** Qué es cada renglón al capturarlo en el alta ("truck" por omisión; "uniform"). */
+  rowNoun?: string;
+  /** Botón de la captura en el alta ("Add truck" por omisión). */
+  draftAddLabel?: string;
   /**
    * Botones de alta adicionales que abren el mismo formulario con algunos
    * campos ya definidos. Sirve para atajos frecuentes, como registrar un

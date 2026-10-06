@@ -148,25 +148,30 @@ export function DraftDetailRows({
       options = options.filter((option) => itemsWithStock.has(option.value));
     }
 
-    // Talla: del tipo que usa la prenda elegida y con existencia disponible.
+    // Talla: la lista NUNCA queda vacía. Se prefieren (1) las tallas con
+    // existencia de esa prenda; si no hay, (2) las del tipo de talla de la
+    // prenda; y si tampoco, (3) todas las tallas. Antes se pedían ambas cosas
+    // a la vez y, con una prenda cuyo tipo no coincidía con lo que hay en el
+    // almacén, la lista salía vacía ("No results").
     const filter = field.refFilterFromRefField;
     if (filter) {
       const sourceField = detail.fields.find((f) => f.key === filter.field);
       const sourceId = draft[filter.field];
       if (sourceField?.refCollection && typeof sourceId === 'string' && sourceId !== '') {
+        const all = options;
+        const withStock =
+          control && stockByKey && field.key === control.matchKeys[1]
+            ? all.filter((option) => (stockByKey.get(`${sourceId}|${option.value}`) ?? 0) > 0)
+            : [];
         const source = refMaps[sourceField.refCollection]?.rows.find((r) => r.id === sourceId);
         const expected = source?.[filter.sourceField];
-        if (expected !== undefined && expected !== '') {
-          const allowed = new Set(
-            data.rows.filter((r) => r[filter.targetField] === expected).map((r) => r.id),
-          );
-          options = options.filter((option) => allowed.has(option.value));
-        }
-        if (control && stockByKey && field.key === control.matchKeys[1]) {
-          options = options.filter(
-            (option) => (stockByKey.get(`${sourceId}|${option.value}`) ?? 0) > 0,
-          );
-        }
+        const ofType =
+          expected !== undefined && expected !== ''
+            ? all.filter((option) =>
+                data.rows.some((r) => r.id === option.value && r[filter.targetField] === expected),
+              )
+            : [];
+        options = withStock.length > 0 ? withStock : ofType.length > 0 ? ofType : all;
       }
     }
     return options.sort((a, b) => a.label.localeCompare(b.label));
@@ -224,6 +229,10 @@ export function DraftDetailRows({
   };
 
   const [open, setOpen] = useState(false);
+  /** Qué se agrega en cada renglón (camión en BC Reports, uniforme en Requirements). */
+  const noun = detail.rowNoun ?? 'truck';
+  const addFirst = detail.draftAddLabel ?? `Add ${noun}`;
+  const addMore = detail.draftAddLabel ? `${detail.draftAddLabel} another` : `Add another ${noun}`;
 
   /** Resumen de un renglón, para la lista y para la barra del formulario. */
   const rowText = (row: DraftRow) =>
@@ -247,7 +256,7 @@ export function DraftDetailRows({
         </div>
         <button type="button" className="btn btn-outline" onClick={() => setOpen(true)}>
           <ListPlus size={16} />
-          {rows.length === 0 ? 'Add truck' : 'Add another truck'}
+          {rows.length === 0 ? addFirst : addMore}
         </button>
       </section>
 
@@ -277,9 +286,8 @@ export function DraftDetailRows({
       >
         <div className="draftrows">
           <p className="draftrows-help">
-            Fill in this truck and press <strong>Done</strong>: the line is saved and the window
-            closes. To add another truck, open it again with{' '}
-            <strong>Add another truck</strong>.
+            Fill in this {noun} and press <strong>Done</strong>: the line is saved and the window
+            closes. To add another {noun}, open it again with <strong>{addMore}</strong>.
           </p>
           <div className="draftrows-form">
             {fields.map((field) => (

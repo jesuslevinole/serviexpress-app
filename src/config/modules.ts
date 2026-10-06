@@ -1836,6 +1836,9 @@ export const requirementsModule: ModuleConfig = {
     collection: COLLECTIONS.uniforms,
     parentKey: 'idRequeriments',
     title: 'Requested uniforms',
+    /** En Requirements no se agregan camiones: el botón dice solo "Add". */
+    rowNoun: 'uniform',
+    draftAddLabel: 'Add',
     /** La subtabla solo se habilita en solicitudes de uniformes. */
     enabledWhen: { field: 'idRequest', refNameIn: ['Uniforms', 'Uniform', 'Uniformes'] },
     /** Cada salida descuenta del inventario de uniformes. */
