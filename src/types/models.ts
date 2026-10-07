@@ -146,6 +146,11 @@ export interface FieldConfig {
    * salir con unas columnas exactas y ninguna de más.
    */
   exportable?: boolean;
+  /**
+   * Va SIEMPRE en el Excel, aunque el layout (Customize) lo oculte de la
+   * tabla o del detalle: lecturas que el archivo debe traer (millaje, llantas).
+   */
+  exportAlways?: boolean;
   /** Valores permitidos cuando type === 'enum'. */
   enumValues?: readonly string[];
   /** Colección referenciada cuando type === 'ref' (se muestra el nombre, nunca el id). */

@@ -2370,11 +2370,31 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           },
         ]
       : [];
+    /**
+     * Columnas del Excel: las visibles, más las marcadas exportAlways que el
+     * layout haya ocultado (millaje y llantas del Fleet Report). Cada una se
+     * inserta tras el campo que la precede en el código.
+     */
+    const exportFields = [...allowedFields];
+    const present = new Set(exportFields.map((f) => f.key));
+    baseConfig.fields.forEach((field, index) => {
+      if (field.exportAlways !== true || present.has(field.key)) return;
+      let at = 0;
+      for (let i = index - 1; i >= 0; i -= 1) {
+        const pos = exportFields.findIndex((f) => f.key === baseConfig.fields[i].key);
+        if (pos >= 0) {
+          at = pos + 1;
+          break;
+        }
+      }
+      exportFields.splice(at, 0, field);
+      present.add(field.key);
+    });
     await exportToExcel(
       `${config.title}${activeSuffix}${rangeSuffix}`,
       // Los campos marcados exportable:false quedan fuera, para que el archivo
       // salga con las columnas exactas que espera quien lo recibe.
-      [...statusColumn, ...allowedFields
+      [...statusColumn, ...exportFields
         .filter((field) => field.exportable !== false && field.key !== activeKey)
         .map((field) => ({
           header: field.label,

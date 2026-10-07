@@ -2029,7 +2029,7 @@ export const catalogModules: ModuleConfig[] = [
  * Preventivo con los datos ya capturados (sin volver a escribirlos).
  */
 const fleetReportExtraFields: FieldConfig[] = [
-  { key: 'mileage', label: 'Actual Mileage', type: 'number' },
+  { key: 'mileage', label: 'Actual Mileage', type: 'number', exportAlways: true },
   {
     // Lo trae el camión al elegirlo; queda fijo en el registro.
     key: 'nextMant',
@@ -2041,6 +2041,7 @@ const fleetReportExtraFields: FieldConfig[] = [
   },
   {
     key: 'diffMileage',
+    exportAlways: true,
     label: 'Difference mileage',
     type: 'number',
     form: false,
@@ -2052,12 +2053,12 @@ const fleetReportExtraFields: FieldConfig[] = [
       return next === null || mileage === null ? null : next - mileage;
     },
   },
-  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number' },
-  { key: 'frontRPass', label: 'Front R/Pass', type: 'number' },
-  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number' },
-  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number' },
-  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number' },
-  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number' },
+  { key: 'frontLDriver', label: 'Front L/Driver', type: 'number', exportAlways: true },
+  { key: 'frontRPass', label: 'Front R/Pass', type: 'number', exportAlways: true },
+  { key: 'backLDriverOut', label: 'Back L/Driver Out', type: 'number', exportAlways: true },
+  { key: 'backLDriverIn', label: 'Back L/Driver In', type: 'number', exportAlways: true },
+  { key: 'backRPassOut', label: 'Back R/Pass Out', type: 'number', exportAlways: true },
+  { key: 'backRPassIn', label: 'Back R/Pass In', type: 'number', exportAlways: true },
   /** Correctivo desde el propio reporte: al guardar con "Yes" se abre el
    *  alta de Maintenance con el problema ya escrito y el enlace de origen. */
   {
