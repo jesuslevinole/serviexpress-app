@@ -538,6 +538,12 @@ export interface ModuleConfig {
   /** false = el diálogo Export Excel no muestra el filtro por fechas (Drivers). */
   exportDateFilter?: boolean;
   /**
+   * Excel COMPLETO: todo lo que se carga en el módulo, aunque el layout lo
+   * oculte — campos del código, campos personalizados (cf_…) y la fecha y
+   * hora exactas de captura. Quien lo descarga quita lo que no necesite.
+   */
+  exportEverything?: boolean;
+  /**
    * Alta con PRECARGA: al elegir `field` (el camión) se traen `keys` del
    * último registro de ese camión en este módulo; si no hay, del registro
    * del camión en `fallbackCollection` (Fleet).

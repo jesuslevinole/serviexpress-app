@@ -144,7 +144,7 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
  */
 export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps) {
   const { can, canOr, firebaseUser, isAdminView, profile, viewAs } = useAuth();
-  const { editMode, applyToModule } = useUiConfig();
+  const { editMode, applyToModule, overrides: uiOverrides } = useUiConfig();
   /** Configuración efectiva: títulos, etiquetas y orden personalizados por el admin. */
   const mergedConfig = useMemo(() => applyToModule(baseConfig), [applyToModule, baseConfig]);
   /**
@@ -373,7 +373,19 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     if (scoped?.isOffice === true) return [];
     return scoped?.scopeStations ?? [];
   }, [isAdminView, viewAs, profile]);
-  const refMaps = useRefMaps(config.fields, refScopeStations);
+  /**
+   * Catálogos a suscribir: los campos visibles MÁS los exportAlways que el
+   * layout ocultó (p. ej. Scanner del Fleet Report). Sin esto su columna en
+   * el Excel salía vacía: el catálogo de assets ni siquiera se cargaba.
+   */
+  const refFields = useMemo(() => {
+    const present = new Set(config.fields.map((f) => f.key));
+    const extra = baseConfig.fields.filter(
+      (f) => f.exportAlways === true && !present.has(f.key) && f.type === 'ref',
+    );
+    return extra.length > 0 ? [...config.fields, ...extra] : config.fields;
+  }, [config.fields, baseConfig.fields]);
+  const refMaps = useRefMaps(refFields, refScopeStations);
 
   // El detalle de módulos CON ventana conserva el catálogo completo: las
   // etiquetas de camiones de otras estaciones (movidos) salen de aquí.
@@ -2379,6 +2391,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     const present = new Set(exportFields.map((f) => f.key));
     baseConfig.fields.forEach((field, index) => {
       if (field.exportAlways !== true || present.has(field.key)) return;
+      // Respeta los permisos: un campo protegido por acción, o marcado "solo
+      // admin" en el layout, no se cuela al Excel de quien no puede verlo.
+      if (field.requiresAction && !isAdminView && !can(config.id, field.requiresAction)) return;
+      const merged = mergedConfig.fields.find((f) => f.key === field.key);
+      if (merged?.adminOnly === true && !isAdminView) return;
       let at = 0;
       for (let i = index - 1; i >= 0; i -= 1) {
         const pos = exportFields.findIndex((f) => f.key === baseConfig.fields[i].key);
@@ -2390,6 +2407,21 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       exportFields.splice(at, 0, field);
       present.add(field.key);
     });
+    if (config.exportEverything) {
+      // Campos personalizados del módulo (cf_…), aunque estén ocultos.
+      (uiOverrides.modules[config.id]?.customFields ?? []).forEach((def) => {
+        if (present.has(def.key)) return;
+        exportFields.push({ key: def.key, label: def.label, type: def.type });
+        present.add(def.key);
+      });
+      // Fecha y hora EXACTAS de captura (hora de Texas), al final.
+      exportFields.push({
+        key: '__capturedAt',
+        label: 'Captured at (Texas time)',
+        type: 'text',
+        compute: (row) => (typeof row.createdAt === 'string' ? formatTexas(row.createdAt) : null),
+      });
+    }
     await exportToExcel(
       `${config.title}${activeSuffix}${rangeSuffix}`,
       // Los campos marcados exportable:false quedan fuera, para que el archivo

@@ -2080,6 +2080,8 @@ const fleetReportExtraFields: FieldConfig[] = [
 export const fleetReportsModule: ModuleConfig = {
   id: 'fleetReports',
   collection: COLLECTIONS.fleetReports,
+  /** Excel completo: todo lo cargado, aunque esté oculto en la tabla. */
+  exportEverything: true,
   title: 'Fleet Report',
   icon: 'FileCheck2',
   autoUserField: fleetModule.autoUserField,
@@ -2120,7 +2122,12 @@ export const fleetReportsModule: ModuleConfig = {
       collection: COLLECTIONS.maintenance,
       foreignKey: 'originId',
       emptyMessage: 'No maintenance has been created from this report yet',
-      fields: [
+      /**
+   * TODOS los datos del Fleet Report van SIEMPRE en el Excel (Scanner, Driver,
+   * Route, millaje, llantas…), aunque Customize los oculte de la tabla o del
+   * detalle: el archivo es el reporte completo de la semana.
+   */
+  fields: [
         { key: 'date', label: 'Date', type: 'date' },
         { key: 'type', label: 'Type', type: 'text', badge: true },
         { key: 'status', label: 'Status', type: 'text', badge: true },
@@ -2130,7 +2137,7 @@ export const fleetReportsModule: ModuleConfig = {
       ],
     },
   ],
-  fields: [
+  fields: ([
     {
       key: 'date',
       label: 'Date',
@@ -2159,7 +2166,7 @@ export const fleetReportsModule: ModuleConfig = {
           : field,
       ),
     ...fleetReportExtraFields,
-  ],
+  ] as FieldConfig[]).map((field) => ({ ...field, exportAlways: true })),
 };
 
 export const CRUD_MODULES: ModuleConfig[] = [
