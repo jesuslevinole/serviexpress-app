@@ -2232,7 +2232,76 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * parte de los encabezados que el ROL permite ver, así que un usuario con
    * visibilidad "Own" solo obtiene sus propios registros.
    */
-  const exportLinkedRows = async (dateField: string, from: string, to: string) => {
+    /**
+     * Columnas del Excel: las visibles, más las marcadas exportAlways que el
+     * layout haya ocultado (millaje y llantas del Fleet Report). Cada una se
+     * inserta tras el campo que la precede en el código.
+     */
+  const buildExportFields = (): FieldConfig[] => {
+    const exportFields = [...allowedFields];
+    const present = new Set(exportFields.map((f) => f.key));
+    baseConfig.fields.forEach((field, index) => {
+      if (field.exportAlways !== true || present.has(field.key)) return;
+      // Respeta los permisos: un campo protegido por acción, o marcado "solo
+      // admin" en el layout, no se cuela al Excel de quien no puede verlo.
+      if (field.requiresAction && !isAdminView && !can(config.id, field.requiresAction)) return;
+      const merged = mergedConfig.fields.find((f) => f.key === field.key);
+      if (merged?.adminOnly === true && !isAdminView) return;
+      let at = 0;
+      for (let i = index - 1; i >= 0; i -= 1) {
+        const pos = exportFields.findIndex((f) => f.key === baseConfig.fields[i].key);
+        if (pos >= 0) {
+          at = pos + 1;
+          break;
+        }
+      }
+      exportFields.splice(at, 0, field);
+      present.add(field.key);
+    });
+    if (config.exportEverything) {
+      // Campos personalizados del módulo (cf_…), aunque estén ocultos.
+      (uiOverrides.modules[config.id]?.customFields ?? []).forEach((def) => {
+        if (present.has(def.key)) return;
+        exportFields.push({ key: def.key, label: def.label, type: def.type });
+        present.add(def.key);
+      });
+      // Fecha y hora EXACTAS de captura (hora de Texas), al final.
+      exportFields.push({
+        key: '__capturedAt',
+        label: 'Captured at (Texas time)',
+        type: 'text',
+        compute: (row) => (typeof row.createdAt === 'string' ? formatTexas(row.createdAt) : null),
+      });
+    }
+    return exportFields.filter(
+      (field) => field.exportable !== false && field.key !== config.activeToggle,
+    );
+  };
+
+  /** Clave estable de una columna del Excel de renglones (BC Reports). */
+  const linkedColumnKey = (column: { from: string; field: FieldConfig }) =>
+    `${column.from}:${column.field.key}`;
+
+  /** Columnas que se ofrecen en el diálogo de exportación, en su orden. */
+  const exportColumnOptions = (): { key: string; label: string }[] => {
+    if (config.exportRows) {
+      return config.exportRows.columns.map((column) => ({
+        key: linkedColumnKey(column),
+        label: column.label,
+      }));
+    }
+    return [
+      ...(config.activeToggle ? [{ key: '__status', label: 'Status (ACTIVE / INACTIVE)' }] : []),
+      ...buildExportFields().map((field) => ({ key: field.key, label: field.label })),
+    ];
+  };
+
+  const exportLinkedRows = async (
+    dateField: string,
+    from: string,
+    to: string,
+    columnKeys: string[] | null = null,
+  ) => {
     const spec = config.exportRows;
     if (!spec) return;
 
@@ -2306,9 +2375,12 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       });
 
     const rangeSuffix = from || to ? ` (${from || 'start'} to ${to || 'today'})` : '';
+    const chosenColumns = columnKeys ? new Set(columnKeys) : null;
     await exportToExcel(
       `${config.title}${rangeSuffix}`,
-      spec.columns.map((column) => ({
+      spec.columns
+        .filter((column) => chosenColumns === null || chosenColumns.has(linkedColumnKey(column)))
+        .map((column) => ({
         header: column.label,
         values: linked.map((row) => {
           const source =
@@ -2340,11 +2412,15 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     from: string,
     to: string,
     activeMode: ActiveExportMode = 'all',
+    columnKeys: string[] | null = null,
   ) => {
     if (config.exportRows) {
-      await exportLinkedRows(dateField, from, to);
+      await exportLinkedRows(dateField, from, to, columnKeys);
       return;
     }
+    /** ¿La columna va en el archivo? (null = todas). */
+    const chosen = columnKeys ? new Set(columnKeys) : null;
+    const wanted = (key: string) => chosen === null || chosen.has(key);
     const activeKey = config.activeToggle;
     const isActive = (row: EntityData) => isActiveRecord(row, activeKey);
     let rowsForExport = rows.filter((row) => {
@@ -2382,52 +2458,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           },
         ]
       : [];
-    /**
-     * Columnas del Excel: las visibles, más las marcadas exportAlways que el
-     * layout haya ocultado (millaje y llantas del Fleet Report). Cada una se
-     * inserta tras el campo que la precede en el código.
-     */
-    const exportFields = [...allowedFields];
-    const present = new Set(exportFields.map((f) => f.key));
-    baseConfig.fields.forEach((field, index) => {
-      if (field.exportAlways !== true || present.has(field.key)) return;
-      // Respeta los permisos: un campo protegido por acción, o marcado "solo
-      // admin" en el layout, no se cuela al Excel de quien no puede verlo.
-      if (field.requiresAction && !isAdminView && !can(config.id, field.requiresAction)) return;
-      const merged = mergedConfig.fields.find((f) => f.key === field.key);
-      if (merged?.adminOnly === true && !isAdminView) return;
-      let at = 0;
-      for (let i = index - 1; i >= 0; i -= 1) {
-        const pos = exportFields.findIndex((f) => f.key === baseConfig.fields[i].key);
-        if (pos >= 0) {
-          at = pos + 1;
-          break;
-        }
-      }
-      exportFields.splice(at, 0, field);
-      present.add(field.key);
-    });
-    if (config.exportEverything) {
-      // Campos personalizados del módulo (cf_…), aunque estén ocultos.
-      (uiOverrides.modules[config.id]?.customFields ?? []).forEach((def) => {
-        if (present.has(def.key)) return;
-        exportFields.push({ key: def.key, label: def.label, type: def.type });
-        present.add(def.key);
-      });
-      // Fecha y hora EXACTAS de captura (hora de Texas), al final.
-      exportFields.push({
-        key: '__capturedAt',
-        label: 'Captured at (Texas time)',
-        type: 'text',
-        compute: (row) => (typeof row.createdAt === 'string' ? formatTexas(row.createdAt) : null),
-      });
-    }
+    const exportFields = buildExportFields();
     await exportToExcel(
       `${config.title}${activeSuffix}${rangeSuffix}`,
       // Los campos marcados exportable:false quedan fuera, para que el archivo
       // salga con las columnas exactas que espera quien lo recibe.
-      [...statusColumn, ...exportFields
-        .filter((field) => field.exportable !== false && field.key !== activeKey)
+      [...(wanted('__status') ? statusColumn : []), ...exportFields
+        .filter((field) => wanted(field.key))
         .map((field) => ({
           header: field.label,
           values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
@@ -3138,6 +3175,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         <ExportExcelModal
           title={config.title}
           fields={allowedFields}
+          columns={exportColumnOptions()}
+          moduleId={config.id}
+          // La selección es de quien exporta (la sesión real, no la de View as).
+          userId={firebaseUser?.uid ?? ''}
           hasActiveStatus={config.activeToggle !== undefined && !config.exportRows}
           showDateFilter={config.exportDateFilter !== false}
           onClose={() => setExportOpen(false)}
