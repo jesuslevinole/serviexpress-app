@@ -49,6 +49,9 @@ export function Topbar({ title, onMenu }: TopbarProps) {
           <Eye size={14} />
           <span>
             Viewing as <strong>{viewAs.name}</strong> ({viewAs.email})
+            <em className="topbar-viewas-note">
+              — exactly what they see; anything you save is recorded as you
+            </em>
           </span>
           <button type="button" onClick={stopViewAs}>
             <EyeOff size={13} />

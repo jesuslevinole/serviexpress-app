@@ -107,3 +107,16 @@
   color: #fff;
   border: none;
 }
+
+/* Aclaración dentro del aviso de "View as": la vista es la del otro usuario,
+   pero la autoría de lo que se guarde es del admin que está simulando. */
+.topbar-viewas-note {
+  font-style: normal;
+  opacity: 0.85;
+}
+
+@media (max-width: 760px) {
+  .topbar-viewas-note {
+    display: none;
+  }
+}

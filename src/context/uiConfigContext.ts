@@ -1,6 +1,17 @@
 import { createContext } from 'react';
 import type { FormStep, ModuleConfig } from '../types/models';
 
+/**
+ * Qué alcanza a ver una persona DENTRO de un campo, igual que la columna
+ * Visibility de Roles pero campo por campo:
+ * - all: todo el catálogo.
+ * - own: solo lo que esa persona capturó.
+ * - station: solo lo de sus estaciones asignadas.
+ * - none: no ve el campo (desaparece de su formulario, tabla y Excel).
+ * Sin valor = hereda lo que diga el rol para el módulo.
+ */
+export type FieldViewScope = 'all' | 'own' | 'station' | 'none';
+
 export interface FieldOverride {
   label?: string;
   order?: number;
@@ -12,6 +23,10 @@ export interface FieldOverride {
   hidden?: boolean;
   /** true = solo los administradores ven el campo (tabla y formulario). */
   adminOnly?: boolean;
+  /** Alcance del campo para TODOS los roles que no tengan regla propia. */
+  viewScope?: FieldViewScope;
+  /** Alcance del campo para un rol concreto (gana sobre `viewScope`). */
+  viewScopeByRole?: Record<string, FieldViewScope>;
 }
 
 /** Campo agregado por el admin desde "Edit layout" (vive en los documentos). */

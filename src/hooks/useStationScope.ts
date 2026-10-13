@@ -28,7 +28,15 @@ export interface StationScope {
   scopeOf: (moduleId: string | undefined) => ViewScope;
   /** Usuario sin ninguna limitación (admin real u oficina). */
   unrestricted: boolean;
+  /**
+   * Estaciones ASIGNADAS al usuario, diga lo que diga el rol. Se usa cuando
+   * un campo pide expresamente "los de su estación" (alcance por campo).
+   */
+  assigned: string[];
 }
+
+/** Misma referencia siempre: "sin recorte" no debe cambiar de identidad. */
+const NO_SCOPE: string[] = [];
 
 export function useStationScope(): StationScope {
   const { profile, viewAs, isAdmin, effectiveRole } = useAuth();
@@ -49,12 +57,12 @@ export function useStationScope(): StationScope {
   const forModule = useCallback(
     (moduleId: string | undefined): string[] => {
       const alcance = scopeOf(moduleId);
-      if (alcance === 'all') return [];
+      if (alcance === 'all') return NO_SCOPE;
       // Trucks: cualquier restricción del rol se reduce a "misma Current
       // station" (stationOnlyScope), igual que en la lista del módulo.
       const stationOnly =
         CRUD_MODULES.find((m) => m.id === moduleId)?.stationOnlyScope === true;
-      if (!stationOnly && alcance !== 'station' && alcance !== 'entity_station') return [];
+      if (!stationOnly && alcance !== 'station' && alcance !== 'entity_station') return NO_SCOPE;
       return stations;
     },
     [scopeOf, stations],
@@ -65,5 +73,10 @@ export function useStationScope(): StationScope {
     [forModule],
   );
 
-  return { forModule, forCollection, scopeOf, unrestricted };
+  // Objeto estable: si cambiara en cada render arrastraría a todo lo que lo
+  // tenga en sus dependencias (consultas, catálogos) a resuscribirse.
+  return useMemo(
+    () => ({ forModule, forCollection, scopeOf, unrestricted, assigned: stations }),
+    [forModule, forCollection, scopeOf, unrestricted, stations],
+  );
 }

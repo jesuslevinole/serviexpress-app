@@ -9,10 +9,11 @@ import {
 } from '../../services/activeStatus';
 import { QuickAddRefModal } from '../ui/QuickAddRefModal';
 import { QuickEditRefModal } from '../ui/QuickEditRefModal';
-import { CRUD_MODULES, catalogModules } from '../../config/modules';
+import { CRUD_MODULES, catalogModules, moduleByCollection } from '../../config/modules';
 import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
 import { useStationScope } from '../../hooks/useStationScope';
+import { useFieldScope } from '../../hooks/useFieldScope';
 import { texasToday } from '../../services/captureWindow';
 import { useAlertThresholds } from '../../hooks/useAlertThresholds';
 import { MAX_SUFFIX } from '../../services/alertThresholds';
@@ -271,7 +272,11 @@ export function CrudForm({
     userScopes,
   ]);
 
-  const { can, canOr, isAdminView, profile, role } = useAuth();
+  const { can, canOr, isAdminView, profile, role, viewAs } = useAuth();
+  /** Alcance configurado campo por campo en "Edit layout". */
+  const fieldScope = useFieldScope();
+  /** Usuario EFECTIVO (el simulado en "View as"), para el alcance "own". */
+  const effectiveUid = (viewAs ?? profile)?.id ?? '';
   /**
    * Alcance por estación, el MISMO que usa la lista del módulo: manda la
    * columna Visibility del rol (Roles). Con "All" los desplegables traen
@@ -311,8 +316,24 @@ export function CrudForm({
       }
       // Camiones: solo los de la Current station del usuario (el ya elegido
       // en un registro viejo se conserva para no vaciar el campo).
+      // Alcance PROPIO del campo (Edit layout) — manda sobre el del rol:
+      // "este rol ve solo sus registros, pero aquí ve los de su estación".
+      const ownScope = ownerModuleId ? fieldScope.scopeOf(ownerModuleId, field.key) : undefined;
+      if (ownScope === 'own') {
+        const ownerKey = moduleByCollection(field.refCollection)?.autoUserField;
+        if (ownerKey && effectiveUid !== '') {
+          const current = values[field.key];
+          rows = rows.filter((row) => row[ownerKey] === effectiveUid || row.id === current);
+        }
+      }
       const stationKey = STATION_KEY_BY_COLLECTION[field.refCollection];
-      const refStations = stationKey ? stationScope.forCollection(field.refCollection) : [];
+      const refStations = stationKey
+        ? ownScope === 'station'
+          ? stationScope.assigned
+          : ownScope === 'all' || ownScope === 'own'
+            ? []
+            : stationScope.forCollection(field.refCollection)
+        : [];
       if (stationKey && refStations.length > 0) {
         const current = values[field.key];
         const before = rows.length;
@@ -399,7 +420,18 @@ export function CrudForm({
         .sort((a, b) => a.label.localeCompare(b.label));
     });
     return { map, notes };
-  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs, stationScope]);
+  }, [
+    formFields,
+    fields,
+    refMaps,
+    values,
+    scopeStations,
+    blockedRefs,
+    stationScope,
+    fieldScope,
+    ownerModuleId,
+    effectiveUid,
+  ]);
   const refOptionsByField = refOptions.map;
   const refNotesByField = refOptions.notes;
 

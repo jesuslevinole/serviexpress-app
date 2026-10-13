@@ -93,6 +93,7 @@ import { Pagination } from '../ui/Pagination';
 import { displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
 import { isActiveRecord, STATION_KEY_BY_COLLECTION } from '../../services/activeStatus';
 import { useStationScope } from '../../hooks/useStationScope';
+import { useFieldScope } from '../../hooks/useFieldScope';
 import type { FieldConfig, EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
@@ -176,11 +177,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const canConfigureForm = isAdminView || can(config.id, 'configurarForm');
   /** Puede editar el campo "Captured by": admin o rol con ese permiso en Roles. */
   /**
-   * Usuario a nombre de quien queda el registro. Con "View as" activo es el
-   * usuario simulado: el formulario debe mostrar y guardar lo mismo que vería
-   * esa persona, o la simulación engañaría sobre a quién se le atribuye.
+   * Usuario REAL, el que firma lo que se guarda. Aunque se esté viendo como
+   * otra persona, el registro queda a nombre de quien lo capturó de verdad:
+   * simular sirve para ver y para ayudar, nunca para escribir en nombre ajeno.
    */
-  const capturingUid = (viewAs ?? profile)?.id ?? firebaseUser?.uid ?? null;
+  const realUid = profile?.id ?? firebaseUser?.uid ?? null;
 
   const canEditCapturedBy =
     config.autoUserField !== undefined && (isAdminView || can('capturedBy', 'editar'));
@@ -202,6 +203,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   /** Puede editar Entity/Station en formularios: admin o permiso entityStation. */
   const canEditContext = isAdminView || can('entityStation', 'editar');
 
+  /** Alcance configurado campo por campo desde "Edit layout". */
+  const fieldScope = useFieldScope();
+
   /**
    * Campos que el rol puede ver. Los marcados con requiresAction (dinero,
    * notas internas) se ocultan salvo que la matriz de permisos los habilite.
@@ -211,9 +215,13 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   const allowedFields = useMemo(
     () =>
       config.fields.filter(
-        (field) => !field.requiresAction || isAdminView || can(config.id, field.requiresAction),
+        (field) =>
+          // Alcance "None" por campo (Edit layout): ese rol no lo ve en
+          // ningún lado — ni tabla, ni formulario, ni detalle, ni Excel.
+          !fieldScope.isHidden(config.id, field.key) &&
+          (!field.requiresAction || isAdminView || can(config.id, field.requiresAction)),
       ),
-    [config.fields, config.id, isAdminView, can],
+    [config.fields, config.id, isAdminView, can, fieldScope],
   );
 
   /** Valores iniciales desde el alcance del usuario (su entidad/estación asignada). */
@@ -271,11 +279,10 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         : undefined,
     [scopeClauses, config.autoUserField, profile?.id],
   );
-  const { rows: ownRows } = useCollection(
-    ownFilter ? config.collection : '',
-    ownFilter,
-    config.listLimit,
-  );
+  // Sin `limit` a propósito: el tope obliga a ordenar por createdAt y esa
+  // combinación (igualdad + orden) exigiría un índice compuesto creado a
+  // mano. Con la igualdad sola basta el índice automático de Firestore.
+  const { rows: ownRows } = useCollection(ownFilter ? config.collection : '', ownFilter);
   const allRows = useMemo(() => {
     if (ownRows.length === 0) return scopedRows;
     const seen = new Set(scopedRows.map((row) => row.id));
@@ -1783,7 +1790,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         // si no, el sistema lo llena con la sesión actual.
         const chosen = payload[config.autoUserField];
         if (!canEditCapturedBy || typeof chosen !== 'string' || chosen === '') {
-          payload[config.autoUserField] = capturingUid ?? firebaseUser.uid;
+          // Siempre el usuario REAL: con "View as" se ve como el otro, pero
+          // lo que se guarda lo firma quien está sentado al teclado.
+          payload[config.autoUserField] = realUid ?? firebaseUser.uid;
         }
       }
       if (editing) {
@@ -3290,7 +3299,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
         editableCapturedByKey={canEditCapturedBy ? config.autoUserField : undefined}
         capturedByKey={config.autoUserField}
-        currentUid={capturingUid}
+        // El formulario muestra al usuario REAL en "Captured by": lo que se
+        // guarda queda a su nombre aunque esté viendo como otra persona.
+        currentUid={realUid}
         presetValues={scopePresets}
         prefillValues={externalPrefill ?? undefined}
         blockedRefs={

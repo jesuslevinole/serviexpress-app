@@ -508,7 +508,7 @@ export function RolesPage() {
         open={formOpen}
         title={editing ? 'Edit role' : 'Add role'}
         onClose={() => setFormOpen(false)}
-        size="lg"
+        size="full"
         footer={
           <>
             {error ? <span className="roles-error">{error}</span> : null}

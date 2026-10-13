@@ -1,12 +1,30 @@
-import { useState, type DragEvent } from 'react';
-import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { useMemo, useState, type DragEvent } from 'react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useUiConfig } from '../../hooks/useUiConfig';
 import {
   countDocumentsHavingField,
   removeFieldFromDocuments,
 } from '../../services/firestoreService';
-import type { CustomFieldDef, FieldOverride } from '../../context/uiConfigContext';
+import type {
+  CustomFieldDef,
+  FieldOverride,
+  FieldViewScope,
+} from '../../context/uiConfigContext';
+import { useCollection } from '../../hooks/useCollection';
+import { COLLECTIONS } from '../../config/collections';
 import type { ModuleConfig } from '../../types/models';
 import './TableLayoutModal.css';
 
@@ -31,7 +49,24 @@ interface EditableField {
   computed: boolean;
   /** Definición si es un campo agregado por el admin (eliminable). */
   custom: CustomFieldDef | null;
+  /** Qué alcanza a ver en el campo quien no tenga regla propia de rol. */
+  viewScope: FieldViewScope | 'inherit';
+  /** Alcance por rol (gana sobre el anterior). */
+  viewScopeByRole: Record<string, FieldViewScope>;
 }
+
+/** Opciones de alcance por campo, las mismas palabras que en Roles. */
+const VIEW_SCOPES: { value: FieldViewScope | 'inherit'; label: string; title: string }[] = [
+  {
+    value: 'inherit',
+    label: 'Role',
+    title: "Follows the module's Visibility set in Roles (default)",
+  },
+  { value: 'all', label: 'All', title: 'Sees every record in this field' },
+  { value: 'own', label: 'Own', title: 'Only what that person captured' },
+  { value: 'station', label: 'Station', title: 'Only the ones of their assigned stations' },
+  { value: 'none', label: 'None', title: 'The field disappears for them' },
+];
 
 const CUSTOM_TYPES: { value: CustomFieldDef['type']; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -88,6 +123,8 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
         const baseField = baseFields.find((f) => f.key === item.key);
         return {
           ...item,
+          viewScope: (override?.viewScope ?? 'inherit') as FieldViewScope | 'inherit',
+          viewScopeByRole: { ...(override?.viewScopeByRole ?? {}) },
           label: override?.label ?? item.baseLabel,
           required: override?.required ?? baseField?.required === true,
           visibleAll:
@@ -99,16 +136,31 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
         };
       })
       .sort((a, b) => a.order - b.order)
-      .map(({ key, baseLabel, label, required, visibleAll, visibleOthers, computed, custom }) => ({
-        key,
-        baseLabel,
-        label,
-        required,
-        visibleAll,
-        visibleOthers,
-        computed,
-        custom,
-      }));
+      .map(
+        ({
+          key,
+          baseLabel,
+          label,
+          required,
+          visibleAll,
+          visibleOthers,
+          computed,
+          custom,
+          viewScope,
+          viewScopeByRole,
+        }) => ({
+          key,
+          baseLabel,
+          label,
+          required,
+          visibleAll,
+          visibleOthers,
+          computed,
+          custom,
+          viewScope,
+          viewScopeByRole,
+        }),
+      );
   };
 
   const [title, setTitle] = useState(current?.title ?? baseTitle);
@@ -120,6 +172,16 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
   /** Alta de campo nuevo. */
   const [newLabel, setNewLabel] = useState('');
   const [newType, setNewType] = useState<CustomFieldDef['type']>('text');
+  /** Campo cuyo panel "Who sees it" está abierto. */
+  const [scopeOpen, setScopeOpen] = useState<string | null>(null);
+  const rolesData = useCollection(COLLECTIONS.roles);
+  const roles = useMemo(
+    () =>
+      rolesData.rows
+        .map((row) => ({ id: row.id, name: typeof row.name === 'string' ? row.name : row.id }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [rolesData.rows],
+  );
   /** Confirmación de borrado de un campo con datos. */
   const [removing, setRemoving] = useState<{ row: EditableField; count: number } | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -151,6 +213,26 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  /** Alcance de un rol concreto en un campo ("inherit" = sin regla propia). */
+  const setRoleScope = (index: number, roleId: string, value: FieldViewScope | 'inherit') => {
+    setRows((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const next = { ...row.viewScopeByRole };
+        if (value === 'inherit') delete next[roleId];
+        else next[roleId] = value;
+        return { ...row, viewScopeByRole: next };
+      }),
+    );
+  };
+
+  /** Resumen corto para el botón del campo ("Role" / "Station · 2 roles"). */
+  const scopeSummary = (row: EditableField): string => {
+    const base = VIEW_SCOPES.find((option) => option.value === row.viewScope)?.label ?? 'Role';
+    const count = Object.keys(row.viewScopeByRole).length;
+    return count === 0 ? base : `${base} · ${count} role${count === 1 ? '' : 's'}`;
+  };
+
   const addCustomField = () => {
     const label = newLabel.trim();
     if (label === '') return;
@@ -166,6 +248,8 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
         visibleOthers: true,
         computed: false,
         custom: def,
+        viewScope: 'inherit',
+        viewScopeByRole: {},
       },
     ]);
     setNewLabel('');
@@ -232,6 +316,8 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
           visibleOthers: true,
           computed: f.compute !== undefined || f.form === false,
           custom: null,
+          viewScope: 'inherit' as const,
+          viewScopeByRole: {},
         })),
     );
   };
@@ -248,6 +334,10 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
         hidden: !row.visibleAll,
         table: row.visibleAll,
         adminOnly: !row.visibleOthers,
+        ...(row.viewScope !== 'inherit' ? { viewScope: row.viewScope } : {}),
+        ...(Object.keys(row.viewScopeByRole).length > 0
+          ? { viewScopeByRole: row.viewScopeByRole }
+          : {}),
         ...(row.label.trim() !== '' && row.label !== row.baseLabel
           ? { label: row.label.trim() }
           : {}),
@@ -308,10 +398,13 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
           Drag the <GripVertical size={12} /> handle to reorder. <strong>Show</strong> off = the
           field disappears for EVERYONE (you included), everywhere. <strong>Others</strong> off =
           only admins see it. Everything applies to the table, the form, the Excel export and the
-          template.
+          template. <strong>Who sees it</strong> sets, per role, how much of the field that role
+          reaches: All, only their Own, only their Station, or None — and it wins over the
+          module&apos;s Visibility in Roles.
         </p>
         <div className="tlayout-legend">
           <span className="tlayout-legend-grow">Header</span>
+          <span>Who sees it</span>
           <span>Show</span>
           <span>Others</span>
           <span>Req</span>
@@ -335,6 +428,21 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
               <span className="tlayout-pos">{index + 1}</span>
               <input value={row.label} onChange={(e) => update(index, { label: e.target.value })} />
               {row.custom ? <span className="tlayout-custom-tag">{row.custom.type}</span> : null}
+              <button
+                type="button"
+                className={`tlayout-scope-btn ${
+                  row.viewScope !== 'inherit' || Object.keys(row.viewScopeByRole).length > 0
+                    ? 'is-set'
+                    : ''
+                }`}
+                title="Who sees this field, and how much of it"
+                aria-expanded={scopeOpen === row.key}
+                onClick={() => setScopeOpen(scopeOpen === row.key ? null : row.key)}
+              >
+                {scopeOpen === row.key ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <Users size={13} />
+                <span>{scopeSummary(row)}</span>
+              </button>
               <label
                 className="tlayout-required"
                 title="Show off: nobody sees this field (you included), anywhere"
@@ -398,6 +506,63 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
                 >
                   <Trash2 size={15} />
                 </button>
+              ) : null}
+
+              {scopeOpen === row.key ? (
+                <div className="tlayout-scope">
+                  <div className="tlayout-scope-line">
+                    <span className="tlayout-scope-who">Everyone (default)</span>
+                    <span className="tlayout-scope-opts">
+                      {VIEW_SCOPES.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`tlayout-scope-opt ${
+                            row.viewScope === option.value ? 'is-active' : ''
+                          }`}
+                          title={option.title}
+                          aria-pressed={row.viewScope === option.value}
+                          onClick={() => update(index, { viewScope: option.value })}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                  {roles.map((role) => {
+                    const value = row.viewScopeByRole[role.id] ?? 'inherit';
+                    return (
+                      <div className="tlayout-scope-line" key={role.id}>
+                        <span className="tlayout-scope-who">{role.name}</span>
+                        <span className="tlayout-scope-opts">
+                          {VIEW_SCOPES.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`tlayout-scope-opt ${
+                                value === option.value ? 'is-active' : ''
+                              }`}
+                              title={
+                                option.value === 'inherit'
+                                  ? 'Uses the default of the line above'
+                                  : option.title
+                              }
+                              aria-pressed={value === option.value}
+                              onClick={() => setRoleScope(index, role.id, option.value)}
+                            >
+                              {option.value === 'inherit' ? 'Default' : option.label}
+                            </button>
+                          ))}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <p className="tlayout-scope-help">
+                    Example: a role that only sees <strong>their own</strong> Fleet Reports can
+                    still get <strong>Station</strong> here, so the Truck list offers every truck
+                    of their station that has not been loaded this week.
+                  </p>
+                </div>
               ) : null}
             </li>
           ))}

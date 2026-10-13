@@ -5,17 +5,23 @@
 }
 
 /* Dentro del modal a pantalla completa: el nombre y el filtro quedan fijos
-   arriba y solo la rejilla desplaza. */
+   arriba y SOLO la rejilla desplaza. Un único scroll en toda la pantalla:
+   el cuerpo del modal no desplaza (lo impide .modal-full .modal-body), así
+   que estas dos capas deben estirarse para que la rejilla reciba el alto. */
 .roles-layout {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .roles-form-col {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .roles-name {
@@ -37,7 +43,8 @@
   }
 
   .roles-matrix-wrap {
-    max-height: 58vh;
+    flex: 1;
+    min-height: 0;
   }
 }
 
@@ -91,7 +98,10 @@
    del modal, el encabezado fijo se despegaría y se encimaría con las filas. */
 .roles-matrix-wrap {
   overflow: auto;
-  max-height: 55vh;
+  /* Toma TODO el alto que sobra: sin tope fijo no hay un segundo scroll
+     peleando con el del modal. */
+  flex: 1;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
