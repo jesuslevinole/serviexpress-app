@@ -11,7 +11,7 @@
  * (este archivo y public/version.json); si no coinciden, todos verían el
  * aviso de actualización de forma permanente.
  */
-export const APP_VERSION = 'V00101';
+export const APP_VERSION = 'V00102';
 
 /** Cada cuánto se pregunta al servidor si hay una versión nueva. */
 export const VERSION_CHECK_MS = 5 * 60 * 1000;

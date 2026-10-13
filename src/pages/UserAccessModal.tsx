@@ -87,7 +87,7 @@ export function UserAccessModal({ user, roleName, onClose }: UserAccessModalProp
       open
       title={`Extra access · ${String(user.name ?? '')}`}
       onClose={onClose}
-      size="md"
+      size="full"
       footer={
         <>
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>

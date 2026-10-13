@@ -9,6 +9,12 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  /**
+   * Clase extra para el cuerpo. "is-grid" = el cuerpo NO desplaza y lo hace
+   * la rejilla de adentro (encabezado y primera columna fijos). Sigue siendo
+   * una sola barra; sin esto, el único scroll es el del cuerpo.
+   */
+  bodyClassName?: string;
   /** 'top' lo dibuja por encima de otro modal abierto (alta rápida de catálogo). */
   layer?: 'base' | 'top';
 }
@@ -21,6 +27,7 @@ export function Modal({
   footer,
   size = 'md',
   layer = 'base',
+  bodyClassName,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -55,7 +62,7 @@ export function Modal({
             <X size={18} />
           </button>
         </div>
-        <div className="modal-body">{children}</div>
+        <div className={`modal-body ${bodyClassName ?? ''}`}>{children}</div>
         {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>

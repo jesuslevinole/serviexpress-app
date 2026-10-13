@@ -69,7 +69,7 @@ export function UserPickerModal({ selectedId, onPick, onClose }: UserPickerModal
       open
       title="Choose a user"
       onClose={onClose}
-      size="md"
+      size="lg"
       layer="top"
       footer={
         <button type="button" className="btn btn-outline" onClick={onClose}>

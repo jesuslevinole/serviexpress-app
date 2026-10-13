@@ -71,7 +71,7 @@ export function ViewAsModal({ onClose }: ViewAsModalProps) {
         open
         title="View as user"
         onClose={onClose}
-        size="md"
+        size="lg"
         footer={
           <>
             <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>

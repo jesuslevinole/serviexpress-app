@@ -150,7 +150,7 @@ export function AlertThresholdsModal({
       open
       title={`Alerts · ${config.title}`}
       onClose={onClose}
-      size="md"
+      size="full"
       layer="top"
       footer={
         <>

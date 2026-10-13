@@ -49,8 +49,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 180px;
-  overflow-y: auto;
 }
 
 .coverage-list li {

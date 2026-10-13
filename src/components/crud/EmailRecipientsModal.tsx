@@ -96,7 +96,7 @@ export function EmailRecipientsModal({
       open
       title={`Email on save · ${moduleTitle}`}
       onClose={onClose}
-      size="sm"
+      size="lg"
       layer="top"
       footer={
         <>

@@ -48,8 +48,8 @@ body.modal-open {
   max-width: min(1600px, 96vw);
 }
 
-/* Pantalla completa: para rejillas que no caben de otra forma (matriz de
-   permisos, con una columna por acción y una fila por módulo). */
+/* Pantalla completa: ventanas de configuración y rejillas que no caben de
+   otra forma (layout de un módulo, matriz de permisos, columnas del Excel). */
 .modal-full {
   max-width: 100vw;
   width: 100vw;
@@ -58,14 +58,29 @@ body.modal-open {
   border-radius: 0;
 }
 
-/* El cuerpo NO desplaza: desplaza solo la rejilla de adentro. Con dos
-   contenedores desplazables el encabezado fijo se despega y se encima
-   sobre las filas. */
-.modal-full .modal-body {
+/* UN SOLO SCROLL POR MODAL: el cuerpo es el único que desplaza, en los dos
+   ejes. Ninguna lista de adentro lleva su propio max-height con overflow;
+   con dos contenedores desplazables uno queda atrapado dentro del otro y
+   hay que arrastrar dos barras para llegar al mismo sitio.
+
+   Única excepción: una rejilla con encabezado y primera columna fijos
+   (la matriz de Roles). Ahí desplaza la rejilla y no el cuerpo, porque con
+   el cuerpo desplazando el encabezado fijo se despega de las filas. Se pide
+   expresamente con bodyClassName="is-grid"; sigue siendo UNA sola barra. */
+.modal-body.is-grid {
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* A pantalla completa el contenido NO se estira sin límite: se centra con un
+   ancho cómodo (un renglón de formulario de 1.900 px es ilegible). */
+.modal-full .modal-body > * {
+  width: 100%;
+  max-width: 1500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .modal-header {
@@ -83,7 +98,8 @@ body.modal-open {
 
 .modal-body {
   padding: 20px;
-  overflow-y: auto;
+  /* Los dos ejes: una tabla ancha desplaza aquí, no en un marco interno. */
+  overflow: auto;
 }
 
 .modal-footer {

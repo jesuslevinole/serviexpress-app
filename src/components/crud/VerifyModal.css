@@ -70,8 +70,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 30vh;
-  overflow-y: auto;
 }
 
 .verify-history li {

@@ -93,8 +93,6 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  max-height: 45vh;
-  overflow-y: auto;
 }
 
 .imp-table-wrap td {

@@ -185,7 +185,7 @@ export function MergeDuplicatesModal({ config, rows, onClose }: MergeDuplicatesM
       open
       title={`Merge duplicates · ${config.title}`}
       onClose={busyGroup ? () => undefined : onClose}
-      size="lg"
+      size="full"
       footer={
         <>
           {error ? <span className="crudform-error">{error}</span> : null}

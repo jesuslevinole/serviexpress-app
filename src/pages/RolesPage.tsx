@@ -509,6 +509,9 @@ export function RolesPage() {
         title={editing ? 'Edit role' : 'Add role'}
         onClose={() => setFormOpen(false)}
         size="full"
+        // La rejilla desplaza (encabezado y columna de módulo fijos); el
+        // cuerpo no: una sola barra para toda la matriz.
+        bodyClassName="is-grid"
         footer={
           <>
             {error ? <span className="roles-error">{error}</span> : null}

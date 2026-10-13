@@ -145,7 +145,7 @@ export function ExportExcelModal({
       open
       title={`Export Excel · ${title}`}
       onClose={onClose}
-      size="md"
+      size="full"
       footer={
         <>
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>

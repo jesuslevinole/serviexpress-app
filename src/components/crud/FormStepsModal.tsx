@@ -94,7 +94,7 @@ export function FormStepsModal({ base, onClose }: FormStepsModalProps) {
   return (
     <Modal
       open
-      size="lg"
+      size="full"
       layer="top"
       title={`Form steps · ${base.title}`}
       onClose={onClose}

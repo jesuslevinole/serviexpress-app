@@ -126,7 +126,7 @@ export function CaptureWindowModal({ label, window, onSave, onClear, onClose }: 
       open
       title={label}
       onClose={onClose}
-      size="md"
+      size="full"
       footer={
         <>
           {error ? <span className="crudform-error">{error}</span> : null}

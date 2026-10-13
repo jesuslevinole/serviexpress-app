@@ -366,7 +366,7 @@ export function TableLayoutModal({ base, target = 'module', onClose }: TableLayo
       open
       title={`Edit layout · ${baseTitle}`}
       onClose={onClose}
-      size="md"
+      size="full"
       layer="top"
       footer={
         <>

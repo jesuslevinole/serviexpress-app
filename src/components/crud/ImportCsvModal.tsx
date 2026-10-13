@@ -536,7 +536,7 @@ export function ImportCsvModal({
   const warningRows = prepared.filter((r) => r.errors.length === 0 && r.warnings.length > 0);
 
   return (
-    <Modal open title={`Import CSV · ${title}`} onClose={onClose} size="lg"
+    <Modal open title={`Import CSV · ${title}`} onClose={onClose} size="full"
       footer={
         phase === 'preview' && missingColumns.length === 0 ? (
           <>
