@@ -12,6 +12,7 @@ import { QuickEditRefModal } from '../ui/QuickEditRefModal';
 import { CRUD_MODULES, catalogModules } from '../../config/modules';
 import { COLLECTIONS } from '../../config/collections';
 import { useAuth } from '../../hooks/useAuth';
+import { useStationScope } from '../../hooks/useStationScope';
 import { texasToday } from '../../services/captureWindow';
 import { useAlertThresholds } from '../../hooks/useAlertThresholds';
 import { MAX_SUFFIX } from '../../services/alertThresholds';
@@ -270,17 +271,13 @@ export function CrudForm({
     userScopes,
   ]);
 
-  const { can, canOr, isAdminView, profile, role, viewAs } = useAuth();
+  const { can, canOr, isAdminView, profile, role } = useAuth();
   /**
-   * Estaciones del usuario EFECTIVO (el simulado en View as): acotan los
-   * desplegables de camiones a su Current station. Admin y oficina ven todo.
+   * Alcance por estación, el MISMO que usa la lista del módulo: manda la
+   * columna Visibility del rol (Roles). Con "All" los desplegables traen
+   * todos los camiones; con "Station", solo los de su Current station.
    */
-  const effectiveScope = viewAs ?? profile;
-  const optionScopeStations = useMemo(
-    () =>
-      isAdminView || effectiveScope?.isOffice === true ? [] : (effectiveScope?.scopeStations ?? []),
-    [isAdminView, effectiveScope],
-  );
+  const stationScope = useStationScope();
 
   /**
    * Estaciones a las que el usuario está limitado. Vacío = sin límite (admin,
@@ -294,8 +291,9 @@ export function CrudForm({
     return profile?.scopeStations ?? [];
   }, [isAdminView, profile, role, ownerModuleId]);
 
-  const refOptionsByField = useMemo(() => {
+  const refOptions = useMemo(() => {
     const map: Record<string, SelectOption[]> = {};
+    const notes: Record<string, string> = {};
     formFields.forEach((field) => {
       if (field.type !== 'ref' || !field.refCollection) return;
       const refData = refMaps[field.refCollection];
@@ -314,14 +312,23 @@ export function CrudForm({
       // Camiones: solo los de la Current station del usuario (el ya elegido
       // en un registro viejo se conserva para no vaciar el campo).
       const stationKey = STATION_KEY_BY_COLLECTION[field.refCollection];
-      if (stationKey && optionScopeStations.length > 0) {
+      const refStations = stationKey ? stationScope.forCollection(field.refCollection) : [];
+      if (stationKey && refStations.length > 0) {
         const current = values[field.key];
+        const before = rows.length;
         rows = rows.filter((row) => {
           const st = row[stationKey];
-          return (
-            (typeof st === 'string' && optionScopeStations.includes(st)) || row.id === current
-          );
+          // Sin estación no es de nadie: se ofrece a todos (si no, un camión
+          // sin Current station no se puede elegir desde ninguna cuenta).
+          const noStation = typeof st !== 'string' || st === '';
+          return noStation || refStations.includes(st) || row.id === current;
         });
+        // Se dice por qué no está el que buscan (antes solo salía "No results").
+        if (rows.length < before) {
+          notes[field.key] = `Only ${field.label.toLowerCase()} of your station(s) are listed. ${
+            before - rows.length
+          } hidden: they belong to another station.`;
+        }
       }
       // Filtro fijo, o dependiente del valor actual de otro campo del formulario.
       let filter = field.refFilter;
@@ -391,8 +398,10 @@ export function CrudForm({
         .map((r) => ({ value: r.id, label: refData.labels.get(r.id) ?? r.id }))
         .sort((a, b) => a.label.localeCompare(b.label));
     });
-    return map;
-  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs, optionScopeStations]);
+    return { map, notes };
+  }, [formFields, fields, refMaps, values, scopeStations, blockedRefs, stationScope]);
+  const refOptionsByField = refOptions.map;
+  const refNotesByField = refOptions.notes;
 
   /** Diferencia de millaje en vivo: Next mant − Actual Mileage. */
   const mileageDiff = useMemo(() => {
@@ -834,6 +843,7 @@ export function CrudForm({
               }
               maxValue={maxFor(field)}
               refOptions={refOptionsByField[field.key] ?? []}
+              hint={refNotesByField[field.key]}
               onQuickAdd={catalogFor(field) ? () => setQuickAdd(field) : undefined}
               onQuickEdit={catalogEditFor(field) ? () => setQuickEdit(field) : undefined}
               onChange={handleChange}

@@ -91,7 +91,8 @@ import { COLLECTIONS, REF_LABEL_DEPENDENCIES, buildRefLabel } from '../../config
 import { FilterPanel, type ColumnFilter, type FiltersState } from './FilterPanel';
 import { Pagination } from '../ui/Pagination';
 import { displayCell, displayValue, effectiveValue, scalar, formatUsDate } from './displayValue';
-import { isActiveRecord } from '../../services/activeStatus';
+import { isActiveRecord, STATION_KEY_BY_COLLECTION } from '../../services/activeStatus';
+import { useStationScope } from '../../hooks/useStationScope';
 import type { FieldConfig, EntityData, FieldValue, ModuleConfig } from '../../types/models';
 import './CrudModule.css';
 
@@ -237,25 +238,53 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * declaran (scopeServerSide) y con la cláusula "in" simple (sin orderBy,
    * para no requerir índice compuesto); el orden lo pone el cliente.
    */
+  const stationScope = useStationScope();
   const scopeClauses = useMemo(() => {
     if (config.scopeServerSide !== true) return undefined;
-    if (isAdminView || (viewAs === null && profile?.isOffice === true)) return undefined;
-    const scoped = viewAs ?? profile;
-    if (scoped?.isOffice === true) return undefined;
-    const stations = scoped?.scopeStations ?? [];
+    // Manda la Visibility del rol: con "All" no se recorta nada. (Antes se
+    // recortaba igual y el usuario ni siquiera descargaba lo que su rol le
+    // permitía ver.)
+    const stations = stationScope.forModule(config.id);
     if (stations.length === 0 || stations.length > 30) return undefined;
     const stationKey = config.fields.find(
       (f) => f.type === 'ref' && f.refCollection === COLLECTIONS.stations,
     )?.key;
     if (!stationKey) return undefined;
     return [{ op: 'in' as const, field: stationKey, values: stations }];
-  }, [config.scopeServerSide, config.fields, isAdminView, viewAs, profile]);
-  const { rows: allRows, loading, error } = useCollection(
+  }, [config.scopeServerSide, config.fields, config.id, stationScope]);
+  const { rows: scopedRows, loading, error } = useCollection(
     config.collection,
     undefined,
     scopeClauses ? undefined : config.listLimit,
     scopeClauses,
   );
+  /**
+   * Con alcance por servidor, lo PROPIO se trae aparte: un "in" por estación
+   * deja fuera los registros cuya estación quedó vacía o cambió después de
+   * capturarlos, y el BC los daba por perdidos. Son pocos documentos y van a
+   * su propio caché.
+   */
+  const ownFilter = useMemo(
+    () =>
+      scopeClauses && config.autoUserField && profile?.id
+        ? { field: config.autoUserField, value: profile.id }
+        : undefined,
+    [scopeClauses, config.autoUserField, profile?.id],
+  );
+  const { rows: ownRows } = useCollection(
+    ownFilter ? config.collection : '',
+    ownFilter,
+    config.listLimit,
+  );
+  const allRows = useMemo(() => {
+    if (ownRows.length === 0) return scopedRows;
+    const seen = new Set(scopedRows.map((row) => row.id));
+    const extra = ownRows.filter((row) => !seen.has(row.id));
+    if (extra.length === 0) return scopedRows;
+    return [...scopedRows, ...extra].sort((a, b) =>
+      String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')),
+    );
+  }, [scopedRows, ownRows]);
   const [activeTab, setActiveTab] = useState(config.viewTabs?.[0]?.id ?? 'all');
   /**
    * La pestaña "Historic" (semanas anteriores) se concede desde Roles con
@@ -367,12 +396,16 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * de SU estación): las cargas frías del teléfono de un BC dejan de
    * descargar los catálogos completos. Admin y oficina: sin recorte.
    */
-  const refScopeStations = useMemo(() => {
-    if (isAdminView || (viewAs === null && profile?.isOffice === true)) return [];
-    const scoped = viewAs ?? profile;
-    if (scoped?.isOffice === true) return [];
-    return scoped?.scopeStations ?? [];
-  }, [isAdminView, viewAs, profile]);
+  const refScopeStations = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.keys(STATION_KEY_BY_COLLECTION).map((collectionName) => [
+          collectionName,
+          stationScope.forCollection(collectionName),
+        ]),
+      ),
+    [stationScope],
+  );
   /**
    * Catálogos a suscribir: los campos visibles MÁS los exportAlways que el
    * layout ocultó (p. ej. Scanner del Fleet Report). Sin esto su columna en
@@ -391,7 +424,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   // etiquetas de camiones de otras estaciones (movidos) salen de aquí.
   const detailRefMaps = useRefMaps(
     config.detail?.fields ?? [],
-    config.captureWindow ? [] : refScopeStations,
+    config.captureWindow ? {} : refScopeStations,
   );
 
   /**
@@ -399,7 +432,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * fija el admin; dentro de ella cada camión entra una sola vez. El admin
    * real (sin "View as") no queda sujeto al horario, para poder corregir.
    */
-  const captureInfo = useCaptureWindow(config, allRows, refScopeStations);
+  const captureInfo = useCaptureWindow(config, allRows, stationScope.forModule(config.id));
   const captureSpec = config.captureWindow ?? null;
   const [windowOpen, setWindowOpen] = useState(false);
   const [dedupeOpen, setDedupeOpen] = useState(false);

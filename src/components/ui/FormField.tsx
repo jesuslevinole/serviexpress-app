@@ -17,6 +17,8 @@ interface FormFieldProps {
   onQuickEdit?: () => void;
   /** Lo más alto que acepta el campo numérico (se muestra debajo). */
   maxValue?: number;
+  /** Aclaración bajo el campo (p. ej. por qué faltan opciones en la lista). */
+  hint?: string;
   onChange: (key: string, value: FieldValue) => void;
 }
 
@@ -32,6 +34,7 @@ export function FormField({
   onQuickAdd,
   onQuickEdit,
   maxValue,
+  hint,
   onChange,
 }: FormFieldProps) {
   const inputClass = `field-input ${invalid ? 'field-invalid' : ''}`;
@@ -201,6 +204,7 @@ export function FormField({
         if (maxValue !== undefined) {
           return <span className="field-hint">Max {maxValue.toLocaleString('en-US')}</span>;
         }
+        if (hint) return <span className="field-hint">{hint}</span>;
         return null;
       })()}
     </div>

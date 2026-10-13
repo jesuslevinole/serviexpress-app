@@ -31,12 +31,13 @@ const REF_SUBSCRIBE_LIMITS: Record<string, number> = {
 export function useRefMaps(
   fields: FieldConfig[],
   /**
-   * Estaciones del usuario acotado: los catálogos CON estación (camiones,
-   * drivers) se suscriben SOLO a esas estaciones — un teléfono de BC en
-   * carga fría deja de descargar 600+ documentos que no le tocan. Vacío o
-   * ausente = catálogos completos (admin/oficina).
+   * Estaciones que acotan CADA catálogo, por colección: los camiones se
+   * suscriben solo a las estaciones del usuario cuando su rol lo pide
+   * (Visibility = Station), y así un teléfono de BC en carga fría no baja
+   * 600+ documentos que no le tocan. Sin entrada, o lista vacía = catálogo
+   * completo (admin, oficina o Visibility = All).
    */
-  scopeStations: string[] = [],
+  scopeByCollection: Record<string, string[]> = {},
 ): RefMaps {
   const collections = useMemo(() => {
     const set = new Set<string>();
@@ -50,8 +51,19 @@ export function useRefMaps(
     return Array.from(set).sort();
   }, [fields]);
 
-  const scopeKey = scopeStations.length > 0 && scopeStations.length <= 30 ? scopeStations.join(',') : '';
-  const collectionsKey = `${collections.join('|')}#${scopeKey}`;
+  /** Estaciones efectivas por colección, ya normalizadas ("" = sin recorte). */
+  const scopeKeys = useMemo(() => {
+    const map: Record<string, string> = {};
+    collections.forEach((name) => {
+      const stations = scopeByCollection[name] ?? [];
+      map[name] = stations.length > 0 && stations.length <= 30 ? stations.join(',') : '';
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scopeSignature representa el mapa
+  }, [collections, JSON.stringify(scopeByCollection)]);
+  const collectionsKey = `${collections.join('|')}#${collections
+    .map((name) => scopeKeys[name] ?? '')
+    .join('|')}`;
   const [maps, setMaps] = useState<RefMaps>({});
 
   useEffect(() => {
@@ -70,9 +82,10 @@ export function useRefMaps(
 
     const unsubscribers = collections.map((collectionName) => {
       const stationKey = STATION_KEY_BY_COLLECTION[collectionName];
+      const stationsKey = scopeKeys[collectionName] ?? '';
       const clauses: QueryClause[] | undefined =
-        stationKey !== undefined && scopeKey !== ''
-          ? [{ op: 'in', field: stationKey, values: scopeKey.split(',') }]
+        stationKey !== undefined && stationsKey !== ''
+          ? [{ op: 'in', field: stationKey, values: stationsKey.split(',') }]
           : undefined;
       // Tope solo SIN cláusulas (limit exige orderBy y con "in" pediría un
       // índice compuesto); con alcance el conjunto ya es chico.

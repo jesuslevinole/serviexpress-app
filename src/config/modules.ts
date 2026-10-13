@@ -2102,10 +2102,12 @@ export const fleetReportsModule: ModuleConfig = {
    */
   prefillFromPrevious: {
     field: 'idTruck',
-    // SOLO estos cinco vienen de la semana pasada. Millaje, las seis llantas
-    // y "Add corrective maintenance?" arrancan SIEMPRE vacíos: se capturan
-    // de nuevo cada semana.
-    keys: ['idDriver', 'route', 'idScanner', 'gasCard', 'stop'],
+    // TODO lo que está ANTES de "Actual Mileage" se trae del Fleet Report
+    // anterior del camión: son datos que no cambian de semana a semana
+    // (driver, ruta, escáner, seriales de cámara, gas card, stops).
+    // De "Actual Mileage" en adelante NADA se copia — millaje, las seis
+    // llantas y el correctivo se capturan de nuevo cada semana.
+    keys: ['unitType', 'route', 'idDriver', 'idScanner', 'gasCard', 'sNumber', 'vTruck', 'stop'],
   },
   /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
   uniqueInWindow: ['idTruck', 'idDriver'],

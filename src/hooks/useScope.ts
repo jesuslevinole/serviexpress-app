@@ -33,6 +33,12 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
       const alcance: ViewScope = permissions[config.id]?.alcance ?? 'all';
       if (alcance === 'all') return true;
 
+      // Lo que YO capturé lo veo siempre, esté en la estación que esté. Sin
+      // esto un BC perdía de vista su propio reporte en cuanto el camión
+      // cambiaba de estación (o se quedaba sin ella).
+      const ownerKey = config.autoUserField;
+      if (ownerKey && userId !== '' && row[ownerKey] === userId) return true;
+
       // Trucks: cualquier restricción del rol se reduce a "misma estación".
       const effectiveAlcance: ViewScope =
         config.stationOnlyScope === true ? 'station' : alcance;
@@ -53,9 +59,16 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
       const stationFields = pick('station', COLLECTIONS.stations);
       const entityFields = pick('entity', COLLECTIONS.entities);
 
+      // Un registro SIN estación no es de nadie: esconderlo de todos lo deja
+      // irrecuperable. Se muestra (y el filtro solo descarta los que
+      // pertenecen a OTRA estación).
+      const hasValue = (fields: typeof stationFields) =>
+        fields.some((f) => typeof row[f.key] === 'string' && row[f.key] !== '');
+
       const matchesStation =
         scopeStations.length === 0 ||
         stationFields.length === 0 ||
+        !hasValue(stationFields) ||
         stationFields.some((f) => {
           const value = row[f.key];
           return typeof value === 'string' && scopeStations.includes(value);
@@ -67,6 +80,7 @@ export function useScopeFilter(): (config: ModuleConfig, row: EntityData) => boo
       const matchesEntity =
         scopeEntities.length === 0 ||
         entityFields.length === 0 ||
+        !hasValue(entityFields) ||
         entityFields.some((f) => {
           const value = row[f.key];
           return typeof value === 'string' && scopeEntities.includes(value);
