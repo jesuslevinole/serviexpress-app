@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { APP_VERSION, VERSION_CHECK_MS } from '../../config/version';
-import './UpdateNotice.css';
+// Hoja renombrada en V00101: el nombre anterior quedó atascado en el índice
+// de git (Windows no distingue mayúsculas) y el build de Cloudflare, que sí
+// distingue, no lo encontraba.
+import './UpdateNoticeBar.css';
 
 /**
  * Aviso de versión nueva. Compara la versión que trae el paquete cargado en
