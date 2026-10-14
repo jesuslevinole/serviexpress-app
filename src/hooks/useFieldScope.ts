@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAuth } from './useAuth';
 import { useUiConfig } from './useUiConfig';
 import type { FieldViewScope } from '../context/uiConfigContext';
@@ -42,5 +42,8 @@ export function useFieldScope(): FieldScope {
     [scopeOf, isAdminView],
   );
 
-  return { scopeOf, isHidden };
+  // Objeto ESTABLE. Si cambiara en cada render arrastraría consigo a
+  // `allowedFields` del módulo, y con ello a la lista de campos del
+  // formulario: el formulario se daría por reabierto y borraría lo tecleado.
+  return useMemo(() => ({ scopeOf, isHidden }), [scopeOf, isHidden]);
 }

@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import './CaptureWindow.css';
+
+/** Renglones que se muestran sin pedirlo; el resto, bajo "Show all". */
+const PREVIEW = 6;
 
 interface BlockedItem {
   id: string;
@@ -31,9 +34,16 @@ export function BlockedRefsNote({
   onItemClick,
 }: BlockedRefsNoteProps) {
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const needle = search.trim().toLowerCase();
   const filtered =
     needle === '' ? items : items.filter((item) => item.label.toLowerCase().includes(needle));
+  // Dentro del formulario esta nota convive con los campos: si pinta los 60
+  // de golpe, empuja el millaje y las llantas fuera de la vista. Se enseñan
+  // unos pocos y el buscador hace el resto.
+  const limit = expanded ? 200 : needle === '' ? PREVIEW : 20;
+  const shown = filtered.slice(0, limit);
+  const hidden = filtered.length - shown.length;
 
   return (
     <div className="cwin-note">
@@ -50,7 +60,7 @@ export function BlockedRefsNote({
         </span>
       </div>
       <ul>
-        {filtered.slice(0, 60).map((item) => (
+        {shown.map((item) => (
           <li key={item.id}>
             {onItemClick ? (
               <button type="button" className="cwin-truck-btn" onClick={() => onItemClick(item.id)}>
@@ -62,9 +72,16 @@ export function BlockedRefsNote({
             — {item.reason}
           </li>
         ))}
-        {filtered.length > 60 ? <li>…and {filtered.length - 60} more (narrow the search)</li> : null}
-        {filtered.length === 0 ? <li>No blocked {needle === '' ? 'items' : `match for "${search}"`}</li> : null}
+        {filtered.length === 0 ? (
+          <li>No blocked {needle === '' ? 'items' : `match for "${search}"`}</li>
+        ) : null}
       </ul>
+      {hidden > 0 || expanded ? (
+        <button type="button" className="cwin-toggle" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show fewer' : `Show all ${filtered.length}`}
+          {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+        </button>
+      ) : null}
     </div>
   );
 }

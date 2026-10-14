@@ -181,8 +181,25 @@ export function CrudForm({
     [fields, editableCapturedByKey, capturedByKey, initial],
   );
 
+  /**
+   * Firma de los campos: el formulario debe reiniciarse cuando CAMBIAN los
+   * campos, no cuando el padre vuelve a renderizar y entrega otro arreglo
+   * con el mismo contenido. Sin esto, cualquier re-render del módulo (el
+   * reloj de la ventana de captura late cada 15 s) borraba lo tecleado.
+   */
+  const valueFieldsKey = valueFields.map((field) => field.key).join('|');
+  /**
+   * Lo que de verdad justifica reiniciar el formulario: que se abra, que se
+   * edite otro registro, que se pida un alta nueva o que cambien los campos.
+   * Cualquier otra cosa (un catálogo que termina de cargar, el reloj de la
+   * ventana) NO puede borrar lo que la persona está escribiendo.
+   */
+  const openKey = `${open ? 1 : 0}|${initial?.id ?? 'new'}|${resetSignal}|${valueFieldsKey}|${currentUid ?? ''}`;
+  const openedKey = useRef('');
+
   useEffect(() => {
-    if (open) {
+    if (open && openedKey.current !== openKey) {
+      openedKey.current = openKey;
       setStepIndex(0);
       const base = buildInitialValues(valueFields, initial);
       // Alta: las fechas de registro arrancan en el día de hoy (hora de Texas).
@@ -257,13 +274,15 @@ export function CrudForm({
       const pickedAtOpen = !initial && prefillOnPick ? base[prefillOnPick.field] : null;
       if (typeof pickedAtOpen === 'string' && pickedAtOpen !== '') void runPrefill(pickedAtOpen);
     }
+    // Al cerrarse se olvida la marca, para que la próxima apertura sí arranque.
+    if (!open) openedKey.current = '';
     // refMaps/fields/prefillOnPick se leen al abrir; no deben reabrir el formulario.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
+    openKey,
     valueFields,
     initial,
-    resetSignal,
     editableCapturedByKey,
     capturedByKey,
     currentUid,
