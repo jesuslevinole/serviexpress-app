@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Send, Trash2 } from 'lucide-react';
+import { Pencil, Plus, RotateCcw, Search, Send, Trash2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useCollection } from '../../hooks/useCollection';
 import { COLLECTIONS } from '../../config/collections';
 import {
+  DEFAULT_TEMPLATE,
   EMPTY_NOTIFY_CONFIG,
+  TEMPLATE_VARS,
   saveModuleNotifyConfig,
   sendTestNotification,
   subscribeModuleNotifyConfig,
   type ModuleNotifyConfig,
   type NotifyRule,
+  type NotifyTemplate,
 } from '../../services/emailNotifications';
 import type { ModuleConfig } from '../../types/models';
 import './EmailRecipientsModal.css';
@@ -33,6 +36,8 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  /** El texto del correo se escribe una vez; normalmente solo se mira. */
+  const [editingText, setEditingText] = useState(false);
   /** Resultado de la prueba de envío (verde si salió, rojo con el motivo). */
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -73,6 +78,9 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
 
   const patch = (changes: Partial<ModuleNotifyConfig>) =>
     setConfig((prev) => ({ ...prev, ...changes }));
+
+  const patchTemplate = (changes: Partial<NotifyTemplate>) =>
+    setConfig((prev) => ({ ...prev, template: { ...prev.template, ...changes } }));
 
   const toggleUser = (id: string) =>
     setConfig((prev) => ({
@@ -285,13 +293,15 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
               También a <strong>quien capturó</strong> el registro
             </label>
           ) : null}
-          <input
-            className="mailrec-search"
-            type="text"
-            placeholder="Buscar usuario…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <label className="app-search is-block mailrec-search">
+            <Search size={15} />
+            <input
+              type="text"
+              placeholder="Buscar usuario…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
           <ul className="mailrec-list">
             {sorted.map((user) => (
               <li key={user.id}>
@@ -318,6 +328,114 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
                   config.notifyOwner ? ' + quien capturó' : ''
                 }`}
           </p>
+        </section>
+
+        <section className="mailrec-block mailrec-mail">
+          <h3>Mensaje del correo</h3>
+          {editingText ? (
+            <div className="mailrec-tpl">
+              <label className="mailrec-field">
+                <span>Asunto</span>
+                <input
+                  type="text"
+                  value={config.template.subject}
+                  onChange={(event) => patchTemplate({ subject: event.target.value })}
+                />
+              </label>
+              <label className="mailrec-field">
+                <span>Texto de apertura</span>
+                <textarea
+                  rows={3}
+                  value={config.template.intro}
+                  onChange={(event) => patchTemplate({ intro: event.target.value })}
+                />
+              </label>
+              <label className="mailrec-field">
+                <span>Texto de cierre</span>
+                <textarea
+                  rows={2}
+                  value={config.template.outro}
+                  onChange={(event) => patchTemplate({ outro: event.target.value })}
+                />
+              </label>
+
+              <div className="mailrec-vars">
+                <p>
+                  Escribe estas palabras entre llaves donde quieras y el servidor las cambia por
+                  el dato real al enviar:
+                </p>
+                <ul>
+                  {TEMPLATE_VARS.map((item) => (
+                    <li key={item.token}>
+                      <code>{item.token}</code> {item.help}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <label className="mailrec-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.template.showFields}
+                  onChange={() => patchTemplate({ showFields: !config.template.showFields })}
+                />
+                Incluir la <strong>tabla con los datos</strong> del registro
+              </label>
+              <label className="mailrec-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.template.showChanges}
+                  onChange={() => patchTemplate({ showChanges: !config.template.showChanges })}
+                />
+                Incluir la lista de <strong>cambios</strong> (solo cuando se edita)
+              </label>
+
+              <div className="mailrec-tpl-actions">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => patchTemplate(DEFAULT_TEMPLATE)}
+                  title="Vuelve al texto que traía el sistema"
+                >
+                  <RotateCcw size={15} />
+                  Restaurar texto por defecto
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setEditingText(false)}
+                >
+                  Listo
+                </button>
+              </div>
+              <p className="mailrec-count">
+                Los cambios se guardan con el botón <strong>Save</strong> de abajo.
+              </p>
+            </div>
+          ) : (
+            <div className="mailrec-preview">
+              <p className="mailrec-preview-subject">{config.template.subject}</p>
+              {config.template.intro ? (
+                <p className="mailrec-preview-line">{config.template.intro}</p>
+              ) : null}
+              <p className="mailrec-preview-parts">
+                {config.template.showFields ? 'Tabla con los datos del registro' : 'Sin tabla de datos'}
+                {' · '}
+                {config.template.showChanges ? 'Lista de cambios al editar' : 'Sin lista de cambios'}
+              </p>
+              {config.template.outro ? (
+                <p className="mailrec-preview-line is-muted">{config.template.outro}</p>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setEditingText(true)}
+              >
+                <Pencil size={15} />
+                Editar mensaje
+              </button>
+            </div>
+          )}
         </section>
       </div>
     </Modal>

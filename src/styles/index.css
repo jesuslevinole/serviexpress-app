@@ -100,6 +100,94 @@ textarea {
 }
 
 /* ============================================================
+   Buscadores: UN solo aspecto en toda la app.
+   La envoltura (.app-search) lleva el fondo, el borde y el anillo
+   de foco; el input va sin borde propio. Así se ilumina el campo
+   entero al escribir y no solo el texto, y da igual si el
+   buscador vive en la barra de un módulo o dentro de un modal.
+   ============================================================ */
+.app-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  color: var(--text-muted);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.app-search:hover {
+  border-color: var(--primary-light);
+}
+
+.app-search:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+}
+
+/* El icono no se encoge cuando el texto es largo. */
+.app-search > svg {
+  flex: none;
+}
+
+.app-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 10px 0;
+  font-size: 13.5px;
+  /* La envoltura va en --text-muted por el icono: lo que teclea el
+     usuario debe ir en el color de texto normal o casi no se lee. */
+  color: var(--text);
+}
+
+.app-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.app-search input:focus {
+  outline: none;
+}
+
+/* Dentro de un modal el buscador ocupa todo el ancho disponible. */
+.app-search.is-block {
+  width: 100%;
+}
+
+/* Variante compacta: la que va embebida en una cabecera o una nota,
+   donde el buscador acompaña a un texto y no debe robarle altura. */
+.app-search.is-compact {
+  border-radius: 20px;
+  padding: 0 10px;
+  gap: 6px;
+}
+
+.app-search.is-compact input {
+  padding: 5px 0;
+  font-size: 12.5px;
+}
+
+/* Variante al ras: el buscador que encabeza un desplegable. Va pegado
+   a los bordes del menú, así que no lleva recuadro propio: del listado
+   lo separa una sola línea. */
+.app-search.is-flush {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.app-search.is-flush:focus-within {
+  box-shadow: none;
+  background: var(--primary-bg);
+  border-bottom-color: var(--primary);
+}
+
+/* ============================================================
    Experiencia móvil (≤640px): targets táctiles grandes,
    tipografía cómoda e inputs a 16px (evita el zoom de iOS).
    Los !important son necesarios para vencer la especificidad
@@ -186,7 +274,8 @@ textarea {
   }
 
   /* --- Barra de herramientas: búsqueda a lo ancho y botones en grid --- */
-  .crud-search {
+  .crud-search,
+  .app-search {
     min-height: 52px;
     border-radius: 13px;
   }

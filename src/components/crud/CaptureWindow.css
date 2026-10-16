@@ -264,24 +264,13 @@
   flex-wrap: wrap;
 }
 
+/* El aspecto lo pone .app-search.is-compact (global). */
 .cwin-note-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   margin-left: auto;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: var(--surface);
-  color: var(--text-soft);
 }
 
 .cwin-note-search input {
-  border: none;
-  background: none;
-  outline: none;
-  color: var(--text);
-  font-size: 12.5px;
+  flex: none;
   width: 170px;
 }
 

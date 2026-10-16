@@ -49,7 +49,7 @@ export function BlockedRefsNote({
     <div className="cwin-note">
       <div className="cwin-note-head">
         <strong>{title}</strong> (they are out of the list):
-        <span className="cwin-note-search">
+        <span className="app-search is-compact cwin-note-search">
           <Search size={14} />
           <input
             type="text"

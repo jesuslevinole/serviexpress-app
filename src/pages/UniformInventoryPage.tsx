@@ -181,7 +181,7 @@ export function UniformInventoryPage() {
       ) : (
         <>
           <div className="crud-toolbar">
-            <label className="crud-search">
+            <label className="app-search crud-search">
               <Search size={16} />
               <input
                 placeholder="Search uniforms…"

@@ -31,8 +31,8 @@
   color: var(--success);
 }
 
+/* El aspecto lo pone .app-search (global). Aquí solo su hueco. */
 .uaccess-search {
-  width: 100%;
   margin-bottom: 10px;
 }
 

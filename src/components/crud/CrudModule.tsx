@@ -2654,7 +2654,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       ) : null}
 
       <div className="crud-toolbar">
-        <div className="crud-search">
+        <div className="app-search crud-search">
           <Search size={16} />
           <input
             placeholder={`Search ${config.title.toLowerCase()}…`}

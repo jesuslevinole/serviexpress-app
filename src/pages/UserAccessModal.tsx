@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, Search } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { PERMISSION_MODULES } from '../config/modules';
 import { COLLECTIONS } from '../config/collections';
@@ -116,12 +116,14 @@ export function UserAccessModal({ user, roleName, onClose }: UserAccessModalProp
         </div>
         {error ? <p className="uaccess-error">{error}</p> : null}
         {saved ? <p className="uaccess-saved">Saved. The person sees it on their next load.</p> : null}
-        <input
-          className="field-input uaccess-search"
-          placeholder="Search module…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <label className="app-search is-block uaccess-search">
+          <Search size={15} />
+          <input
+            placeholder="Search module…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
         <div className="uaccess-scroll">
           <table className="uaccess-table">
             <thead>

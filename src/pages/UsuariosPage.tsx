@@ -342,7 +342,7 @@ export function UsuariosPage() {
   return (
     <div className="usuarios">
       <div className="crud-toolbar">
-        <div className="crud-search">
+        <div className="app-search crud-search">
           <Search size={16} />
           <input
             placeholder="Search users…"

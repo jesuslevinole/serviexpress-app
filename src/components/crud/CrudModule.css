@@ -12,37 +12,12 @@
   flex-wrap: wrap;
 }
 
+/* El aspecto lo pone .app-search (global); aquí solo cuánto espacio
+   ocupa dentro de la barra de herramientas. */
 .crud-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 0 12px;
-  color: var(--text-muted);
   flex: 1;
   min-width: 200px;
   max-width: 360px;
-}
-
-.crud-search input {
-  border: none;
-  padding: 10px 0;
-  font-size: 13.5px;
-  width: 100%;
-  background: transparent;
-  /* El contenedor va en --text-muted por el icono; lo que escribe el
-     usuario debe ir en el color de texto normal para que se lea. */
-  color: var(--text);
-}
-
-.crud-search input::placeholder {
-  color: var(--text-muted);
-}
-
-.crud-search input:focus {
-  outline: none;
 }
 
 .crud-toolbar-actions {

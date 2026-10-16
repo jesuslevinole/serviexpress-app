@@ -78,7 +78,7 @@ export function UserPickerModal({ selectedId, onPick, onClose }: UserPickerModal
       }
     >
       <div className="upick">
-        <label className="upick-search">
+        <label className="app-search is-block upick-search">
           <Search size={15} />
           <input
             autoFocus

@@ -188,7 +188,7 @@ export function MyTrucksModal({
             </>
           ) : null}
         </span>
-        <span className="mytrucks-search">
+        <span className="app-search is-compact mytrucks-search">
           <Search size={14} />
           <input
             type="text"

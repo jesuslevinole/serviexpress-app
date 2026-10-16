@@ -25,6 +25,43 @@ export interface NotifyRule {
   label: string;
 }
 
+/**
+ * El texto del correo, editable por el admin UNA vez por vista.
+ *
+ * `subject`, `intro` y `outro` admiten variables entre llaves que el
+ * SERVIDOR sustituye al enviar (ver TEMPLATE_VARS). La tabla de datos y
+ * la lista de cambios no se escriben a mano: se arman solas con lo que
+ * tenga el registro, y aquí solo se decide si aparecen.
+ */
+export interface NotifyTemplate {
+  subject: string;
+  intro: string;
+  outro: string;
+  showFields: boolean;
+  showChanges: boolean;
+}
+
+/** Variables disponibles, con el ejemplo que se le muestra al admin. */
+export const TEMPLATE_VARS: { token: string; help: string }[] = [
+  { token: '{titulo}', help: 'nombre de la vista (Trucks, Fleet Report…)' },
+  { token: '{evento}', help: 'Nuevo registro, Registro editado o la regla que se cumplió' },
+  { token: '{registro}', help: 'cómo se identifica el registro (730925 · 10/16/2026)' },
+  { token: '{fecha}', help: 'fecha y hora del envío' },
+];
+
+/**
+ * Texto de fábrica: es EXACTAMENTE lo que enviaba el sistema antes de
+ * que el mensaje fuese editable, así que una vista sin plantilla propia
+ * sigue mandando el mismo correo de siempre.
+ */
+export const DEFAULT_TEMPLATE: NotifyTemplate = {
+  subject: '[ServiExpress] {titulo}: {evento} — {registro}',
+  intro: '{evento} en {titulo}.',
+  outro: 'Aviso automático de ServiExpress Fleet Control. No respondas a este correo.',
+  showFields: true,
+  showChanges: true,
+};
+
 export interface ModuleNotifyConfig {
   userIds: string[];
   /** Avisar al CREAR un registro. */
@@ -35,6 +72,8 @@ export interface ModuleNotifyConfig {
   notifyOwner: boolean;
   /** Eventos con nombre propio (aprobaciones, cambios de estatus). */
   rules: NotifyRule[];
+  /** Texto del correo. Se edita una vez y queda. */
+  template: NotifyTemplate;
 }
 
 export const EMPTY_NOTIFY_CONFIG: ModuleNotifyConfig = {
@@ -43,6 +82,7 @@ export const EMPTY_NOTIFY_CONFIG: ModuleNotifyConfig = {
   onEdit: false,
   notifyOwner: false,
   rules: [],
+  template: DEFAULT_TEMPLATE,
 };
 
 function parseConfig(raw: unknown): ModuleNotifyConfig | null {
@@ -66,6 +106,28 @@ function parseConfig(raw: unknown): ModuleNotifyConfig | null {
     onEdit: data.onEdit === true,
     notifyOwner: data.notifyOwner === true,
     rules,
+    template: parseTemplate(data.template),
+  };
+}
+
+/**
+ * Una vista guardada antes de que el mensaje fuese editable no tiene
+ * `template`: se le da el texto de fábrica, campo por campo, para que no
+ * quede ningún hueco en blanco en el editor.
+ */
+function parseTemplate(raw: unknown): NotifyTemplate {
+  if (!raw || typeof raw !== 'object') return DEFAULT_TEMPLATE;
+  const data = raw as Record<string, unknown>;
+  const text = (value: unknown, fallback: string) =>
+    typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  return {
+    subject: text(data.subject, DEFAULT_TEMPLATE.subject),
+    intro: text(data.intro, DEFAULT_TEMPLATE.intro),
+    // El cierre SÍ puede quedar vacío a propósito: quien no quiera pie de
+    // correo borra el texto, y eso no es un hueco que haya que rellenar.
+    outro: typeof data.outro === 'string' ? data.outro : DEFAULT_TEMPLATE.outro,
+    showFields: data.showFields !== false,
+    showChanges: data.showChanges !== false,
   };
 }
 

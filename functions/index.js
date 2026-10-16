@@ -169,7 +169,51 @@ async function configFor(collectionName) {
     labelKeys: Array.isArray(data.labelKeys) ? data.labelKeys.map(String).slice(0, 4) : [],
     fields: Array.isArray(data.fields) ? data.fields.slice(0, 25) : [],
     rules: Array.isArray(data.rules) ? data.rules.slice(0, 10) : [],
+    template: parseTemplate(data.template),
   };
+}
+
+/**
+ * Texto de fábrica del correo. Es el mismo que hay en
+ * src/services/emailNotifications.ts: una vista que nunca pasó por el
+ * editor sigue enviando exactamente el correo de siempre.
+ */
+const DEFAULT_TEMPLATE = {
+  subject: '[ServiExpress] {titulo}: {evento} — {registro}',
+  intro: '{evento} en {titulo}.',
+  outro: 'Aviso automático de ServiExpress Fleet Control. No respondas a este correo.',
+  showFields: true,
+  showChanges: true,
+};
+
+function parseTemplate(raw) {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const text = (value, fallback) =>
+    typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  return {
+    subject: text(data.subject, DEFAULT_TEMPLATE.subject),
+    intro: text(data.intro, DEFAULT_TEMPLATE.intro),
+    // El cierre sí puede ir vacío a propósito (correo sin pie).
+    outro: typeof data.outro === 'string' ? data.outro : DEFAULT_TEMPLATE.outro,
+    showFields: data.showFields !== false,
+    showChanges: data.showChanges !== false,
+  };
+}
+
+/**
+ * Sustituye {titulo}, {evento}, {registro} y {fecha}. Lo que el admin NO
+ * escribió entre llaves se respeta tal cual, y una variable desconocida
+ * se deja visible en vez de borrarla: así se ve el error y se corrige.
+ */
+function fillTemplate(text, vars) {
+  return String(text ?? '').replace(/\{(\w+)\}/g, (match, name) =>
+    Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name] ?? '') : match,
+  );
+}
+
+/** Texto del admin → HTML: se escapa y los saltos de línea se respetan. */
+function asHtmlParagraph(text) {
+  return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
 /** Nombres de los documentos referenciados (camión, driver, estación…). */
@@ -309,7 +353,24 @@ async function notify(collectionName, docId, before, after) {
       ? 'Nuevo registro'
       : 'Registro editado';
 
-  const subject = `[ServiExpress] ${config.title}: ${event}${label ? ` — ${label}` : ''}`;
+  // Texto editable por el admin. Las variables se rellenan aquí, en el
+  // servidor, que es el único que conoce el registro recién guardado.
+  const tpl = config.template;
+  const vars = {
+    titulo: config.title,
+    evento: event,
+    registro: label,
+    fecha: new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+  };
+  // Si el registro no tiene etiqueta, el asunto por defecto terminaría en
+  // un guion suelto ("… Nuevo registro — "): se recorta el separador.
+  const subject =
+    fillTemplate(tpl.subject, vars)
+      .replace(/\s+/g, ' ')
+      .replace(/[\s—·:-]+$/, '')
+      .trim() || `[ServiExpress] ${config.title}`;
+  const intro = fillTemplate(tpl.intro, vars).trim();
+  const outro = fillTemplate(tpl.outro, vars).trim();
 
   // Qué cambió (solo en ediciones): se ve de un vistazo sin abrir el app.
   const changes = creating
@@ -329,13 +390,20 @@ async function notify(collectionName, docId, before, after) {
     .map((field) => ({ label: field.label ?? field.key, value: valueOf(field) }))
     .filter((row) => row.value !== '');
 
+  // Qué bloques arma el correo, según lo que dejó marcado el admin.
+  const showRows = tpl.showFields !== false && rows.length > 0;
+  const showChanges = tpl.showChanges !== false && changes.length > 0;
+
   const text = [
-    `${event} en ${config.title}.`,
+    intro,
     label ? `Registro: ${label}` : null,
     '',
-    ...rows.map((row) => `${row.label}: ${row.value}`),
-    changes.length > 0 ? '\nCambios:' : null,
-    ...changes.map((change) => `· ${change.label}: ${change.from} → ${change.to}`),
+    ...(showRows ? rows.map((row) => `${row.label}: ${row.value}`) : []),
+    showChanges ? '\nCambios:' : null,
+    ...(showChanges
+      ? changes.map((change) => `· ${change.label}: ${change.from} → ${change.to}`)
+      : []),
+    outro ? `\n${outro}` : null,
   ]
     .filter((line) => line !== null)
     .join('\n');
@@ -343,10 +411,12 @@ async function notify(collectionName, docId, before, after) {
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2430;line-height:1.5">
       <p style="margin:0 0 4px;font-size:16px;font-weight:700">${escapeHtml(config.title)}</p>
-      <p style="margin:0 0 14px;color:#5b6472">${escapeHtml(event)}${
-        label ? ` — <strong>${escapeHtml(label)}</strong>` : ''
+      <p style="margin:0 0 14px;color:#5b6472">${asHtmlParagraph(intro)}${
+        label ? `<br><strong>${escapeHtml(label)}</strong>` : ''
       }</p>
-      <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">
+      ${
+        showRows
+          ? `<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">
         ${rows
           .map(
             (row, index) => `<tr style="background:${index % 2 ? '#f6f7fb' : '#ffffff'}">
@@ -355,9 +425,11 @@ async function notify(collectionName, docId, before, after) {
             </tr>`,
           )
           .join('')}
-      </table>
+      </table>`
+          : ''
+      }
       ${
-        changes.length > 0
+        showChanges
           ? `<p style="margin:16px 0 4px;font-weight:700">Cambios</p>
              <ul style="margin:0;padding-left:18px">${changes
                .map(
@@ -369,9 +441,11 @@ async function notify(collectionName, docId, before, after) {
                .join('')}</ul>`
           : ''
       }
-      <p style="margin:18px 0 0;font-size:12px;color:#8a93a5">
-        Aviso automático de ServiExpress Fleet Control. No respondas a este correo.
-      </p>
+      ${
+        outro
+          ? `<p style="margin:18px 0 0;font-size:12px;color:#8a93a5">${asHtmlParagraph(outro)}</p>`
+          : ''
+      }
     </div>`;
 
   const error = await sendMail({
@@ -453,6 +527,8 @@ exports.testNotification = onCall(
 
     let title = moduleId || 'ServiExpress';
     let recipients = 0;
+    let tpl = parseTemplate(null);
+    let sampleFields = [];
     if (moduleId !== '') {
       const cfgSnap = await db.collection(CONFIG_COLLECTION).doc(moduleId).get();
       if (!cfgSnap.exists) {
@@ -468,17 +544,58 @@ exports.testNotification = onCall(
       }
       title = String(data.title ?? moduleId);
       recipients = Array.isArray(data.userIds) ? data.userIds.length : 0;
+      // La prueba usa el MISMO texto que los avisos reales: así el admin ve
+      // cómo le quedó el mensaje sin tener que guardar un registro de verdad.
+      tpl = parseTemplate(data.template);
+      sampleFields = (Array.isArray(data.fields) ? data.fields : [])
+        .filter((field) => field && field.key)
+        .slice(0, 5)
+        .map((field) => String(field.label ?? field.key));
     }
+
+    const vars = {
+      titulo: title,
+      evento: 'Nuevo registro',
+      registro: 'EJEMPLO · 10/16/2026',
+      fecha: new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+    };
+    const subject = `[PRUEBA] ${fillTemplate(tpl.subject, vars).replace(/\s+/g, ' ').trim()}`;
+    const intro = fillTemplate(tpl.intro, vars).trim();
+    const outro = fillTemplate(tpl.outro, vars).trim();
+    const sampleRows =
+      tpl.showFields !== false && sampleFields.length > 0
+        ? sampleFields.map(
+            (label, index) => `<tr style="background:${index % 2 ? '#f6f7fb' : '#ffffff'}">
+              <td style="color:#5b6472;border:1px solid #e3e6ef">${escapeHtml(label)}</td>
+              <td style="border:1px solid #e3e6ef"><strong>(dato del registro)</strong></td>
+            </tr>`,
+          )
+            .join('')
+        : '';
 
     const error = await sendMail({
       to: [myEmail],
-      subject: `[ServiExpress] Prueba de correo — ${title}`,
-      text: `Prueba de correo de ServiExpress Fleet Control.\n\nSi lees esto, el envío funciona: dominio verificado, clave válida y funciones desplegadas.\n\nVista: ${title}\nDestinatarios configurados: ${recipients}`,
-      html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6">
-        <p style="font-size:16px;font-weight:700;margin:0 0 8px">Prueba de correo</p>
-        <p style="margin:0 0 12px">Si lees esto, el envío funciona: dominio verificado, clave válida y funciones desplegadas.</p>
-        <p style="margin:0;color:#5b6472">Vista: <strong>${escapeHtml(title)}</strong><br>
-        Destinatarios configurados: <strong>${recipients}</strong></p>
+      subject,
+      text: `CORREO DE PRUEBA — así se verá el aviso de ${title}.\n\n${intro}\nRegistro: ${vars.registro}\n\nDestinatarios configurados: ${recipients}\n\n${outro}`,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2430;line-height:1.5">
+        <p style="margin:0 0 14px;padding:8px 10px;background:#fdf0dc;color:#b45309;border-radius:6px;font-size:12px">
+          Correo de <strong>prueba</strong>: así se verá el aviso de ${escapeHtml(title)}.
+          Destinatarios configurados: <strong>${recipients}</strong>.
+        </p>
+        <p style="margin:0 0 4px;font-size:16px;font-weight:700">${escapeHtml(title)}</p>
+        <p style="margin:0 0 14px;color:#5b6472">${asHtmlParagraph(intro)}<br><strong>${escapeHtml(
+          vars.registro,
+        )}</strong></p>
+        ${
+          sampleRows
+            ? `<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">${sampleRows}</table>`
+            : ''
+        }
+        ${
+          outro
+            ? `<p style="margin:18px 0 0;font-size:12px;color:#8a93a5">${asHtmlParagraph(outro)}</p>`
+            : ''
+        }
       </div>`,
       meta: { module: moduleId || null, event: 'test', byUid: uid, auto: false },
     });

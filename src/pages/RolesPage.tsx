@@ -406,7 +406,7 @@ export function RolesPage() {
   return (
     <div className="roles">
       <div className="crud-toolbar">
-        <div className="crud-search">
+        <div className="app-search crud-search">
           <Search size={16} />
           <input
             placeholder="Search roles…"

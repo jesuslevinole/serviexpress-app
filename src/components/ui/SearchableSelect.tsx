@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import './SearchableSelect.css';
 
 export interface SelectOption {
@@ -82,13 +82,15 @@ export function SearchableSelect({
       </button>
       {open ? (
         <div className="sselect-menu">
-          <input
-            className="sselect-search"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoFocus
-          />
+          <label className="app-search is-flush sselect-search">
+            <Search size={14} />
+            <input
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
+          </label>
           <ul role="listbox">
             {filtered.length === 0 ? <li className="sselect-empty">No results</li> : null}
             {filtered.map((option) => (

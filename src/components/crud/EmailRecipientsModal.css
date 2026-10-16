@@ -14,7 +14,8 @@
     column-gap: 24px;
   }
 
-  .mailrec-hint {
+  .mailrec-hint,
+  .mailrec-mail {
     grid-column: 1 / -1;
   }
 }
@@ -104,8 +105,8 @@
   margin-bottom: 6px;
 }
 
+/* El aspecto lo pone .app-search (global). Aquí solo su hueco. */
 .mailrec-search {
-  width: 100%;
   margin: 8px 0 10px;
 }
 
@@ -155,6 +156,117 @@
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--text-soft);
+}
+
+/* ── El texto del correo: se mira casi siempre, se edita de vez en cuando ── */
+.mailrec-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.mailrec-preview-subject {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.mailrec-preview-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.mailrec-preview-line.is-muted {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.mailrec-preview-parts {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.mailrec-preview .btn {
+  margin-top: 6px;
+}
+
+.mailrec-tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mailrec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.mailrec-field input,
+.mailrec-field textarea {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 9px 11px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.mailrec-field input:focus,
+.mailrec-field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+}
+
+.mailrec-vars {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.mailrec-vars p {
+  margin: 0 0 6px;
+}
+
+.mailrec-vars ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.mailrec-vars code {
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-weight: 700;
+}
+
+.mailrec-tpl-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 /* Resultado de "Probar envío": verde si salió, rojo con el motivo exacto. */

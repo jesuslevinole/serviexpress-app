@@ -5,30 +5,7 @@
   min-height: 0;
 }
 
-.upick-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  padding: 0 12px;
-}
-
-.upick-search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  padding: 11px 0;
-  font-size: 13.5px;
-}
-
-.upick-search input:focus {
-  outline: none;
-}
+/* El aspecto lo pone .app-search (global). */
 
 .upick-count {
   font-size: 12px;
