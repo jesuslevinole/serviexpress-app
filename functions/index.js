@@ -16,14 +16,18 @@
  *     - una REGLA de campo  → p. ej. Status pasa a APROBADO (aunque onEdit
  *                             esté apagado: es un evento con nombre propio)
  *  4. Arma el correo con los campos que la configuración lista (resolviendo
- *     los que son referencia a su nombre) y lo envía con RESEND.
+ *     los que son referencia a su nombre) y lo envía por SMTP.
  *  5. Cada envío queda en `messages_log`.
  *
- * Secretos (nunca en el código ni en el navegador):
- *   firebase functions:secrets:set RESEND_API_KEY
- *   firebase functions:secrets:set MAIL_FROM
+ * SMTP, no un servicio de terceros: se usa el buzón que la empresa YA tiene
+ * (Google Workspace, Microsoft 365 o el del hosting). Lo único que hace
+ * falta son los datos de ese servidor, guardados como secretos:
  *
- * Node 20 trae fetch integrado: cero dependencias de terceros.
+ *   firebase functions:secrets:set SMTP_HOST   (smtp.gmail.com, smtp.office365.com…)
+ *   firebase functions:secrets:set SMTP_PORT   (465 con SSL, o 587 con STARTTLS)
+ *   firebase functions:secrets:set SMTP_USER   (la cuenta que autentica)
+ *   firebase functions:secrets:set SMTP_PASS   (su contraseña de aplicación)
+ *   firebase functions:secrets:set MAIL_FROM   (remitente: noreply@tudominio.com)
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
@@ -34,8 +38,39 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 initializeApp();
 const db = getFirestore();
 
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY'); // re_...
+const SMTP_HOST = defineSecret('SMTP_HOST');
+const SMTP_PORT = defineSecret('SMTP_PORT');
+const SMTP_USER = defineSecret('SMTP_USER');
+const SMTP_PASS = defineSecret('SMTP_PASS');
 const MAIL_FROM = defineSecret('MAIL_FROM'); // p. ej. noreply@serviexpress.com
+
+/** Todos los secretos que necesita cualquier función que envíe correo. */
+const MAIL_SECRETS = [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM];
+
+/**
+ * Conexión SMTP reutilizada entre invocaciones de la misma instancia: abrir
+ * una por correo sería lento y algunos proveedores lo castigan.
+ */
+let transport = null;
+function mailer() {
+  if (transport) return transport;
+  const nodemailer = require('nodemailer');
+  const port = Number(SMTP_PORT.value()) || 587;
+  transport = nodemailer.createTransport({
+    host: SMTP_HOST.value(),
+    port,
+    // 465 = SSL directo; 587 (y los demás) = STARTTLS sobre conexión limpia.
+    secure: port === 465,
+    auth: { user: SMTP_USER.value(), pass: SMTP_PASS.value() },
+    pool: true,
+    maxConnections: 1,
+    // Un servidor lento no puede dejar la función colgada.
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+  return transport;
+}
 
 const REGION = 'us-central1';
 const CONFIG_COLLECTION = 'settings_notifications';
@@ -155,26 +190,20 @@ async function recipientEmails(userIds) {
 async function sendMail({ to, subject, text, html, meta }) {
   let errorMessage = null;
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY.value()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
-        to,
-        subject,
-        text,
-        html,
-      }),
+    await mailer().sendMail({
+      from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
+      // Los destinatarios van en "Para", no en copia oculta: si el remitente
+      // (noreply@…) no es un buzón real, mandarle el correo a él rebotaría.
+      to,
+      subject,
+      text,
+      html,
     });
-    if (!response.ok) {
-      const detail = await response.json().catch(() => null);
-      errorMessage = (detail && detail.message) || `HTTP ${response.status}`;
-    }
   } catch (error) {
     errorMessage = error && error.message ? error.message : String(error);
+    // La conexión pudo quedar inservible (credenciales, red): se descarta
+    // para que la próxima invocación abra una limpia.
+    transport = null;
   }
 
   await db.collection('messages_log').add({
@@ -338,7 +367,7 @@ async function notify(collectionName, docId, before, after) {
 
 const triggerOptions = {
   region: REGION,
-  secrets: [RESEND_API_KEY, MAIL_FROM],
+  secrets: MAIL_SECRETS,
   // Un aviso perdido no justifica reintentos infinitos ni correos repetidos.
   retry: false,
 };
@@ -389,7 +418,7 @@ WATCHED.forEach((collectionName) => {
  * sesión iniciada.
  */
 exports.testNotification = onCall(
-  { region: REGION, secrets: [RESEND_API_KEY, MAIL_FROM], enforceAppCheck: false },
+  { region: REGION, secrets: MAIL_SECRETS, enforceAppCheck: false },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const uid = request.auth.uid;
@@ -455,7 +484,7 @@ async function canSendMessages(uid) {
 }
 
 exports.sendEmail = onCall(
-  { region: REGION, secrets: [RESEND_API_KEY, MAIL_FROM], enforceAppCheck: false },
+  { region: REGION, secrets: MAIL_SECRETS, enforceAppCheck: false },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const uid = request.auth.uid;
