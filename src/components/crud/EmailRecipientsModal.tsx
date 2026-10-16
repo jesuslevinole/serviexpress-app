@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Send, Trash2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useCollection } from '../../hooks/useCollection';
 import { COLLECTIONS } from '../../config/collections';
 import {
   EMPTY_NOTIFY_CONFIG,
   saveModuleNotifyConfig,
+  sendTestNotification,
   subscribeModuleNotifyConfig,
   type ModuleNotifyConfig,
   type NotifyRule,
@@ -32,6 +33,9 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  /** Resultado de la prueba de envío (verde si salió, rojo con el motivo). */
+  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     return subscribeModuleNotifyConfig(
@@ -118,6 +122,19 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
     }
   };
 
+  const runTest = async () => {
+    setTesting(true);
+    setTest(null);
+    const result = await sendTestNotification(module.id);
+    setTest({
+      ok: result.ok === true,
+      text: result.ok
+        ? `Correo de prueba enviado a ${result.sentTo ?? 'tu dirección'}. Si no llega en un minuto, revisa el correo no deseado.`
+        : (result.reason ?? 'No se pudo enviar.'),
+    });
+    setTesting(false);
+  };
+
   const nobody = config.userIds.length === 0 && !config.notifyOwner;
 
   return (
@@ -130,6 +147,16 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
       footer={
         <>
           {error ? <span className="mailrec-error">{error}</span> : null}
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => void runTest()}
+            disabled={busy || testing}
+            title="Manda un correo de prueba a TU dirección y dice el motivo exacto si no sale"
+          >
+            <Send size={15} />
+            {testing ? 'Enviando…' : 'Probar envío'}
+          </button>
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>
             Cancel
           </button>
@@ -151,6 +178,10 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
           quien capturó cierre la pestaña o el registro entre por una importación. Sin nadie
           marcado no se envía nada.
         </p>
+
+        {test ? (
+          <p className={`mailrec-test ${test.ok ? 'is-ok' : 'is-bad'}`}>{test.text}</p>
+        ) : null}
 
         <section className="mailrec-block">
           <h3>Cuándo avisar</h3>

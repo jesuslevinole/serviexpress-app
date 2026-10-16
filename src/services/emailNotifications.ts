@@ -1,5 +1,6 @@
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app, db } from '../firebase/config';
 import type { ModuleConfig } from '../types/models';
 
 /**
@@ -112,6 +113,35 @@ function labelKeysOf(config: ModuleConfig): string[] {
   const date = config.fields.find((field) => field.type === 'date');
   if (date && !keys.includes(date.key)) keys.push(date.key);
   return keys.slice(0, 3);
+}
+
+/**
+ * Correo de prueba A UNO MISMO. Devuelve la razón exacta si no sale, para
+ * no quedarse adivinando si el problema es el despliegue, el dominio o la
+ * configuración.
+ */
+export async function sendTestNotification(
+  moduleId: string,
+): Promise<{ ok: boolean; reason?: string; sentTo?: string }> {
+  try {
+    const functions = getFunctions(app, 'us-central1');
+    const call = httpsCallable<{ moduleId: string }, { ok: boolean; reason?: string; sentTo?: string }>(
+      functions,
+      'testNotification',
+    );
+    const result = await call({ moduleId });
+    return result.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // El caso más común mientras no se despliega: la función no existe.
+    if (/not-found|not found|internal/i.test(message)) {
+      return {
+        ok: false,
+        reason: `No se pudo llamar a la función (${message}). ¿Está desplegada? En la carpeta del proyecto: firebase deploy --only functions`,
+      };
+    }
+    return { ok: false, reason: message };
+  }
 }
 
 export async function saveModuleNotifyConfig(

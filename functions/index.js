@@ -376,6 +376,67 @@ WATCHED.forEach((collectionName) => {
   );
 });
 
+/* ──────────────────────── prueba de correo ──────────────────────── */
+
+/**
+ * testNotification: manda un correo de prueba A TI MISMO (a la dirección que
+ * tengas en Users) y DEVUELVE LA RAZÓN EXACTA si no sale. Existe para no
+ * quedarse adivinando: dice si falta la configuración, si tu usuario no
+ * tiene correo, o el error literal que devolvió Resend (dominio sin
+ * verificar, API key inválida…).
+ *
+ * Solo envía a quien la llama, así que no hace falta más permiso que tener
+ * sesión iniciada.
+ */
+exports.testNotification = onCall(
+  { region: REGION, secrets: [RESEND_API_KEY, MAIL_FROM], enforceAppCheck: false },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const uid = request.auth.uid;
+    const moduleId = String(request.data?.moduleId ?? '').trim().slice(0, 60);
+
+    const meSnap = await db.collection('users').doc(uid).get();
+    const myEmail = String(meSnap.get('email') ?? '').trim();
+    if (!isEmail(myEmail)) {
+      return { ok: false, reason: 'Tu usuario no tiene un correo válido en Users.' };
+    }
+
+    let title = moduleId || 'ServiExpress';
+    let recipients = 0;
+    if (moduleId !== '') {
+      const cfgSnap = await db.collection(CONFIG_COLLECTION).doc(moduleId).get();
+      if (!cfgSnap.exists) {
+        return { ok: false, reason: 'Esta vista todavía no tiene configuración guardada.' };
+      }
+      const data = cfgSnap.data() ?? {};
+      if (typeof data.collection !== 'string' || data.collection === '') {
+        return {
+          ok: false,
+          reason:
+            'La configuración es de la versión anterior: vuelve a guardarla aquí para que el servidor sepa qué colección vigilar.',
+        };
+      }
+      title = String(data.title ?? moduleId);
+      recipients = Array.isArray(data.userIds) ? data.userIds.length : 0;
+    }
+
+    const error = await sendMail({
+      to: [myEmail],
+      subject: `[ServiExpress] Prueba de correo — ${title}`,
+      text: `Prueba de correo de ServiExpress Fleet Control.\n\nSi lees esto, el envío funciona: dominio verificado, clave válida y funciones desplegadas.\n\nVista: ${title}\nDestinatarios configurados: ${recipients}`,
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6">
+        <p style="font-size:16px;font-weight:700;margin:0 0 8px">Prueba de correo</p>
+        <p style="margin:0 0 12px">Si lees esto, el envío funciona: dominio verificado, clave válida y funciones desplegadas.</p>
+        <p style="margin:0;color:#5b6472">Vista: <strong>${escapeHtml(title)}</strong><br>
+        Destinatarios configurados: <strong>${recipients}</strong></p>
+      </div>`,
+      meta: { module: moduleId || null, event: 'test', byUid: uid, auto: false },
+    });
+    if (error) return { ok: false, reason: error };
+    return { ok: true, sentTo: myEmail, recipients };
+  },
+);
+
 /* ─────────────────── envío manual (se conserva) ─────────────────── */
 
 /** ¿El usuario puede enviar mensajes? (admin, o acción enviarMensajes). */
