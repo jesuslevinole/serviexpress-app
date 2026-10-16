@@ -52,16 +52,30 @@ const MAIL_SECRETS = [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM];
  * una por correo sería lento y algunos proveedores lo castigan.
  */
 let transport = null;
+
+/**
+ * Limpia lo que se guardó en el secreto. Al pegar en la terminal se cuela
+ * con facilidad un salto de línea, un espacio al final o unas comillas, y
+ * entonces el servidor de correo rechaza el nombre ("EBADNAME") o la clave
+ * sin decir por qué. Aquí se quitan una sola vez, para todos los valores.
+ */
+function secretValue(secret) {
+  return String(secret.value() ?? '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .trim();
+}
+
 function mailer() {
   if (transport) return transport;
   const nodemailer = require('nodemailer');
-  const port = Number(SMTP_PORT.value()) || 587;
+  const port = Number(secretValue(SMTP_PORT)) || 587;
   transport = nodemailer.createTransport({
-    host: SMTP_HOST.value(),
+    host: secretValue(SMTP_HOST),
     port,
     // 465 = SSL directo; 587 (y los demás) = STARTTLS sobre conexión limpia.
     secure: port === 465,
-    auth: { user: SMTP_USER.value(), pass: SMTP_PASS.value() },
+    auth: { user: secretValue(SMTP_USER), pass: secretValue(SMTP_PASS) },
     pool: true,
     maxConnections: 1,
     // Un servidor lento no puede dejar la función colgada.
@@ -191,7 +205,7 @@ async function sendMail({ to, subject, text, html, meta }) {
   let errorMessage = null;
   try {
     await mailer().sendMail({
-      from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
+      from: `ServiExpress Fleet Control <${secretValue(MAIL_FROM)}>`,
       // Los destinatarios van en "Para", no en copia oculta: si el remitente
       // (noreply@…) no es un buzón real, mandarle el correo a él rebotaría.
       to,
