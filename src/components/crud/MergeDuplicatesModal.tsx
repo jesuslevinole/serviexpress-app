@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import {
   countDocumentsSafe,
   deleteDocument,
+  fetchDocumentsArrayContains,
   fetchDocumentsWhere,
   setDocument,
   updateDocument,
@@ -94,6 +95,11 @@ export function MergeDuplicatesModal({ config, rows, onClose }: MergeDuplicatesM
                 value: member.row.id,
               });
             }
+            // Referencias dentro de un arreglo (estaciones de cada usuario).
+            for (const ref of dedupe.arrayReferences ?? []) {
+              total += (await fetchDocumentsArrayContains(ref.collection, ref.key, member.row.id))
+                .length;
+            }
           } catch {
             total = 0;
           }
@@ -139,6 +145,20 @@ export function MergeDuplicatesModal({ config, rows, onClose }: MergeDuplicatesM
               [ref.key]: keeper.row.id,
               ...(ref.alsoCopyLabelTo ? { [ref.alsoCopyLabelTo]: keeperLabel } : {}),
             });
+          }
+        }
+        // 1b) Reapuntar las referencias que viven dentro de un ARREGLO: se
+        //     cambia el id viejo por el que se queda y se quitan repeticiones
+        //     (un usuario que tuviera las dos estaciones queda con una).
+        for (const ref of dedupe.arrayReferences ?? []) {
+          const holders = await fetchDocumentsArrayContains(ref.collection, ref.key, loser.row.id);
+          for (const holder of holders) {
+            const current = holder[ref.key];
+            if (!Array.isArray(current)) continue;
+            const next = [
+              ...new Set(current.map((id) => (id === loser.row.id ? keeper.row.id : id))),
+            ];
+            await updateDocument(ref.collection, holder.id, { [ref.key]: next });
           }
         }
         // 2) Completar en el que se queda los datos que solo tenía la copia.
@@ -206,10 +226,11 @@ export function MergeDuplicatesModal({ config, rows, onClose }: MergeDuplicatesM
       }
     >
       <p className="mdup-help">
-        Each group below is the <strong>same person written in different ways</strong>. Merging
-        keeps the copy that is most referenced (oldest one on a tie), repoints every record that
-        used the other copies, completes missing data (phone, email) from them, and deletes them.
-        Nothing referencing the person is lost.
+        Each group below is the <strong>same {config.title.toLowerCase()} written more than
+        once</strong>. Merging keeps the copy that is used the most (the oldest one on a tie),
+        repoints to it <strong>every record in the app</strong> that used the other copies,
+        completes in it any data only the copies had, and deletes them. Nothing that pointed to
+        them is lost.
       </p>
       {groups.length === 0 ? (
         <p className="mdup-empty">No duplicated names found. The catalog is clean.</p>

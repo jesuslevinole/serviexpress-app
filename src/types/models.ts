@@ -635,12 +635,27 @@ export interface ModuleConfig {
       /** Campo de texto en el referenciador que guarda copia del nombre. */
       alsoCopyLabelTo?: string;
     }[];
+    /**
+     * Referencias guardadas dentro de un ARREGLO (las estaciones asignadas a
+     * un usuario, `users.scopeStations`): al fusionar hay que cambiar el id
+     * dentro del arreglo, no el documento entero.
+     */
+    arrayReferences?: { collection: string; key: string }[];
   };
   /**
    * Impide dar de alta dos registros con el mismo valor en este campo. Al
    * intentarlo, se avisa quién capturó el que ya existe.
    */
-  uniqueBy?: { field: string; label: string };
+  uniqueBy?: {
+    field: string;
+    label: string;
+    /**
+     * Compara sin distinguir mayúsculas ni espacios de sobra: "770", "770 "
+     * y "Office"/"OFFICE" son el mismo nombre. Para catálogos escritos a
+     * mano por varias personas.
+     */
+    ignoreCase?: boolean;
+  };
   detail?: DetailConfig;
   /**
    * Pestañas que separan los registros del módulo (p. ej. mantenimiento

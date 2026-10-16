@@ -2002,7 +2002,16 @@ export const catalogModules: ModuleConfig[] = [
     },
   },
   { id: 'entities', collection: COLLECTIONS.entities, title: 'Entities', icon: 'Building2', fields: catalogFields },
-  { id: 'stations', collection: COLLECTIONS.stations, title: 'Stations', icon: 'MapPin', fields: catalogFields },
+  {
+    id: 'stations',
+    collection: COLLECTIONS.stations,
+    title: 'Stations',
+    icon: 'MapPin',
+    fields: catalogFields,
+    /** No puede haber dos estaciones que se llamen igual (ni "770" y "770 "). */
+    uniqueBy: { field: 'name', label: 'station', ignoreCase: true },
+    // `dedupe` se completa más abajo: necesita conocer TODOS los módulos.
+  },
   {
     id: 'driverCategories',
     collection: COLLECTIONS.driverCategories,
@@ -2210,6 +2219,59 @@ export const PERMISSION_MODULES: { id: string; title: string }[] = [
   { id: 'capturedBy', title: 'Captured by (edit the capturing user)' },
   { id: 'entityStation', title: 'Entity & Station fields (edit in forms)' },
 ];
+
+/**
+ * Toda colección y campo del app que apunta a un catálogo. Se calcula
+ * recorriendo los módulos (incluidos sus detalles), así que un módulo nuevo
+ * con campo de estación entra solo en la fusión de duplicados: nadie tiene
+ * que acordarse de agregarlo a una lista.
+ */
+function referencesTo(collection: string): {
+  collection: string;
+  key: string;
+  alsoCopyLabelTo?: string;
+}[] {
+  const out = new Map<string, { collection: string; key: string; alsoCopyLabelTo?: string }>();
+  const scan = (owner: string, fields: FieldConfig[]) => {
+    fields.forEach((field) => {
+      if (field.type !== 'ref' || field.refCollection !== collection) return;
+      out.set(`${owner}|${field.key}`, {
+        collection: owner,
+        key: field.key,
+        ...(field.copyLabelTo ? { alsoCopyLabelTo: field.copyLabelTo } : {}),
+      });
+    });
+  };
+  [...CRUD_MODULES, uniformEntriesModule, ...catalogModules].forEach((module) => {
+    scan(module.collection, module.fields);
+    if (module.detail) scan(module.detail.collection, module.detail.fields);
+  });
+  return [...out.values()];
+}
+
+/**
+ * ESTACIONES REPETIDAS: fusionarlas reapunta a la que se conserva todo lo que
+ * la usaba — camiones (estación de registro y Current station), drivers,
+ * assets, Fleet, Fleet Report, BC Report y sus renglones, Maintenance, Shop,
+ * accidentes, rentas y requerimientos — y también las estaciones asignadas a
+ * cada usuario, que viven dentro de un arreglo.
+ */
+{
+  const stations = catalogModules.find((module) => module.id === 'stations');
+  if (stations) {
+    stations.dedupe = {
+      labelKey: 'name',
+      references: [
+        ...referencesTo(COLLECTIONS.stations),
+        // Los renglones del BC Report guardan la estación de su encabezado
+        // aunque no sea un campo del formulario (la consulta semanal filtra
+        // por ella), así que entran a mano.
+        { collection: COLLECTIONS.bcReportDetails, key: 'idStation' },
+      ],
+      arrayReferences: [{ collection: COLLECTIONS.users, key: 'scopeStations' }],
+    };
+  }
+}
 
 /** Configuración de un módulo a partir de su colección (búsqueda diferida). */
 export function moduleByCollection(collection: string): ModuleConfig | undefined {

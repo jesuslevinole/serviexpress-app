@@ -527,6 +527,23 @@ export async function fetchDocumentsWhere(
 }
 
 /**
+ * Documentos cuyo campo de ARREGLO contiene ese id (las estaciones asignadas
+ * a un usuario). Se usa al fusionar duplicados de un catálogo: el id viejo
+ * vive dentro de una lista, no en un campo suelto.
+ */
+export async function fetchDocumentsArrayContains(
+  collectionName: string,
+  field: string,
+  value: string,
+): Promise<EntityData[]> {
+  const snapshot = await getDocs(
+    query(collection(db, collectionName), where(field, 'array-contains', value)),
+  );
+  if (!snapshot.metadata.fromCache) trackReads(`${collectionName} (fetch)`, snapshot.size);
+  return snapshot.docs.map((d) => toEntity(d.id, d.data()));
+}
+
+/**
  * Lectura puntual con condiciones del servidor ("in" y/o un rango), sin
  * listener: para consultas bajo demanda como el histórico por fechas.
  */

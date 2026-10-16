@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Wrench,
   AlertTriangle,
@@ -567,6 +567,23 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * borrarlos a mano — borrar en Fleet no toca el historial del camión en
    * Trucks, que vive en su propia colección.
    */
+  /**
+   * Valor con el que se compara la unicidad. Con `ignoreCase` (catálogos
+   * escritos a mano) se ignoran mayúsculas y espacios de sobra: "770",
+   * "770 " y "Office"/"OFFICE" son el mismo nombre.
+   */
+  // Estable (useCallback): entra en las dependencias del memo de duplicados
+  // sin recalcularlo en cada pintado.
+  const ignoreCase = config.uniqueBy?.ignoreCase === true;
+  const uniqueKeyOf = useCallback(
+    (value: FieldValue | string[] | undefined): string => {
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      if (typeof value !== 'string') return '';
+      return ignoreCase ? value.trim().toLowerCase() : value;
+    },
+    [ignoreCase],
+  );
+
   const duplicateIds = useMemo(() => {
     const unique = config.uniqueBy;
     if (!unique) return new Set<string>();
@@ -575,8 +592,8 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     [...allRows]
       .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
       .forEach((row) => {
-        const value = row[unique.field];
-        if (typeof value !== 'string' || value === '') return;
+        const value = uniqueKeyOf(row[unique.field]);
+        if (value === '') return;
         const seen = newestByValue.get(value);
         if (!seen) {
           newestByValue.set(value, { id: row.id, stamp: String(row.createdAt ?? '') });
@@ -585,7 +602,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         extra.add(row.id);
       });
     return extra;
-  }, [allRows, config.uniqueBy]);
+  }, [allRows, config.uniqueBy, uniqueKeyOf]);
 
   /**
    * Aviso informativo del módulo (resultados de acciones masivas).
@@ -1796,6 +1813,25 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         }
       }
       if (editing) {
+        // Renombrar NO puede crear un duplicado: dos estaciones con el mismo
+        // nombre rompen los desplegables y los filtros por estación.
+        const uniqueEdit = config.uniqueBy;
+        if (uniqueEdit) {
+          const target = uniqueKeyOf(payload[uniqueEdit.field]);
+          const clash =
+            target === ''
+              ? undefined
+              : allRows.find(
+                  (row) => row.id !== editing.id && uniqueKeyOf(row[uniqueEdit.field]) === target,
+                );
+          if (clash) {
+            setFormError(
+              `There is already another ${uniqueEdit.label} with that name in ${config.title}. Rename it to something different, or merge the duplicates.`,
+            );
+            setBusy(false);
+            return;
+          }
+        }
         if (captureSpec && !config.detail) {
           const clash = await resolveWindowClash(payload, editing.id);
           if (clash) {
@@ -1938,7 +1974,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         const unique = config.uniqueBy;
         if (unique) {
           const value = payload[unique.field];
-          const clash = rows.find((row) => row[unique.field] === value);
+          const target = uniqueKeyOf(value);
+          const clash =
+            target === ''
+              ? undefined
+              : allRows.find((row) => uniqueKeyOf(row[unique.field]) === target);
           if (clash) {
             const who = typeof clash.idUsers === 'string' ? refLabel(COLLECTIONS.users, clash.idUsers) : '';
             const field = config.fields.find((f) => f.key === unique.field);
@@ -2680,7 +2720,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
               <span className="crud-btn-text">Fix stations</span>
             </button>
           ) : null}
-          {!historicView && config.dedupe && isAdminView ? (
+          {!historicView && config.dedupe && (isAdminView || can(config.id, 'eliminar')) ? (
             <button
               type="button"
               className="btn btn-outline"
