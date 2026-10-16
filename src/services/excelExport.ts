@@ -49,8 +49,12 @@ function safeSheetName(name: string, index: number): string {
  * Libro de Excel con una hoja por reporte, con el mismo formato de marca.
  * Se usa para el paquete de reportes por rango de fechas del Dashboard.
  */
-export async function exportWorkbook(fileName: string, sheets: ExcelSheet[]): Promise<void> {
-  return writeWorkbook(fileName, sheets, {});
+export async function exportWorkbook(
+  fileName: string,
+  sheets: ExcelSheet[],
+  options: ExportOptions = {},
+): Promise<void> {
+  return writeWorkbook(fileName, sheets, options);
 }
 
 async function writeWorkbook(

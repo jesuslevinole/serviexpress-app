@@ -544,6 +544,26 @@ export interface ModuleConfig {
    */
   exportEverything?: boolean;
   /**
+   * SEGUNDA HOJA con los renglones del detalle: cada renglón en su propia
+   * fila, precedido por las columnas de su encabezado. Además, en la hoja
+   * del encabezado se agrega una columna que resume sus renglones.
+   * Sin esto, el Excel de un módulo maestro-detalle (Requirements) sale sin
+   * lo que de verdad se pidió: la prenda y la talla.
+   */
+  exportDetailSheet?: {
+    /** Nombre de la segunda hoja ("Uniform lines"). */
+    sheetName: string;
+    /** Encabezado de la columna resumen ("Uniforms requested"). */
+    summaryLabel: string;
+    /**
+     * Campos del renglón que arman el resumen, en orden: el primero es el
+     * nombre, los siguientes van entre paréntesis y los numéricos como ×N.
+     */
+    summaryKeys: string[];
+    /** Encabezado de la columna con cuántos renglones tiene ("Lines"). */
+    countLabel?: string;
+  };
+  /**
    * Alta con PRECARGA: al elegir `field` (el camión) se traen `keys` del
    * último registro de ese camión en este módulo; si no hay, del registro
    * del camión en `fallbackCollection` (Fleet).

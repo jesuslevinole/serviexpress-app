@@ -1771,6 +1771,8 @@ export const requirementsModule: ModuleConfig = {
   autoUserField: 'idUsers',
   /** Solo los más recientes: la colección completa agota la cuota diaria. */
   listLimit: 500,
+  /** Excel COMPLETO: todo lo capturado, aunque el layout lo oculte. */
+  exportEverything: true,
   fields: [
     {
       key: 'date',
@@ -1831,7 +1833,19 @@ export const requirementsModule: ModuleConfig = {
       hideOnCreate: true,
     },
     capturedByField,
-  ],
+  ].map((field) => ({ ...field, exportAlways: true })) as FieldConfig[],
+  /**
+   * El Excel sale con DOS hojas: "Requirements" (una fila por solicitud, con
+   * una columna que resume lo pedido) y "Uniform lines" (una fila por prenda,
+   * con su talla y cantidad). Así no se pierde ni la solicitud sin renglones
+   * ni el detalle de lo que se pidió.
+   */
+  exportDetailSheet: {
+    sheetName: 'Uniform lines',
+    summaryLabel: 'Uniforms requested',
+    summaryKeys: ['idUniformItem', 'idSize', 'quantity'],
+    countLabel: 'Lines',
+  },
   detail: {
     collection: COLLECTIONS.uniforms,
     parentKey: 'idRequeriments',

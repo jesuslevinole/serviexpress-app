@@ -29,7 +29,7 @@ import {
   deleteDocument,
   updateDocument,
 } from '../../services/firestoreService';
-import { downloadExcelTemplate, exportToExcel } from '../../services/excelExport';
+import { downloadExcelTemplate, exportToExcel, exportWorkbook } from '../../services/excelExport';
 import { buildTemplateFields } from './templateFields';
 import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -2541,20 +2541,114 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         ]
       : [];
     const exportFields = buildExportFields();
-    await exportToExcel(
-      `${config.title}${activeSuffix}${rangeSuffix}`,
-      // Los campos marcados exportable:false quedan fuera, para que el archivo
-      // salga con las columnas exactas que espera quien lo recibe.
-      [...(wanted('__status') ? statusColumn : []), ...exportFields
-        .filter((field) => wanted(field.key))
-        .map((field) => ({
-          header: field.label,
-          values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
-          alerts: rowsForExport.map((row) =>
-            isAlertValue(field, effectiveValue(field, row), alertThresholds),
-          ),
-          rule: field.type === 'number' ? describeAlertRule(field.key, alertThresholds) : null,
-        }))],
+    // Los campos marcados exportable:false quedan fuera, para que el archivo
+    // salga con las columnas exactas que espera quien lo recibe.
+    const chosenFields = exportFields.filter((field) => wanted(field.key));
+    const headerColumns = [
+      ...(wanted('__status') ? statusColumn : []),
+      ...chosenFields.map((field) => ({
+        header: field.label,
+        values: rowsForExport.map((row) => displayCell(field, row, refLabel)),
+        alerts: rowsForExport.map((row) =>
+          isAlertValue(field, effectiveValue(field, row), alertThresholds),
+        ),
+        rule: field.type === 'number' ? describeAlertRule(field.key, alertThresholds) : null,
+      })),
+    ];
+    const fileTitle = `${config.title}${activeSuffix}${rangeSuffix}`;
+    const detailSheet = config.exportDetailSheet;
+    const detail = config.detail;
+    if (!detailSheet || !detail) {
+      await exportToExcel(fileTitle, headerColumns, { generatedBy: profile?.name ?? undefined });
+      return;
+    }
+
+    /* ── Segunda hoja: un renglón por línea del detalle ──────────────────
+     * La hoja del encabezado se queda con TODAS las solicitudes (también las
+     * que no tienen renglones, como ADP o Swap scanner) y gana una columna
+     * que resume lo pedido; la segunda hoja abre cada prenda con su talla.  */
+    const detailRows = await fetchCollection(detail.collection);
+    const byParent = new Map<string, EntityData[]>();
+    detailRows.forEach((row) => {
+      const parentId = row[detail.parentKey];
+      if (typeof parentId !== 'string' || parentId === '') return;
+      const list = byParent.get(parentId) ?? [];
+      list.push(row);
+      byParent.set(parentId, list);
+    });
+    // Se toman los campos del CÓDIGO (no los del layout): una columna que el
+    // admin ocultó en la subtabla igual tiene que salir en el Excel, con el
+    // nombre que le haya puesto.
+    const detailFields = (baseConfig.detail?.fields ?? detail.fields)
+      .filter((field) => field.exportable !== false)
+      .map((field) => {
+        const renamed = detail.fields.find((f) => f.key === field.key);
+        return renamed ? { ...field, label: renamed.label } : field;
+      });
+    const detailLabel = (collection: string, id: string): string =>
+      detailRefMaps[collection]?.labels.get(id) ?? refLabel(collection, id);
+
+    /** "Polo shirt (M) ×2": el primer campo manda, el resto acompaña. */
+    const summaryOf = (parent: EntityData): string =>
+      (byParent.get(parent.id) ?? [])
+        .map((row) => {
+          const parts = detailSheet.summaryKeys
+            .map((key) => {
+              const field = detailFields.find((f) => f.key === key);
+              if (!field) return null;
+              const text = displayCell(field, row, detailLabel);
+              return text === '' || text === '—' ? null : { field, text };
+            })
+            .filter((part): part is { field: FieldConfig; text: string } => part !== null);
+          if (parts.length === 0) return '';
+          const [main, ...rest] = parts;
+          const extras = rest.filter((part) => part.field.type !== 'number').map((p) => p.text);
+          const amount = rest.find((part) => part.field.type === 'number');
+          return `${main.text}${extras.length > 0 ? ` (${extras.join(', ')})` : ''}${
+            amount ? ` ×${amount.text}` : ''
+          }`;
+        })
+        .filter((text) => text !== '')
+        .join(' · ');
+
+    const lines: { parent: EntityData; row: EntityData }[] = [];
+    rowsForExport.forEach((parent) => {
+      (byParent.get(parent.id) ?? []).forEach((row) => lines.push({ parent, row }));
+    });
+
+    await exportWorkbook(
+      `${fileTitle.replace(/\s+/g, '_')}_${texasToday()}`,
+      [
+        {
+          name: config.title,
+          columns: [
+            ...headerColumns,
+            {
+              header: detailSheet.summaryLabel,
+              values: rowsForExport.map(summaryOf),
+            },
+            {
+              header: detailSheet.countLabel ?? 'Lines',
+              values: rowsForExport.map((parent) =>
+                String((byParent.get(parent.id) ?? []).length),
+              ),
+            },
+          ],
+        },
+        {
+          name: detailSheet.sheetName,
+          columns: [
+            ...chosenFields.map((field) => ({
+              header: field.label,
+              values: lines.map((line) => displayCell(field, line.parent, refLabel)),
+            })),
+            ...detailFields.map((field) => ({
+              header: field.label,
+              values: lines.map((line) => displayCell(field, line.row, detailLabel)),
+            })),
+          ],
+        },
+      ],
       { generatedBy: profile?.name ?? undefined },
     );
   };
