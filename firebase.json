@@ -3,7 +3,7 @@
     {
       "source": "functions",
       "codebase": "mail",
-      "runtime": "nodejs20"
+      "runtime": "nodejs22"
     }
   ]
 }

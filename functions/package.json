@@ -2,7 +2,7 @@
   "name": "serviexpress-mail",
   "description": "Cloud Functions de ServiExpress: correos automáticos por SMTP",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
