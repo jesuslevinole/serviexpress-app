@@ -1,4 +1,4 @@
-# Archivos que debe tener el repositorio (paquete V00107).
+# Archivos que debe tener el repositorio (paquete V00108).
 # Compruébalo con: node revisar-paquete.mjs
 public/favicon.svg
 public/icons.svg

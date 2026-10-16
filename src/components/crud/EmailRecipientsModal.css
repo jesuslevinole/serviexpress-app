@@ -1,4 +1,88 @@
-/* ── "Email on save": destinatarios por módulo ─────────────────────── */
+/* ── "Automatic emails": quién recibe y ante qué evento ──────────── */
+.mailrec {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Las dos mitades (cuándo / a quién) conviven en pantalla completa. */
+@media (min-width: 900px) {
+  .mailrec {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    column-gap: 24px;
+  }
+
+  .mailrec-hint {
+    grid-column: 1 / -1;
+  }
+}
+
+.mailrec-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.mailrec-block h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.mailrec-rules {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mailrec-rules-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.mailrec-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.mailrec-rule select {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 5px 8px;
+}
+
+.mailrec-rule .icon-btn {
+  margin-left: auto;
+}
+
+.mailrec-count.is-warning {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .mailrec-hint {
   margin: 0 0 10px;
   font-size: 12.5px;

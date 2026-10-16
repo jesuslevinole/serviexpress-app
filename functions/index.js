@@ -1,16 +1,32 @@
 /**
- * ServiExpress · Cloud Function — Correos desde el dominio propio
+ * ServiExpress · Cloud Functions — Correos AUTOMÁTICOS desde el dominio propio
+ * ---------------------------------------------------------------------------
+ * Los avisos NO dependen del navegador: los dispara Firestore en el servidor.
+ * Si alguien guarda un registro y cierra la pestaña, o el guardado entra por
+ * una importación, el correo sale igual.
  *
- * sendEmail (callable): envía correos con remitente noreply@<tu dominio>
- * usando RESEND (https://resend.com) — sin Twilio.
- * - Solo usuarios con sesión Y con permiso: rol admin, o un rol con la
- *   acción "enviarMensajes" concedida en cualquier módulo.
- * - La API key vive en un SECRETO de Firebase (nunca en el navegador).
- * - Cada envío queda en la colección `messages_log` (quién, a quién,
- *   cuándo, resultado) — la bitácora de mensajes del app.
- * - Node 20 trae fetch integrado: cero dependencias de terceros.
+ * Cómo funciona
+ *  1. Cada colección del app tiene un disparador onCreate/onUpdate.
+ *  2. El disparador busca la configuración del módulo en
+ *     `settings_notifications` (la que el admin guarda desde el botón
+ *     "Automatic emails" de cada vista). SIN configuración, no hace nada.
+ *  3. Decide si ese evento está encendido:
+ *     - al CREAR            → onCreate
+ *     - al EDITAR           → onEdit
+ *     - una REGLA de campo  → p. ej. Status pasa a APROBADO (aunque onEdit
+ *                             esté apagado: es un evento con nombre propio)
+ *  4. Arma el correo con los campos que la configuración lista (resolviendo
+ *     los que son referencia a su nombre) y lo envía con RESEND.
+ *  5. Cada envío queda en `messages_log`.
+ *
+ * Secretos (nunca en el código ni en el navegador):
+ *   firebase functions:secrets:set RESEND_API_KEY
+ *   firebase functions:secrets:set MAIL_FROM
+ *
+ * Node 20 trae fetch integrado: cero dependencias de terceros.
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -20,6 +36,347 @@ const db = getFirestore();
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY'); // re_...
 const MAIL_FROM = defineSecret('MAIL_FROM'); // p. ej. noreply@serviexpress.com
+
+const REGION = 'us-central1';
+const CONFIG_COLLECTION = 'settings_notifications';
+
+/**
+ * Colecciones vigiladas. Una colección sin disparador no manda avisos, por
+ * mucho que se configure en el app; y un disparador sin configuración no
+ * cuesta más que una lectura. Si mañana nace un módulo, se agrega aquí y se
+ * vuelve a desplegar.
+ *
+ * A propósito NO están los renglones de detalle (bcReportDetails, uniforms):
+ * son miles de escrituras por semana y no tienen pantalla de configuración
+ * propia, así que cada una sería una invocación tirada a la basura.
+ */
+const WATCHED = [
+  'fleetReports',
+  'bcReports',
+  'requirements',
+  'maintenance',
+  'shopOrders',
+  'accidents',
+  'trucks',
+  'drivers',
+  'assets',
+  'rentals',
+  'fleet',
+];
+
+/* ────────────────────────── utilidades ────────────────────────── */
+
+const isEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim());
+
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+/** Fecha ISO (2026-10-16) a formato de Estados Unidos. */
+function formatValue(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  if (typeof value === 'number') return value.toLocaleString('en-US');
+  if (value && typeof value.toDate === 'function') {
+    return value.toDate().toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  return iso ? `${iso[2]}/${iso[3]}/${iso[1]}` : text;
+}
+
+/**
+ * Configuración del módulo dueño de esta colección. El app guarda en cada
+ * documento de `settings_notifications` el campo `collection`, así que basta
+ * una consulta por igualdad (sin índice compuesto).
+ */
+async function configFor(collectionName) {
+  const snap = await db
+    .collection(CONFIG_COLLECTION)
+    .where('collection', '==', collectionName)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  const data = doc.data() ?? {};
+  return {
+    moduleId: doc.id,
+    title: String(data.title ?? doc.id),
+    userIds: Array.isArray(data.userIds) ? data.userIds.map(String).slice(0, 50) : [],
+    onCreate: data.onCreate === true,
+    onEdit: data.onEdit === true,
+    notifyOwner: data.notifyOwner === true,
+    ownerKey: typeof data.ownerKey === 'string' ? data.ownerKey : null,
+    labelKeys: Array.isArray(data.labelKeys) ? data.labelKeys.map(String).slice(0, 4) : [],
+    fields: Array.isArray(data.fields) ? data.fields.slice(0, 25) : [],
+    rules: Array.isArray(data.rules) ? data.rules.slice(0, 10) : [],
+  };
+}
+
+/** Nombres de los documentos referenciados (camión, driver, estación…). */
+async function resolveRefs(pairs) {
+  const unique = new Map();
+  pairs.forEach(({ collection, id }) => {
+    if (collection && id) unique.set(`${collection}/${id}`, { collection, id });
+  });
+  const entries = [...unique.values()].slice(0, 30);
+  if (entries.length === 0) return new Map();
+  const snaps = await db.getAll(
+    ...entries.map((entry) => db.collection(entry.collection).doc(entry.id)),
+  );
+  const names = new Map();
+  snaps.forEach((snap, index) => {
+    if (!snap.exists) return;
+    const data = snap.data() ?? {};
+    const name =
+      data.name ?? data.unidad ?? data.numero ?? data.title ?? data.email ?? snap.id;
+    names.set(`${entries[index].collection}/${entries[index].id}`, String(name));
+  });
+  return names;
+}
+
+/** Correos de los destinatarios, sin repetir y solo los válidos. */
+async function recipientEmails(userIds) {
+  const ids = [...new Set(userIds.filter(Boolean).map(String))].slice(0, 50);
+  if (ids.length === 0) return [];
+  const snaps = await db.getAll(...ids.map((id) => db.collection('users').doc(id)));
+  const emails = snaps
+    .filter((snap) => snap.exists)
+    .filter((snap) => String(snap.get('status') ?? '').toUpperCase() !== 'INACTIVO')
+    .map((snap) => String(snap.get('email') ?? '').trim())
+    .filter(isEmail);
+  return [...new Set(emails)];
+}
+
+/** Envío real + bitácora. Nunca lanza: un correo no puede tumbar un guardado. */
+async function sendMail({ to, subject, text, html, meta }) {
+  let errorMessage = null;
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY.value()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
+        to,
+        subject,
+        text,
+        html,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      errorMessage = (detail && detail.message) || `HTTP ${response.status}`;
+    }
+  } catch (error) {
+    errorMessage = error && error.message ? error.message : String(error);
+  }
+
+  await db.collection('messages_log').add({
+    type: 'EMAIL',
+    auto: true,
+    to: to.join(', '),
+    subject,
+    status: errorMessage ? 'FAILED' : 'sent',
+    error: errorMessage,
+    ...meta,
+    createdAt: new Date().toISOString(),
+    at: FieldValue.serverTimestamp(),
+  });
+  return errorMessage;
+}
+
+/* ────────────────────── el aviso, en un solo sitio ────────────────────── */
+
+/**
+ * Decide y envía. `before` es null en un alta.
+ * Devuelve un texto corto para los registros de la función.
+ */
+async function notify(collectionName, docId, before, after) {
+  const config = await configFor(collectionName);
+  if (!config) return 'sin configuración';
+  if (config.userIds.length === 0 && !config.notifyOwner) return 'sin destinatarios';
+
+  const creating = before === null;
+
+  /** Reglas de campo: "Status pasó a APROBADO". */
+  let ruleHit = null;
+  if (!creating) {
+    ruleHit =
+      config.rules.find((rule) => {
+        const key = String(rule.field ?? '');
+        if (key === '') return false;
+        const to = String(rule.to ?? '');
+        const nextValue = String(after[key] ?? '');
+        const prevValue = String(before[key] ?? '');
+        return nextValue !== prevValue && nextValue === to;
+      }) ?? null;
+  }
+
+  if (creating && !config.onCreate) return 'alta no configurada';
+  if (!creating && !ruleHit && !config.onEdit) return 'edición no configurada';
+
+  // Destinatarios: los configurados y, si se pidió, el capturista del registro.
+  const ids = [...config.userIds];
+  if (config.notifyOwner && config.ownerKey) {
+    const owner = after[config.ownerKey];
+    if (typeof owner === 'string' && owner !== '') ids.push(owner);
+  }
+  const to = await recipientEmails(ids);
+  if (to.length === 0) return 'sin correos válidos';
+
+  // Campos del correo, con las referencias resueltas a su nombre.
+  const fields = config.fields.filter((field) => field && field.key);
+  const refNames = await resolveRefs(
+    fields
+      .filter((field) => field.ref)
+      .map((field) => ({ collection: field.ref, id: String(after[field.key] ?? '') })),
+  );
+  const valueOf = (field) => {
+    const raw = after[field.key];
+    if (field.ref && typeof raw === 'string' && raw !== '') {
+      return refNames.get(`${field.ref}/${raw}`) ?? '—';
+    }
+    return formatValue(raw);
+  };
+
+  const label = config.labelKeys
+    .map((key) => {
+      const field = fields.find((item) => item.key === key);
+      return field ? valueOf(field) : formatValue(after[key]);
+    })
+    .filter((text) => text !== '')
+    .join(' · ');
+
+  const event = ruleHit
+    ? String(ruleHit.label ?? `${ruleHit.field}: ${ruleHit.to}`)
+    : creating
+      ? 'Nuevo registro'
+      : 'Registro editado';
+
+  const subject = `[ServiExpress] ${config.title}: ${event}${label ? ` — ${label}` : ''}`;
+
+  // Qué cambió (solo en ediciones): se ve de un vistazo sin abrir el app.
+  const changes = creating
+    ? []
+    : fields
+        .filter((field) => String(before[field.key] ?? '') !== String(after[field.key] ?? ''))
+        .map((field) => {
+          const raw = before[field.key];
+          const previous =
+            field.ref && typeof raw === 'string' && raw !== ''
+              ? (refNames.get(`${field.ref}/${raw}`) ?? '—')
+              : formatValue(raw);
+          return { label: field.label ?? field.key, from: previous || '—', to: valueOf(field) || '—' };
+        });
+
+  const rows = fields
+    .map((field) => ({ label: field.label ?? field.key, value: valueOf(field) }))
+    .filter((row) => row.value !== '');
+
+  const text = [
+    `${event} en ${config.title}.`,
+    label ? `Registro: ${label}` : null,
+    '',
+    ...rows.map((row) => `${row.label}: ${row.value}`),
+    changes.length > 0 ? '\nCambios:' : null,
+    ...changes.map((change) => `· ${change.label}: ${change.from} → ${change.to}`),
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2430;line-height:1.5">
+      <p style="margin:0 0 4px;font-size:16px;font-weight:700">${escapeHtml(config.title)}</p>
+      <p style="margin:0 0 14px;color:#5b6472">${escapeHtml(event)}${
+        label ? ` — <strong>${escapeHtml(label)}</strong>` : ''
+      }</p>
+      <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">
+        ${rows
+          .map(
+            (row, index) => `<tr style="background:${index % 2 ? '#f6f7fb' : '#ffffff'}">
+              <td style="color:#5b6472;border:1px solid #e3e6ef">${escapeHtml(row.label)}</td>
+              <td style="border:1px solid #e3e6ef"><strong>${escapeHtml(row.value)}</strong></td>
+            </tr>`,
+          )
+          .join('')}
+      </table>
+      ${
+        changes.length > 0
+          ? `<p style="margin:16px 0 4px;font-weight:700">Cambios</p>
+             <ul style="margin:0;padding-left:18px">${changes
+               .map(
+                 (change) =>
+                   `<li>${escapeHtml(change.label)}: ${escapeHtml(change.from)} → <strong>${escapeHtml(
+                     change.to,
+                   )}</strong></li>`,
+               )
+               .join('')}</ul>`
+          : ''
+      }
+      <p style="margin:18px 0 0;font-size:12px;color:#8a93a5">
+        Aviso automático de ServiExpress Fleet Control. No respondas a este correo.
+      </p>
+    </div>`;
+
+  const error = await sendMail({
+    to,
+    subject,
+    text,
+    html,
+    meta: { module: config.moduleId, collection: collectionName, recordId: docId, event },
+  });
+  return error ? `error: ${error}` : `enviado a ${to.length}`;
+}
+
+/* ───────────────────────── disparadores ───────────────────────── */
+
+const triggerOptions = {
+  region: REGION,
+  secrets: [RESEND_API_KEY, MAIL_FROM],
+  // Un aviso perdido no justifica reintentos infinitos ni correos repetidos.
+  retry: false,
+};
+
+WATCHED.forEach((collectionName) => {
+  const suffix = collectionName.charAt(0).toUpperCase() + collectionName.slice(1);
+
+  exports[`onCreate${suffix}`] = onDocumentCreated(
+    { ...triggerOptions, document: `${collectionName}/{docId}` },
+    async (event) => {
+      const after = event.data && event.data.data();
+      if (!after) return;
+      try {
+        const result = await notify(collectionName, event.params.docId, null, after);
+        console.log(`[notify] ${collectionName} create ${event.params.docId}: ${result}`);
+      } catch (error) {
+        console.error(`[notify] ${collectionName} create falló`, error);
+      }
+    },
+  );
+
+  exports[`onUpdate${suffix}`] = onDocumentUpdated(
+    { ...triggerOptions, document: `${collectionName}/{docId}` },
+    async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after) return;
+      try {
+        const result = await notify(collectionName, event.params.docId, before, after);
+        console.log(`[notify] ${collectionName} update ${event.params.docId}: ${result}`);
+      } catch (error) {
+        console.error(`[notify] ${collectionName} update falló`, error);
+      }
+    },
+  );
+});
+
+/* ─────────────────── envío manual (se conserva) ─────────────────── */
 
 /** ¿El usuario puede enviar mensajes? (admin, o acción enviarMensajes). */
 async function canSendMessages(uid) {
@@ -33,129 +390,13 @@ async function canSendMessages(uid) {
   const name = String(roleSnap.get('name') ?? '').toLowerCase();
   if (name.includes('admin')) return true;
   const permissions = roleSnap.get('permissions') ?? {};
-  return Object.values(permissions).some(
-    (perms) => perms && perms.enviarMensajes === true,
-  );
+  return Object.values(permissions).some((perms) => perms && perms.enviarMensajes === true);
 }
 
-/**
- * notifyModuleSave: aviso por correo AL GUARDAR un formulario.
- * El cliente solo informa "se guardó un registro en el módulo X"; los
- * DESTINATARIOS los decide este servidor leyendo la configuración que el
- * admin guardó con el botón del módulo (settings_notifications/<moduleId>).
- * Sin destinatarios configurados, no se envía nada. Así, quien captura no
- * necesita permisos de envío y nadie puede mandar correos a direcciones
- * arbitrarias desde el navegador.
- */
-exports.notifyModuleSave = onCall(
-  {
-    region: 'us-central1',
-    secrets: [RESEND_API_KEY, MAIL_FROM],
-    enforceAppCheck: false,
-  },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
-    }
-    const uid = request.auth.uid;
-    const moduleId = String(request.data?.moduleId ?? '').trim().slice(0, 60);
-    const moduleTitle = String(request.data?.moduleTitle ?? moduleId).trim().slice(0, 80);
-    const action = request.data?.action === 'update' ? 'update' : 'create';
-    const recordLabel = String(request.data?.recordLabel ?? '').trim().slice(0, 160);
-    const summary = String(request.data?.summary ?? '').trim().slice(0, 1500);
-    if (moduleId === '') {
-      throw new HttpsError('invalid-argument', 'Falta el módulo.');
-    }
-
-    // La configuración manda: sin lista, no hay envío.
-    const cfgSnap = await db.collection('settings_notifications').doc(moduleId).get();
-    if (!cfgSnap.exists) return { ok: true, sent: 0, reason: 'no-config' };
-    const cfg = cfgSnap.data() ?? {};
-    const userIds = Array.isArray(cfg.userIds) ? cfg.userIds.slice(0, 30) : [];
-    if (userIds.length === 0) return { ok: true, sent: 0, reason: 'no-recipients' };
-    if (action === 'create' && cfg.onCreate === false) return { ok: true, sent: 0, reason: 'off' };
-    if (action === 'update' && cfg.onEdit !== true) return { ok: true, sent: 0, reason: 'off' };
-
-    // Correos de los destinatarios y nombre de quien guardó.
-    const userSnaps = await db.getAll(
-      ...userIds.map((id) => db.collection('users').doc(String(id))),
-      db.collection('users').doc(uid),
-    );
-    const bySnap = userSnaps[userSnaps.length - 1];
-    const byName = bySnap.exists ? String(bySnap.get('name') ?? bySnap.get('email') ?? uid) : uid;
-    const recipients = userSnaps
-      .slice(0, -1)
-      .filter((snap) => snap.exists)
-      .map((snap) => String(snap.get('email') ?? '').trim())
-      .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
-    if (recipients.length === 0) return { ok: true, sent: 0, reason: 'no-valid-emails' };
-
-    const verb = action === 'create' ? 'Nuevo registro' : 'Registro editado';
-    const subject = `[ServiExpress] ${moduleTitle}: ${verb}${recordLabel ? ` — ${recordLabel}` : ''}`;
-    const lines = [
-      `${verb} en ${moduleTitle}.`,
-      recordLabel ? `Registro: ${recordLabel}` : null,
-      `Guardado por: ${byName}`,
-      summary ? `\n${summary}` : null,
-    ].filter(Boolean);
-    const text = lines.join('\n');
-    const safeHtml = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-
-    let errorMessage = null;
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY.value()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
-          to: recipients,
-          subject,
-          text,
-          html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;white-space:pre-wrap">${safeHtml}</div>`,
-        }),
-      });
-      if (!response.ok) {
-        const detail = await response.json().catch(() => null);
-        errorMessage = detail?.message ?? `HTTP ${response.status}`;
-      }
-    } catch (error) {
-      errorMessage = error && error.message ? error.message : String(error);
-    }
-
-    await db.collection('messages_log').add({
-      type: 'EMAIL',
-      auto: true,
-      module: moduleId,
-      action,
-      to: recipients.join(', '),
-      subject,
-      byUid: uid,
-      status: errorMessage ? 'FAILED' : 'sent',
-      error: errorMessage,
-      createdAt: new Date().toISOString(),
-      at: FieldValue.serverTimestamp(),
-    });
-
-    if (errorMessage) {
-      throw new HttpsError('internal', `El aviso no se pudo enviar: ${errorMessage}`);
-    }
-    return { ok: true, sent: recipients.length };
-  },
-);
-
 exports.sendEmail = onCall(
-  {
-    region: 'us-central1',
-    secrets: [RESEND_API_KEY, MAIL_FROM],
-    enforceAppCheck: false,
-  },
+  { region: REGION, secrets: [RESEND_API_KEY, MAIL_FROM], enforceAppCheck: false },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
-    }
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const uid = request.auth.uid;
     if (!(await canSendMessages(uid))) {
       throw new HttpsError('permission-denied', 'Tu rol no tiene permiso para enviar mensajes.');
@@ -164,59 +405,24 @@ exports.sendEmail = onCall(
     const to = String(request.data?.to ?? '').trim();
     const subject = String(request.data?.subject ?? '').trim();
     const body = String(request.data?.body ?? '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-      throw new HttpsError('invalid-argument', 'Correo destino inválido.');
-    }
+    if (!isEmail(to)) throw new HttpsError('invalid-argument', 'Correo destino inválido.');
     if (subject === '' || subject.length > 200) {
       throw new HttpsError('invalid-argument', 'El asunto no puede ir vacío ni pasar de 200 caracteres.');
     }
     if (body === '' || body.length > 20000) {
-      throw new HttpsError(
-        'invalid-argument',
-        'El mensaje no puede ir vacío ni pasar de 20.000 caracteres.',
-      );
+      throw new HttpsError('invalid-argument', 'El mensaje no puede ir vacío ni pasar de 20.000 caracteres.');
     }
 
-    const safeHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    let errorMessage = null;
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY.value()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: `ServiExpress Fleet Control <${MAIL_FROM.value()}>`,
-          to: [to],
-          subject,
-          text: body,
-          html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;white-space:pre-wrap">${safeHtml}</div>`,
-        }),
-      });
-      if (!response.ok) {
-        const detail = await response.json().catch(() => null);
-        errorMessage = detail?.message ?? `HTTP ${response.status}`;
-      }
-    } catch (error) {
-      errorMessage = error && error.message ? error.message : String(error);
-    }
-
-    await db.collection('messages_log').add({
-      type: 'EMAIL',
-      to,
+    const error = await sendMail({
+      to: [to],
       subject,
-      body,
-      byUid: uid,
-      status: errorMessage ? 'FAILED' : 'sent',
-      error: errorMessage,
-      createdAt: new Date().toISOString(),
-      at: FieldValue.serverTimestamp(),
+      text: body,
+      html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;white-space:pre-wrap">${escapeHtml(
+        body,
+      )}</div>`,
+      meta: { auto: false, byUid: uid, body },
     });
-
-    if (errorMessage) {
-      throw new HttpsError('internal', `El envío fue rechazado: ${errorMessage}`);
-    }
+    if (error) throw new HttpsError('internal', `El envío fue rechazado: ${error}`);
     return { ok: true };
   },
 );

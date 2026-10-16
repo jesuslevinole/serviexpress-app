@@ -51,7 +51,6 @@ import { BlockedRefsNote } from './BlockedRefsNote';
 import { MergeDuplicatesModal } from './MergeDuplicatesModal';
 import { AlertThresholdsModal } from './AlertThresholdsModal';
 import { EmailRecipientsModal } from './EmailRecipientsModal';
-import { notifyModuleSave } from '../../services/emailNotifications';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { sanitizeSegment } from '../../services/attachments';
 import { MyTrucksModal, type MyTruckRow } from './MyTrucksModal';
@@ -538,19 +537,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
     }
     return `${config.collection}/${sanitizeSegment(auditLabel(record))}`;
   };
-
-  /** Resumen corto del registro guardado (para el correo de aviso). */
-  const saveSummary = (payload: Record<string, FieldValue>): string =>
-    config.fields
-      .filter((field) => field.compute === undefined && field.key in payload)
-      .slice(0, 6)
-      .map((field) => {
-        const value = payload[field.key] ?? null;
-        if (value === null || value === '') return null;
-        return `${field.label}: ${displayValue(field, value, refLabel)}`;
-      })
-      .filter(Boolean)
-      .join('\n');
 
   /** Nombre auditables del usuario REAL (con "(as X)" cuando simula). */
   const auditName = (): string => {
@@ -1841,13 +1827,9 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           }
         }
         await updateDocument(config.collection, editing.id, payload);
-        notifyModuleSave({
-          moduleId: config.id,
-          moduleTitle: config.title,
-          action: 'update',
-          recordLabel: auditLabel(editing),
-          summary: saveSummary(payload),
-        });
+        // El aviso por correo NO se dispara desde aquí: lo hace Firestore en
+        // el servidor al escribirse el documento (Cloud Function). Así llega
+        // aunque se cierre la pestaña o el cambio entre por una importación.
         // Auditoría universal: cada campo cambiado, con valores legibles.
         void logRecordChange({
           collection: config.collection,
@@ -2020,13 +2002,6 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           if (captureInfo.window) payload.windowSchedule = windowName(captureInfo.window);
         }
         const newId = await createDocument(config.collection, payload);
-        notifyModuleSave({
-          moduleId: config.id,
-          moduleTitle: config.title,
-          action: 'create',
-          recordLabel: displayValue(config.fields[0], payload[config.fields[0].key] ?? null, refLabel),
-          summary: saveSummary(payload),
-        });
         void logRecordChange({
           collection: config.collection,
           recordId: newId,
@@ -2764,11 +2739,11 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
             <button
               type="button"
               className="btn btn-outline"
-              title="Choose which users get an email when a form of this module is saved"
+              title="Quién recibe correo automático de esta vista, y ante qué evento"
               onClick={() => setMailCfgOpen(true)}
             >
               <Mail size={16} />
-              <span className="crud-btn-text">Email on save</span>
+              <span className="crud-btn-text">Automatic emails</span>
             </button>
           ) : null}
           {!historicView && (isAdminView || can(config.id, 'configurarAlertas')) &&
@@ -3624,8 +3599,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
 
       {mailCfgOpen ? (
         <EmailRecipientsModal
-          moduleId={config.id}
-          moduleTitle={config.title}
+          module={config}
           byUid={firebaseUser?.uid ?? null}
           onClose={() => setMailCfgOpen(false)}
         />
