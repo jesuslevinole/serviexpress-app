@@ -60,10 +60,17 @@ let transport = null;
  * sin decir por qué. Aquí se quitan una sola vez, para todos los valores.
  */
 function secretValue(secret) {
-  return String(secret.value() ?? '')
+  const clean = String(secret.value() ?? '')
     .trim()
     .replace(/^['"]+|['"]+$/g, '')
     .trim();
+  // Contraseña de aplicación de Google: se muestra como "abcd efgh ijkl mnop"
+  // y hay que entregarla SIN espacios. Si viene con ellos, se quitan; no se
+  // toca ningún otro valor, porque una contraseña normal sí puede llevarlos.
+  if (/^[a-z]{4}\s[a-z]{4}\s[a-z]{4}\s[a-z]{4}$/i.test(clean)) {
+    return clean.replace(/\s+/g, '');
+  }
+  return clean;
 }
 
 function mailer() {
