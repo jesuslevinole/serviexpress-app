@@ -1,13 +1,12 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ClipboardCheck,
   ClipboardList,
+  FileCheck2,
   Download,
   Filter,
   X,
   KeySquare,
-  Route,
   ScanLine,
   Truck,
   Users,
@@ -71,11 +70,13 @@ export function DashboardPage() {
       setCountError(null);
       try {
         const targets: [string, string, CollectionFilter?][] = [
-          ['bcReports', COLLECTIONS.bcReports],
+          // El Fleet Report sustituye a BC Report y Fleet en el tablero: es
+          // el que se llena cada semana. Los otros dos módulos siguen en el
+          // menú, solo salen de aquí (y así son dos conteos menos por visita).
+          ['fleetReports', COLLECTIONS.fleetReports],
           ['trucks', COLLECTIONS.trucks],
           ['drivers', COLLECTIONS.drivers],
           ['assets', COLLECTIONS.assets],
-          ['fleet', COLLECTIONS.fleet],
           ['shop', COLLECTIONS.shopOrders],
           ['rentals', COLLECTIONS.rentals],
           ['requirements', COLLECTIONS.requirements],
@@ -152,11 +153,16 @@ export function DashboardPage() {
   const maxRequirement = Math.max(1, ...requirementsByType.map(([, count]) => count));
 
   const allCards: StatCard[] = [
-    { id: 'bcReports', label: 'BC Reports', value: counts.bcReports ?? null, icon: ClipboardCheck, tone: 'blue' },
+    {
+      id: 'fleetReports',
+      label: 'Fleet Report',
+      value: counts.fleetReports ?? null,
+      icon: FileCheck2,
+      tone: 'blue',
+    },
     { id: 'trucks', label: 'Trucks', value: counts.trucks ?? null, icon: Truck, tone: 'blue' },
     { id: 'drivers', label: 'Drivers', value: counts.drivers ?? null, icon: Users, tone: 'teal' },
     { id: 'assets', label: 'Assets', value: counts.assets ?? null, icon: ScanLine, tone: 'violet' },
-    { id: 'fleet', label: 'Fleet', value: counts.fleet ?? null, icon: Route, tone: 'green' },
     { id: 'shop', label: 'Shop orders', value: counts.shop ?? null, icon: Wrench, tone: 'amber' },
     { id: 'rentals', label: 'Rentals', value: counts.rentals ?? null, icon: KeySquare, tone: 'violet' },
     {
