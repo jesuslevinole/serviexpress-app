@@ -95,6 +95,8 @@ function mailer() {
 
 const REGION = 'us-central1';
 const CONFIG_COLLECTION = 'settings_notifications';
+/** La flota opera en Texas: las horas del correo se leen en su hora local. */
+const TIMEZONE = 'America/Chicago';
 
 /**
  * Colecciones vigiladas. Una colección sin disparador no manda avisos, por
@@ -216,6 +218,24 @@ function asHtmlParagraph(text) {
   return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
+/**
+ * Cuándo se guardó, en hora de Texas. El valor llega como Timestamp de
+ * Firestore (lo normal) o como texto ISO si el registro es viejo; si no
+ * se puede leer, se devuelve vacío y el correo usa la hora de envío.
+ */
+function savedAtText(value) {
+  let date = null;
+  if (value && typeof value.toDate === 'function') date = value.toDate();
+  else if (typeof value === 'string' && value !== '') date = new Date(value);
+  else if (value instanceof Date) date = value;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    timeZone: TIMEZONE,
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
 /** Nombres de los documentos referenciados (camión, driver, estación…). */
 async function resolveRefs(pairs) {
   const unique = new Map();
@@ -326,11 +346,18 @@ async function notify(collectionName, docId, before, after) {
 
   // Campos del correo, con las referencias resueltas a su nombre.
   const fields = config.fields.filter((field) => field && field.key);
-  const refNames = await resolveRefs(
-    fields
+  // El autor del guardado lo sella el app en `updatedBy` (la sesión real,
+  // no el usuario que se esté "visualizando como"). Se pide junto con las
+  // demás referencias para no gastar una lectura suelta.
+  const authorId = typeof after.updatedBy === 'string' ? after.updatedBy : '';
+  const refNames = await resolveRefs([
+    ...fields
       .filter((field) => field.ref)
       .map((field) => ({ collection: field.ref, id: String(after[field.key] ?? '') })),
-  );
+    { collection: 'users', id: authorId },
+  ]);
+  const author = authorId ? (refNames.get(`users/${authorId}`) ?? '') : '';
+  const savedAt = savedAtText(after.updatedAt);
   const valueOf = (field) => {
     const raw = after[field.key];
     if (field.ref && typeof raw === 'string' && raw !== '') {
@@ -360,7 +387,9 @@ async function notify(collectionName, docId, before, after) {
     titulo: config.title,
     evento: event,
     registro: label,
-    fecha: new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+    autor: author,
+    // La fecha que importa es la del guardado, no la del envío.
+    fecha: savedAt || savedAtText(new Date()),
   };
   // Si el registro no tiene etiqueta, el asunto por defecto terminaría en
   // un guion suelto ("… Nuevo registro — "): se recorta el separador.
@@ -394,15 +423,24 @@ async function notify(collectionName, docId, before, after) {
   const showRows = tpl.showFields !== false && rows.length > 0;
   const showChanges = tpl.showChanges !== false && changes.length > 0;
 
+  // Quién y cuándo. Va siempre, sin depender de la plantilla: es la
+  // pregunta que se hace cualquiera al abrir el aviso.
+  const who = creating ? 'Creado por' : 'Editado por';
+  const stamp = [author ? `${who} ${author}` : null, savedAt || null]
+    .filter((part) => part !== null)
+    .join(' · ');
+
   const text = [
     intro,
     label ? `Registro: ${label}` : null,
+    stamp || null,
     '',
-    ...(showRows ? rows.map((row) => `${row.label}: ${row.value}`) : []),
-    showChanges ? '\nCambios:' : null,
+    showChanges ? 'Campos modificados:' : null,
     ...(showChanges
       ? changes.map((change) => `· ${change.label}: ${change.from} → ${change.to}`)
       : []),
+    showChanges && showRows ? '' : null,
+    ...(showRows ? rows.map((row) => `${row.label}: ${row.value}`) : []),
     outro ? `\n${outro}` : null,
   ]
     .filter((line) => line !== null)
@@ -411,12 +449,45 @@ async function notify(collectionName, docId, before, after) {
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2430;line-height:1.5">
       <p style="margin:0 0 4px;font-size:16px;font-weight:700">${escapeHtml(config.title)}</p>
-      <p style="margin:0 0 14px;color:#5b6472">${asHtmlParagraph(intro)}${
+      <p style="margin:0 0 10px;color:#5b6472">${asHtmlParagraph(intro)}${
         label ? `<br><strong>${escapeHtml(label)}</strong>` : ''
       }</p>
       ${
+        stamp
+          ? `<p style="margin:0 0 14px;padding:7px 10px;background:#eef2fb;border-left:3px solid #3e8bff;border-radius:4px;font-size:13px;color:#2b3550">
+               ${escapeHtml(stamp)}
+             </p>`
+          : ''
+      }
+      ${
+        showChanges
+          ? `<p style="margin:0 0 6px;font-weight:700">Campos modificados (${changes.length})</p>
+             <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px;margin:0 0 16px">
+               <tr style="background:#f6f7fb">
+                 <td style="color:#5b6472;border:1px solid #e3e6ef">Campo</td>
+                 <td style="color:#5b6472;border:1px solid #e3e6ef">Antes</td>
+                 <td style="color:#5b6472;border:1px solid #e3e6ef">Ahora</td>
+               </tr>
+               ${changes
+                 .map(
+                   (change) => `<tr>
+                     <td style="border:1px solid #e3e6ef">${escapeHtml(change.label)}</td>
+                     <td style="border:1px solid #e3e6ef;color:#8a93a5;text-decoration:line-through">${escapeHtml(
+                       change.from,
+                     )}</td>
+                     <td style="border:1px solid #e3e6ef"><strong>${escapeHtml(
+                       change.to,
+                     )}</strong></td>
+                   </tr>`,
+                 )
+                 .join('')}
+             </table>`
+          : ''
+      }
+      ${
         showRows
-          ? `<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">
+          ? `${showChanges ? '<p style="margin:0 0 6px;font-weight:700">Registro completo</p>' : ''}
+             <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">
         ${rows
           .map(
             (row, index) => `<tr style="background:${index % 2 ? '#f6f7fb' : '#ffffff'}">
@@ -426,19 +497,6 @@ async function notify(collectionName, docId, before, after) {
           )
           .join('')}
       </table>`
-          : ''
-      }
-      ${
-        showChanges
-          ? `<p style="margin:16px 0 4px;font-weight:700">Cambios</p>
-             <ul style="margin:0;padding-left:18px">${changes
-               .map(
-                 (change) =>
-                   `<li>${escapeHtml(change.label)}: ${escapeHtml(change.from)} → <strong>${escapeHtml(
-                     change.to,
-                   )}</strong></li>`,
-               )
-               .join('')}</ul>`
           : ''
       }
       ${
@@ -553,12 +611,15 @@ exports.testNotification = onCall(
         .map((field) => String(field.label ?? field.key));
     }
 
+    const myName = String(meSnap.get('name') ?? '').trim() || myEmail;
     const vars = {
       titulo: title,
       evento: 'Nuevo registro',
       registro: 'EJEMPLO · 10/16/2026',
-      fecha: new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+      autor: myName,
+      fecha: savedAtText(new Date()),
     };
+    const stamp = `Creado por ${myName} · ${vars.fecha}`;
     const subject = `[PRUEBA] ${fillTemplate(tpl.subject, vars).replace(/\s+/g, ' ').trim()}`;
     const intro = fillTemplate(tpl.intro, vars).trim();
     const outro = fillTemplate(tpl.outro, vars).trim();
@@ -583,9 +644,12 @@ exports.testNotification = onCall(
           Destinatarios configurados: <strong>${recipients}</strong>.
         </p>
         <p style="margin:0 0 4px;font-size:16px;font-weight:700">${escapeHtml(title)}</p>
-        <p style="margin:0 0 14px;color:#5b6472">${asHtmlParagraph(intro)}<br><strong>${escapeHtml(
+        <p style="margin:0 0 10px;color:#5b6472">${asHtmlParagraph(intro)}<br><strong>${escapeHtml(
           vars.registro,
         )}</strong></p>
+        <p style="margin:0 0 14px;padding:7px 10px;background:#eef2fb;border-left:3px solid #3e8bff;border-radius:4px;font-size:13px;color:#2b3550">
+          ${escapeHtml(stamp)}
+        </p>
         ${
           sampleRows
             ? `<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;min-width:320px">${sampleRows}</table>`

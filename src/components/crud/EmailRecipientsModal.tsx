@@ -362,7 +362,8 @@ export function EmailRecipientsModal({ module, byUid, onClose }: EmailRecipients
               <div className="mailrec-vars">
                 <p>
                   Escribe estas palabras entre llaves donde quieras y el servidor las cambia por
-                  el dato real al enviar:
+                  el dato real al enviar. Quién guardó y a qué hora sale siempre en el correo,
+                  aunque no uses las variables:
                 </p>
                 <ul>
                   {TEMPLATE_VARS.map((item) => (

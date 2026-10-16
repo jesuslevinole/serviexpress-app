@@ -46,7 +46,8 @@ export const TEMPLATE_VARS: { token: string; help: string }[] = [
   { token: '{titulo}', help: 'nombre de la vista (Trucks, Fleet Report…)' },
   { token: '{evento}', help: 'Nuevo registro, Registro editado o la regla que se cumplió' },
   { token: '{registro}', help: 'cómo se identifica el registro (730925 · 10/16/2026)' },
-  { token: '{fecha}', help: 'fecha y hora del envío' },
+  { token: '{autor}', help: 'quién guardó el registro' },
+  { token: '{fecha}', help: 'fecha y hora del guardado, en hora de Texas' },
 ];
 
 /**

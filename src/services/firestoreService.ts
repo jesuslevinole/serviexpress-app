@@ -24,8 +24,23 @@ import {
   type QueryConstraint,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { auth, db } from '../firebase/config';
 import type { EntityData, FieldValue } from '../types/models';
+
+/**
+ * Quién está guardando, de verdad.
+ *
+ * Sale de la sesión de Firebase, no de "Visualizar como": si un admin
+ * mira el app como otra persona y guarda, el registro queda firmado por
+ * el admin. Es lo que hace falta para poder pedir cuentas de un cambio.
+ *
+ * Se sella en TODAS las escrituras desde aquí, no en cada pantalla, para
+ * que ninguna vista nueva se quede sin firma por olvido.
+ */
+function authorStamp(): Record<string, string> {
+  const uid = auth.currentUser?.uid;
+  return uid ? { updatedBy: uid } : {};
+}
 
 /** Normaliza un valor crudo de Firestore al tipo FieldValue del app. */
 function normalizeValue(value: unknown): FieldValue | string[] {
@@ -591,8 +606,13 @@ export async function createDocument(
   collectionName: string,
   data: Record<string, FieldValue | string[] | Record<string, unknown>>,
 ): Promise<string> {
+  const author = authorStamp();
   const ref = await addDoc(collection(db, collectionName), {
     ...data,
+    ...author,
+    // En el alta, quien crea y quien actualiza son el mismo; se guardan
+    // los dos para que un registro que nunca se edite siga teniendo autor.
+    ...(author.updatedBy ? { createdBy: author.updatedBy } : {}),
     createdAt: new Date().toISOString(),
     updatedAt: serverTimestamp(),
   });
@@ -609,8 +629,13 @@ export async function setDocument(
   merge = false,
 ): Promise<void> {
   const payload = merge
-    ? { ...data, updatedAt: serverTimestamp() }
-    : { ...data, createdAt: new Date().toISOString(), updatedAt: serverTimestamp() };
+    ? { ...data, ...authorStamp(), updatedAt: serverTimestamp() }
+    : {
+        ...data,
+        ...authorStamp(),
+        createdAt: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
+      };
   await setDoc(doc(db, collectionName, id), payload, { merge });
   invalidateCollectionCache(collectionName);
 }
@@ -623,6 +648,7 @@ export async function updateDocument(
 ): Promise<void> {
   await updateDoc(doc(db, collectionName, id), {
     ...data,
+    ...authorStamp(),
     updatedAt: serverTimestamp(),
   });
   invalidateCollectionCache(collectionName);
