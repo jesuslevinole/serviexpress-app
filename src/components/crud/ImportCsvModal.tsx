@@ -41,6 +41,17 @@ interface ImportCsvModalProps {
   matchField?: { key: string; label: string; textField?: string };
   /** Registros actuales del módulo, para casar contra ellos. */
   existingRows?: EntityData[];
+  /**
+   * Regla extra por fila (p. ej. Fleet Report: un camión una sola vez por
+   * semana). Recibe la fila, su ID de documento (si el archivo lo trae) y
+   * las filas VÁLIDAS anteriores del mismo archivo; devuelve los errores
+   * que la bloquean (vacío = la fila pasa).
+   */
+  rowGuard?: (
+    values: Record<string, FieldValue>,
+    docId: string | null,
+    earlier: Record<string, FieldValue>[],
+  ) => string[];
   onClose: () => void;
 }
 
@@ -127,6 +138,7 @@ export function ImportCsvModal({
   headerExtra,
   matchField,
   existingRows,
+  rowGuard,
   onClose,
 }: ImportCsvModalProps) {
   const [phase, setPhase] = useState<Phase>('pick');
@@ -474,6 +486,17 @@ export function ImportCsvModal({
 
       return { index: rowIndex + 2, docId, values, display, errors, warnings };
     });
+    // Regla extra del módulo, fila por fila y en el orden del archivo: cada
+    // fila se compara con la base y con las válidas que van antes.
+    if (rowGuard) {
+      const accepted: Record<string, FieldValue>[] = [];
+      preparedRows.forEach((row) => {
+        if (row.errors.length > 0) return;
+        const extra = rowGuard(row.values, row.docId, accepted);
+        if (extra.length > 0) row.errors.push(...extra);
+        else accepted.push(row.values);
+      });
+    }
     setHasIdColumn(idColumnIndex !== -1);
     // El previo dibuja SOLO las columnas del archivo: dibujar las 28 del
     // módulo con valores salteados es lo que hacía ver "columnas corridas".

@@ -623,6 +623,14 @@ export interface ModuleConfig {
    */
   uniqueInWindow?: string[];
   /**
+   * AVISO DE REPETIDOS EN LA SEMANA (V00115): si un mismo valor de `field`
+   * (el camión) aparece más de una vez dentro de la misma semana aplicada
+   * —sin importar estación ni entidad—, cada copia se marca en la tabla
+   * junto al número y arriba sale un aviso pidiendo borrar una. Aplica
+   * también a la pestaña Historic (agrupando por el sello de cada semana).
+   */
+  weekDuplicateAlert?: { field: string; label: string };
+  /**
    * Catálogo que TODOS ven completo: no se filtra por entidad ni por
    * estación, sin importar la visibilidad del rol (Drivers: cualquier BC
    * debe poder elegir o consultar a cualquier conductor).

@@ -138,6 +138,18 @@ function matchesFilter(field: { type: string }, value: unknown, filter: ColumnFi
   }
 }
 
+/** Un camión repetido dentro de una misma semana (todas sus copias). */
+interface WeekDupGroup {
+  /** Id del camión repetido. */
+  value: string;
+  /** ¿Es de la semana vigente? (si no, de una semana del Historic). */
+  current: boolean;
+  weekStart: string;
+  weekEnd: string;
+  /** Copias, de la más vieja a la más nueva. */
+  copies: EntityData[];
+}
+
 /**
  * Motor CRUD completo de un módulo: tabla con búsqueda, alta/edición en modal,
  * eliminación con confirmación, permisos por rol, detalle maestro-detalle
@@ -810,6 +822,72 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
   };
 
   /**
+   * CAMIONES REPETIDOS EN LA MISMA SEMANA (V00115). La regla es absoluta:
+   * un camión va UNA sola vez por semana, en cualquier estación o entidad.
+   * El guardado ya lo impide, pero una copia pudo entrar por importación
+   * CSV, por dos guardados al mismo tiempo o desde antes de la regla. Aquí
+   * se detectan para que se vean y se borre una.
+   *
+   * - Semana vigente: la lista EN VIVO del servidor de todas las estaciones
+   *   (captureInfo.weekRows) — así el BC ve el aviso aunque la otra copia
+   *   sea de otra estación que él no tiene en su lista. Sin ella (sin
+   *   conexión), la lista local.
+   * - Semanas pasadas (Historic): agrupadas por el sello de su semana.
+   * Cero lecturas extra: todo sale de suscripciones que ya existían.
+   */
+  const weekDuplicates = useMemo(() => {
+    const spec = config.weekDuplicateAlert;
+    const byId = new Map<string, WeekDupGroup>();
+    const groups: WeekDupGroup[] = [];
+    const occ = captureInfo.occurrence;
+    if (!spec || !captureSpec || !occ) return { byId, groups };
+    const currentKey = `${occ.startAt}|${occ.endAt}`;
+    const inCurrent = (row: EntityData) =>
+      (typeof row.windowKey === 'string' && row.windowKey === currentKey) ||
+      (typeof row.createdAt === 'string' && row.createdAt >= occ.startAt && row.createdAt <= occ.endAt);
+    const current = captureInfo.weekRows.length > 0 ? captureInfo.weekRows : currentWindowRows;
+    const entries: { row: EntityData; week: string }[] = current.map((row) => ({ row, week: currentKey }));
+    const seen = new Set(current.map((row) => row.id));
+    [...allRows, ...(histRows ?? [])].forEach((row) => {
+      if (seen.has(row.id)) return;
+      seen.add(row.id);
+      // De la semana vigente pero ausente en la lista del servidor: ya se
+      // borró (la lista local puede ir atrasada) — no cuenta.
+      if (inCurrent(row)) return;
+      if (typeof row.windowKey === 'string' && row.windowKey !== '') {
+        entries.push({ row, week: row.windowKey });
+      }
+    });
+    const bucket = new Map<string, { value: string; week: string; copies: EntityData[] }>();
+    entries.forEach(({ row, week }) => {
+      const value = row[spec.field];
+      if (typeof value !== 'string' || value === '') return;
+      const key = `${week}#${value}`;
+      const found = bucket.get(key);
+      if (found) found.copies.push(row);
+      else bucket.set(key, { value, week, copies: [row] });
+    });
+    bucket.forEach((item) => {
+      if (item.copies.length < 2) return;
+      // Solo los que el usuario puede ver: al menos una copia en su alcance.
+      if (!item.copies.some((row) => scopeFilter(config, row))) return;
+      const [weekStart = '', weekEnd = ''] = item.week.split('|');
+      const group: WeekDupGroup = {
+        value: item.value,
+        current: item.week === currentKey,
+        weekStart,
+        weekEnd,
+        copies: [...item.copies].sort((a, b) =>
+          String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')),
+        ),
+      };
+      groups.push(group);
+      group.copies.forEach((row) => byId.set(row.id, group));
+    });
+    return { byId, groups };
+  }, [config, captureSpec, captureInfo.occurrence, captureInfo.weekRows, currentWindowRows, allRows, histRows, scopeFilter]);
+
+  /**
    * Plan de reparación: el número de estación del Sch/B ("771 RED" -> 771)
    * se busca en el catálogo; se listan solo los camiones que HOY tienen otra
    * estación.
@@ -1433,7 +1511,71 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
    * con su "gemelo" más reciente para poder comparar antes de borrar. El
    * resto conserva el orden elegido.
    */
-  const sortedRows = useMemo(() => {
+  /** Cómo se identifica cada copia de un camión repetido: estación · entidad · BC · fecha. */
+  const dupCopyText = (row: EntityData): string => {
+    const part = (collection: string, value: unknown) =>
+      typeof value === 'string' && value !== '' ? refLabel(collection, value) : '—';
+    const date = typeof row.date === 'string' && row.date !== '' ? formatUsDate(row.date) : '—';
+    const owner = config.autoUserField ? row[config.autoUserField] : null;
+    return [
+      `Station ${part(COLLECTIONS.stations, row.idStation)}`,
+      part(COLLECTIONS.entities, row.idEntity),
+      part(COLLECTIONS.users, owner),
+      date,
+    ].join(' · ');
+  };
+  const dupWeekText = (group: WeekDupGroup): string =>
+    group.current
+      ? 'this week'
+      : `the week ${formatUsDate(texasDateOf(group.weekStart))} → ${formatUsDate(texasDateOf(group.weekEnd))}`;
+  const dupTruckLabel = (group: WeekDupGroup): string => {
+    const field = config.fields.find((f) => f.key === config.weekDuplicateAlert?.field);
+    return field?.refCollection ? refLabel(field.refCollection, group.value) : group.value;
+  };
+
+  /**
+   * Import CSV con regla semanal: lo importado entra a la SEMANA VIGENTE,
+   * así que un camión que ya está esta semana (en cualquier estación) o que
+   * viene dos veces en el mismo archivo se rechaza en el previo, con el
+   * motivo. Una fila con ID de un registro existente es una actualización
+   * de ese mismo registro y no se compara consigo misma.
+   */
+  const importWeekGuard = useMemo(() => {
+    const spec = config.weekDuplicateAlert;
+    if (!spec || !captureSpec) return undefined;
+    const currentRows = captureInfo.weekRows.length > 0 ? captureInfo.weekRows : currentWindowRows;
+    const existingIds = new Set(allRows.map((row) => row.id));
+    return (
+      values: Record<string, FieldValue>,
+      docId: string | null,
+      earlier: Record<string, FieldValue>[],
+    ): string[] => {
+      if (docId !== null && existingIds.has(docId)) return [];
+      const value = values[spec.field];
+      if (typeof value !== 'string' || value === '') return [];
+      const field = config.fields.find((f) => f.key === spec.field);
+      const label = field?.refCollection ? refLabel(field.refCollection, value) : value;
+      if (earlier.some((other) => other[spec.field] === value)) {
+        return [`${field?.label ?? spec.label} ${label} comes twice in this file — a truck goes only ONCE per week`];
+      }
+      const clash = currentRows.find((row) => row[spec.field] === value);
+      if (clash) {
+        return [
+          `${field?.label ?? spec.label} ${label} is already loaded this week (${dupCopyText(clash)}) — a truck goes only ONCE per week`,
+        ];
+      }
+      return [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, captureSpec, captureInfo.weekRows, currentWindowRows, allRows, refMaps]);
+
+  /** Repetidos que corresponden a la pestaña abierta (vigente / Historic). */
+  const weekDupGroupsShown = useMemo(
+    () => weekDuplicates.groups.filter((group) => (historicView ? !group.current : group.current)),
+    [weekDuplicates, historicView],
+  );
+
+  const uniqueSortedRows = useMemo(() => {
     if (duplicateIds.size === 0) return baseSortedRows;
     const unique = config.uniqueBy;
     // Valores repetidos (para subir también el registro que se conserva).
@@ -1463,6 +1605,20 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
       return valueA.localeCompare(valueB);
     });
   }, [baseSortedRows, duplicateIds, config.uniqueBy]);
+
+  /**
+   * Camiones repetidos en la semana: arriba del todo, con sus copias juntas,
+   * para compararlas y borrar una sin buscarlas. El resto, en su orden.
+   */
+  const sortedRows = useMemo(() => {
+    if (weekDuplicates.byId.size === 0) return uniqueSortedRows;
+    const field = config.weekDuplicateAlert?.field ?? '';
+    const flagged = uniqueSortedRows
+      .filter((row) => weekDuplicates.byId.has(row.id))
+      .sort((a, b) => String(a[field] ?? '').localeCompare(String(b[field] ?? '')));
+    if (flagged.length === 0) return uniqueSortedRows;
+    return [...flagged, ...uniqueSortedRows.filter((row) => !weekDuplicates.byId.has(row.id))];
+  }, [uniqueSortedRows, weekDuplicates, config.weekDuplicateAlert]);
 
   /** Página visible (máx 50 filas). */
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
@@ -1658,6 +1814,28 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         label: field.label,
         render: (row) => {
           const text = displayCell(field, row as EntityData, refLabel);
+          // Camión repetido en la semana: aviso pegado al número.
+          const dupGroup =
+            field.key === config.weekDuplicateAlert?.field ? weekDuplicates.byId.get(row.id) : undefined;
+          if (dupGroup) {
+            const others = dupGroup.copies.filter((copy) => copy.id !== row.id);
+            return (
+              <span
+                className="week-dup-cell"
+                title={`This ${config.weekDuplicateAlert?.label ?? 'truck'} is loaded ${dupGroup.copies.length} times in ${dupWeekText(
+                  dupGroup,
+                )}. It can only be loaded ONCE per week, in any station or entity. Also loaded in: ${others
+                  .map((copy) => dupCopyText(copy))
+                  .join(' | ')}. Delete one of them.`}
+              >
+                <span className="num-alert">{text}</span>
+                <span className="week-dup-tag">
+                  <AlertTriangle size={12} />
+                  REPEATED ×{dupGroup.copies.length}
+                </span>
+              </span>
+            );
+          }
           // Número de unidad con su icono de estado (Shop / correctivo / Maintenance).
           if (unitStatus.enabled && field.key === unitStatus.columnKey) {
             const marks = unitStatus.marksOf(row as EntityData);
@@ -1687,7 +1865,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
         },
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tableFields, refMaps, alertThresholds, unitStatus.marksOf],
+    [tableFields, refMaps, alertThresholds, unitStatus.marksOf, weekDuplicates],
   );
 
   const openCreate = () => {
@@ -2884,6 +3062,41 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           </p>
         ) : null}
         {sweepNote ? <p className="crud-dup-note">{sweepNote}</p> : null}
+        {weekDupGroupsShown.length > 0 ? (
+          <div className="crud-dup-note week-dup-note" role="alert">
+            <p className="week-dup-note-title">
+              <AlertTriangle size={16} />
+              <strong>
+                {weekDupGroupsShown.length}{' '}
+                {weekDupGroupsShown.length === 1
+                  ? `${config.weekDuplicateAlert?.label ?? 'truck'} is`
+                  : `${config.weekDuplicateAlert?.label ?? 'truck'}s are`}{' '}
+                loaded more than once in the same week.
+              </strong>{' '}
+              A truck can only be loaded ONCE per week — not even in another station or entity.{' '}
+              <strong>Delete one of the copies</strong> (they are shown first in the table).
+            </p>
+            <ul className="week-dup-list">
+              {weekDupGroupsShown.map((group) => (
+                <li key={`${group.weekStart}#${group.value}`}>
+                  <span className="num-alert">{dupTruckLabel(group)}</span> — {group.copies.length} times in{' '}
+                  {dupWeekText(group)}:
+                  {group.copies.map((copy) => (
+                    <button
+                      key={copy.id}
+                      type="button"
+                      className="week-dup-copy"
+                      title="Open this record"
+                      onClick={() => setViewing(copy)}
+                    >
+                      {dupCopyText(copy)}
+                    </button>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {duplicateIds.size > 0 ? (
           <p className="crud-dup-note">
             <strong>{duplicateIds.size}</strong>{' '}
@@ -3461,6 +3674,7 @@ export function CrudModule({ config: baseConfig, headerExtra }: CrudModuleProps)
           refMaps={refMaps}
           autoUserField={config.autoUserField}
           currentUid={firebaseUser?.uid ?? null}
+          rowGuard={importWeekGuard}
           onClose={() => setImportOpen(false)}
         />
       ) : null}

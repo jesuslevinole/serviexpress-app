@@ -47,6 +47,8 @@ export interface CaptureWindowInfo {
   sourceRows: EntityData[];
   /** TODOS los registros del catálogo, incluidos inactivos (para explicar motivos). */
   sourceRowsAll: EntityData[];
+  /** Modo propio: registros de la semana vigente de todas las estaciones (en vivo). */
+  weekRows: EntityData[];
   save: (window: Omit<CaptureWindow, 'updatedBy'>) => Promise<void>;
   clear: () => Promise<void>;
 }
@@ -387,6 +389,14 @@ export function useCaptureWindow(
     blockedSources,
     sourceRows,
     sourceRowsAll: sourceAll,
+    /**
+     * Modo propio (Fleet Report): registros de la semana vigente de TODAS
+     * las estaciones, leídos en vivo del servidor (los sellados con la
+     * semana pero capturados fuera del rango salen de la lista local). Sirve
+     * para detectar camiones repetidos aunque el usuario solo vea su
+     * estación. Vacío en módulos con renglones (BC Reports).
+     */
+    weekRows: selfWindowRows,
     save,
     clear,
   };

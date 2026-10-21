@@ -2134,6 +2134,13 @@ export const fleetReportsModule: ModuleConfig = {
   },
   /** Ni el camión ni el driver se pueden repetir dentro de la misma semana. */
   uniqueInWindow: ['idTruck', 'idDriver'],
+  /**
+   * Un camión va UNA sola vez por semana, en cualquier estación o entidad.
+   * Si aun así quedó repetido (importación, dos guardados al mismo tiempo,
+   * registros de antes de la regla), cada copia lleva un aviso junto al
+   * número del camión y el módulo pide borrar una.
+   */
+  weekDuplicateAlert: { field: 'idTruck', label: 'truck' },
   /** En curso = los de la semana vigente; históricos = el resto. */
   viewTabs: [
     { id: 'current', label: 'In progress', tone: 'info' },

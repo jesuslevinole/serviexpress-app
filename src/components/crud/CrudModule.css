@@ -412,3 +412,65 @@
 .unit-status-clear:hover {
   color: var(--text);
 }
+
+/* V00115 — camión repetido en la misma semana (Fleet Report). */
+.week-dup-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  cursor: help;
+}
+
+.week-dup-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.week-dup-note-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+
+.week-dup-note-title svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--danger);
+}
+
+.week-dup-list {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.week-dup-copy {
+  display: inline-block;
+  margin: 2px 0 2px 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.week-dup-copy:hover {
+  background: var(--danger);
+  color: #fff;
+}
